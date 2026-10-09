@@ -26,10 +26,9 @@ In this way, we aim to leverage AI to improve task management efficiency while m
 | Failure Receipt / Evidence | Theoretical Interpretation | Design Implication |
 |---|---|---|
 | **E01 and E06 (Claude):** Claude determined that the two emails might pertain to the same assignment, but their deadlines were different. Since it could not confirm whether they referred to the same task, Claude listed them separately and flagged the uncertainty. | This example illustrates that while AI can quickly extract task information from emails, it may still lack sufficient contextual information when determining the relationships between different emails. This relates to **Reasoning** in Gonzalez et al. (2026). Human judgment based on the actual context is still required. | When AI detects possible duplicate tasks or conflicting deadlines, InboxToTask should alert the user and display the original emails. Users can then verify or merge the tasks rather than relying entirely on AI's judgment. |
-| **TODO: Add second verified test case.** | TODO: Explain the theoretical interpretation. | TODO: Explain the design improvement. |
-| **TODO: Add third verified test case.** | TODO: Explain the theoretical interpretation. | TODO: Explain the design improvement. |
+| **Copilot — E09:** Copilot classified E09 as Passive and listed no outstanding task, even though the email contained an explicit conditional reminder request. However, the reminder appeared later in its output, creating an inconsistency. | **Reasoning and Memory:** AI may recognize a conditional task but fail to classify it consistently. This could cause important responsibilities to be overlooked. | InboxToTask should check whether task classifications match the extracted actions and clearly display conditional tasks for users to review. |
+| **ChatGPT — Task Count:** ChatGPT reported 12 outstanding tasks in its summary, but its detailed list appears to contain only 11, including E09. | **Memory and Reliability:** AI may correctly identify individual tasks while producing inconsistent summaries. This shows why users need accurate and verifiable task records. | InboxToTask should automatically calculate task totals from the extracted task list and flag any inconsistencies between the summary and the actual tasks. |
 
-**Note:** The E01/E06 example documents an unresolved ambiguity rather than a confirmed incorrect output. Additional examples should be checked against the test evidence and answer key.
 
 ## 4. Design Principle and Checkpoint 3 Evaluation
 

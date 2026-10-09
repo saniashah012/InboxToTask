@@ -10,6 +10,8 @@ Participants concentrated their attention on various kinds of errors. Tim is afr
 
 # Reflection
 
+![ChatGPT Generated Image](./tong_hua_ChatGPT_Generated_image.png)
+
 One of the findings from the reading is that simply requiring human approval does not necessarily lead to human-AI collaboration. Complementarity depends on how compatible the skills of the partners are and how clearly the partner roles are defined. In the case of InboxToTask, the strengths of both the AI partner and the human one can be leveraged in order to complete the task. The AI partner can leverage its strengths related to memory and attention to look through the emails and suggest tasks for completion, while the human partner can use the skill of contextual reasoning to check the ownership of each task and deadline.
 
 

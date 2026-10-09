@@ -36,7 +36,7 @@ I interviewed two peers about six dimensions of the proposed InboxToTask experie
 
 ## 3. Class-Generated Storyboard
 
-![Five-panel InboxToTask storyboard](./zhang_yuchen_storyboard.png)
+![Five-panel InboxToTask storyboard](./Yuchen_Zhang_ChatGPT_Generated_image.png)
 
 **Storyboard title:** From Email Overload to Action
 

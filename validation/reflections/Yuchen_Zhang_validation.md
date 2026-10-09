@@ -2,15 +2,15 @@
 
 ## Prompting notes
 
-For InboxToTask, I reviewed ChatGPT and Claude outputs from a simulated inbox of 20 student emails. I looked at how they identified actionable emails, extracted tasks and deadlines, handled conditional reminders, and used earlier messages to avoid listing completed or canceled work. Both outputs identified 10 actionable and 10 passive emails, and both recognized that E09 required a reminder only if feedback had not arrived by Friday afternoon.
+I looked through the ChatGPT and Claude results for our test inbox of 20 student emails. I paid attention to whether they could tell which emails actually needed action, pick out deadlines, and handle tasks that depended on something happening first. Both labeled 10 emails as actionable and 10 as passive. They also picked up on the condition in E09: the student only needed to send a reminder if no feedback had arrived by Friday afternoon.
 
-One case that stood out was E01 and E06. Claude noted that the two emails might refer to the same assignment but had different deadlines. Instead of merging them, it kept them separate and flagged the uncertainty. This was not necessarily an error, but it showed why users need to see the original emails when the AI cannot confidently determine whether two tasks are related.
+E01 and E06 were interesting to me. Claude noticed that the emails might be about the same assignment, but the deadlines did not match. It left them as separate tasks and pointed out the uncertainty. I would not call that a clear mistake. Still, it made me think about what a student would need to see before deciding whether to combine those tasks.
 
 ## Interview notes
 
-I interviewed two peers about their email habits and what they would expect from InboxToTask. We discussed accuracy, reliability, speed, human–AI collaboration, privacy, and cost. Both participants worried about AI missing important tasks or creating tasks that were not actually required. At the same time, one thought AI could catch details that people might overlook when checking a busy inbox.
+I talked with two other students about how they deal with email and whether they would use something like InboxToTask. We covered accuracy, consistency, response time, privacy, cost, and how much control they would want over the AI. Both were concerned about missed tasks and made-up ones. One also pointed out that AI might notice details a person could easily skip in a crowded inbox.
 
-Their preferences were not exactly the same. One wanted results within about 15 seconds to a minute, weekly task summaries, and help with scheduling. The other was willing to wait longer for accurate results and wanted to compare the generated task plan with the original emails. They also had different views on privacy and pricing: one was comfortable granting email access, while the other wanted stronger safeguards for sensitive information.
+They had different expectations, though. One wanted the results quickly, ideally in 15 seconds to a minute, and liked the idea of a weekly task summary and scheduling help. The other cared more about getting the details right, even if it took longer, and wanted to check the task plan against the original emails. Their privacy concerns were different too. One was fairly comfortable letting AI read email, while the other was worried about sensitive personal information. They also had different ideas about how much the service should cost.
 
 ## Class-generated storyboard
 
@@ -18,6 +18,6 @@ Their preferences were not exactly the same. One wanted results within about 15 
 
 ## One finding that changed (or confirmed) my assumption about the proposed scenario
 
-At first, I focused mainly on how InboxToTask could save students time by finding tasks in a crowded inbox. The interviews made me think more about whether users would actually trust the task list. Both participants worried about missed or incorrect tasks, and one specifically wanted to check the AI's suggestions against the original emails. That made me realize that even a fast and convenient tool might not be very useful if students cannot tell where its information came from.
+I originally thought the biggest benefit of InboxToTask would be saving time. If the app could find assignments and deadlines without students having to read every email, that already seemed useful to me. After the interviews, I realized I had not thought enough about what happens when the AI gets something wrong. Both students brought up that concern, and one said he would want to go back to the original emails to check the task plan. I can see why. If a task list looks complete but leaves something out, a student might not even know there is a problem.
 
-I connect this finding to trust calibration and human–AI complementarity in Gonzalez et al. (2026). AI can help direct attention to important emails, but users still need enough context to judge the results. For InboxToTask, I think each suggested task should include a link to its source email and an easy way to edit or reject it before confirmation. This would let AI handle the repetitive scanning while students stay in control of their responsibilities.
+This connects to trust calibration in Gonzalez et al. (2026). Students should be able to use the AI's help without assuming every suggestion is correct. I would want InboxToTask to show where each task came from and let users edit or reject it before adding it to their plans. That way, AI can do the time-consuming scanning, but students still decide what they actually need to do.

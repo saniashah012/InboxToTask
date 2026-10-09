@@ -1,3 +1,76 @@
-# Gap Analysis
+# InboxToTask: Gap Analysis
 
-TODO: Identify gaps between the current state and the desired user experience.
+Eight interviews and five AI-platform outputs show that email-to-task analysis can handle many clear requests and thread updates, but correct labels alone do not guarantee dependable task records. The main observed issues are a conditional-task classification error, contradictory deadline status, missing per-email entries, and an incorrect task total. Other outputs introduce possible review burdens or incompletely express a decision branch.
+
+Interviewees consistently raised the importance of avoiding missed commitments, while differing in automation preferences, privacy expectations, workflow fit, acceptable delays, and willingness to pay. These are interview findings, not proof of AI failures.
+
+This document contains one combined gap matrix, followed by a tool-results summary and detailed output examples. No participant names are included. The theoretical column applies Gonzalez et al. (2026) to our evidence. These applications are our interpretations, not claims that the paper studied InboxToTask. Section references point to the linked reading below.
+
+## Gap analysis matrix
+
+| Dimension | Empirical failure or gap — interview evidence and tool output | Theoretical reading |
+|---|---|---|
+| **Accuracy & hallucinations: missed commitments** | **Reported workflow problems:** Four interviewees described missed information or commitments: important emails, a pinned scholarship deadline, high-volume remediation requests, and beginning an auto-insurance search too late. **Concerns:** Five interviewees specifically emphasized the greater risk of missed tasks. One worried about both omissions and invented tasks; another thought AI could notice details people overlook. **Observed output error:** Copilot E09 labels the email “Passive” and lists no task despite an explicit conditional reminder. It preserves the reminder later, so this is local classification/extraction inconsistency rather than complete omission. | **Attention and memory:** surface commitments and retain conditional responsibilities. A task hidden outside the main category may never reach downstream calendars. (Gonzalez et al., “Memory”; “Attention”; Table 1.) |
+| **Accuracy & hallucinations: details, deadlines, and verification** | One interviewee worried about incorrect requirements, deadlines, categories, and ownership. Five described checking original emails or wanting source references; another would double-check important emails, and another wanted sampled/weekly review. **Observed contradiction:** Copilot E05 describes the deadline as both passed and upcoming. **Incomplete branch:** Gemini E11 says to confirm the interview and reports no uncertainty, without preserving the alternative-slot branch or unknown availability. See detailed examples below. | **Reasoning and interrogation:** source inspection supports checking dates and decisions. Preserve acceptance/rescheduling choices for human judgment. (Gonzalez et al., “Reasoning”; “Implement attention and interrogation orchestration.”) |
+| **Reliability & consistency: coherent output and repeatability** | Two interviewees feared differing answers to identical emails. One would reject the tool if it made mistakes. Another initially accepted continued use despite errors but later rejected a tool that only usually works; this tension needs follow-up. **Observed issues:** Copilot E09 conflicts across sections; ChatGPT's task total appears inconsistent with its detailed list. Claude speculates about E01/E06 duplication but keeps both, creating possible review burden rather than a proven merge. DeepSeek separates E11 reply and rescheduling, creating possible duplicate-task counting. No controlled repeated runs were supplied. | **Shared mental models and trust calibration:** contradictory records obstruct predictable use. Cross-platform differences do not establish repeated-run instability. (Gonzalez et al., Abstract; “Reasoning.”) |
+| **Reliability & consistency: changed or resolved commitments** | Three interviewees explicitly expected changed tasks, deadlines, or priorities to update. One also wanted calendar/dashboard notifications; another distinguished weekly new-task intake from timely changes to ongoing work. One interview's response on changed deadlines was not recorded. **Successful tool behavior:** all five keep E07 canceled and E08 completed without recreating obsolete tasks. This establishes static thread interpretation, not live calendar synchronization. | **Memory and meta-coordination:** reconcile changes and communicate shared state. Static interpretation does not establish external synchronization. (Gonzalez et al., “Memory”; Table 1.) |
+| **Latency & performance** | Two interviewees wanted prompt results near deadlines or by email viewing. Individual preferences included roughly 15 seconds–one minute, up to five minutes when accuracy justified waiting, three minutes specifically for summarization, and one minute with workload unspecified. One interviewee needed new tasks ready for Monday review and ongoing changes by the relevant day. Another wanted urgent results within 20 minutes. **Tool evidence:** elapsed times were not recorded in the supplied transcripts; no latency failure is claimed. | **Attention orchestration:** match delivery to urgency and review cadence; the interviews establish no universal threshold. (Gonzalez et al., “Attention.”) |
+| **UX friction: integration, organization, and workflow fit** | Two interviewees manually transfer commitments to Google Calendar. One wanted custom tags/tabs; another wanted specific filters, including news/jobs/family, and inbox visibility. One wanted planning and weekly summaries; another wanted Gmail/Outlook integration, scheduling, priority surfacing, and ad filtering. One uses task software/notebook and an inbox queue with BCC-and-file practices, would not adopt another system, and suggested priority color coding. Another uses calendar reminders/memory, found Google's AI inbox useful for flagging, but questioned task-system fit and wanted importance/deadline sorting. **Observed format issue:** DeepSeek lacks individual E17/E18 entries despite promising all targets; both are Passive informational emails, not missed tasks. | **Knowledge infrastructure and attention:** inspectable output should fit routines. A parallel system may increase effort. (Gonzalez et al., Abstract; “Memory”; “Attention.”) |
+| **UX friction / human–AI teaming: approval and correction** | Approval preferences varied. One interviewee accepted automatic assignment additions but wanted meeting approval. Another wanted calendar approval and simple editing/deletion without needing a chatbot. One wanted schedule review. Another accepted summarization, extraction, and calendar creation with periodic confirmation, potentially every five hours, while retaining decision authority. One would verify important emails but did not explicitly require approval for every action. Another wanted automatic classification, manual validation, self-written drafts, and sampled/weekly review; the correction question was skipped. One wanted urgent-deadline approval and manual recategorization. Tool errors illustrate why correction matters, but correction effort was not measured. | **Role partition and meta-coordination:** define preparation, approval, execution, override, and correction. Interview preferences require configurable responsibilities. (Gonzalez et al., Abstract; Table 1.) |
+| **Safety & guardrails** | Six interviewees expressed privacy or sensitive-information concerns. Examples included financial emails; payment, flight, personal-data, suspicious-email and security risks; passwords, birthdays and credit cards; grades; personal-email access; and health/banking information. One required local storage/processing for personal email. The mechanism of concern about grade exposure was unclear. One expressed little privacy concern, and one had no explicit privacy preference recorded. Four opposed automatic replies or emailing others; one also required permission before deleting/moving email, and another before meeting cancellation/financial actions. ChatGPT states nothing was executed; no technical privacy, permissions, or malicious-email test was supplied. | **Goals, constraints, and role partition:** analysis permission differs from action permission. Privacy needs implementation controls; interpretation alone cannot demonstrate security. (Gonzalez et al., Abstract.) |
+| **Cost & efficiency** | Three interviewees would not pay; one of these did not identify as a target user and expected errors to add work. One reported over an hour daily on email and possible $10–$20 payment, billing period unspecified. Another reported 10–15 minutes daily and might pay $3–$5/month despite preferring free access. One hypothesized greater professional value for complex inboxes, potentially saving two or three minutes per message, but did not establish actual savings or purchasing behavior. Another mentioned ten-plus RMB/month, firmness unclear; a separate one-hour-per-day response also needs clarification. One expected priority-surfacing savings but possible validation overhead and was uncertain about payment. No time-savings or platform-cost measurements were supplied. | **Complementarity:** evaluate benefits after verification and correction against human-only and AI-only baselines. Workload alone does not establish adoption value. (Gonzalez et al., Abstract.) |
+
+## General summary of tool results
+
+### What was classified correctly
+
+The expected Actionable emails are **E01, E02, E03, E05, E06, E09, E10, E11, E15, and E16**. The expected Passive emails are **E04, E07, E08, E12, E13, E14, E17, E18, E19, and E20**.
+
+| Tool | Main-category labels in the supplied output | Other issues to distinguish from classification |
+|---|---|---|
+| **ChatGPT** | All 20 labels match the current answer key. | Reports 12 outstanding tasks, although the detailed list appears to contain 11 including E09, excluding the separately suggested E19 follow-up. |
+| **Claude** | All 20 labels match the current answer key. | Adds uncertain E01/E06 duplication and E10/E16 linkage hypotheses. These are flagged inferences, not proven merges. E11 reply correctly permits accepting or declining. |
+| **Copilot** | 19 of 20 labels match. E09 is incorrectly Passive rather than Actionable. | Later retains E09's conditional reminder. E05's status explanation contradicts itself, although the date and attention order are otherwise retained. |
+| **DeepSeek** | All 18 individually presented labels match. No individual E17/E18 entries are supplied, though they are mentioned as non-owner-action items in its final list. | Per-target completeness failure; potential E11 duplicate counting from separately listing rescheduling. |
+| **Gemini** | All 20 labels match the current answer key. | E11 response task incompletely preserves the alternative-slot branch and unknown availability. Label correctness does not make all task details complete. |
+
+These are descriptive label checks against the current key, not broad performance estimates or proof that every platform used an identical input version.
+
+### What the tools handled well
+
+All five outputs:
+
+- Preserve both E10 actions: book an interview slot and send a portfolio link.
+- Keep the optional E12 workshop Passive instead of making registration mandatory.
+- Keep E07 canceled and E08 completed rather than recreating obsolete tasks.
+- Keep E16 undated rather than inventing a precise deadline.
+- Keep E19 Passive/waiting-for while separately suggesting an overdue follow-up.
+- Avoid inventing a dated follow-up for E20, whose sender provides no promised date.
+- Surface E05 prominently and separate E09's not-yet-triggered reminder from ready-to-do actions, even though Copilot's E09 entry is wrong.
+
+### Where the tools went wrong or need review
+
+| Tool and email | Exact output evidence | Interpretation |
+|---|---|---|
+| **Copilot — E09** | “Category: Passive”; “Outstanding Tasks: None.” | The prompt explicitly includes conditional user responsibilities as Actionable. The reminder survives in the final list, so this is contradictory classification/extraction, not complete disappearance. |
+| **Copilot — E05** | “Deadline has already passed relative to analysis time” and “still upcoming at analysis time.” | Both statements occur in one sentence. At Oct 5, 9 AM, the before-4-PM deadline is upcoming. |
+| **ChatGPT — opening summary** | “Outstanding tasks 12.” | Detailed extraction appears to contain 11 tasks including E09. The separately suggested E19 follow-up is explicitly excluded from its outstanding count. This is an apparent summary-count error, not a label error. |
+| **DeepSeek — opening and body** | “I include them for completeness since the brief says return an entry for every target ID.” | Despite this promise, E17/E18 lack individual sections. They appear only in a final unranked list. The absent entries concern informational emails. |
+| **Gemini — E11** | “Reply to confirm interview time for Cedar Labs”; “Missing/Uncertainty: None.” | The source permits requesting another slot and does not establish availability. The wording could narrow a required response into acceptance. No interview was actually accepted or scheduled. |
+| **Claude — E01/E06** | “These may be the same assignment with a changed deadline, or two separate assignments.” | Correctly retains both and marks uncertainty, but introduces a relationship the source does not confirm. Potential unnecessary review burden; not a proven hallucinated merge. |
+| **Claude — E10/E16** | “This is an inference, not stated.” | Flags a possible shared portfolio-link problem across different applications and uses it in attention ordering. Treat as an unsupported relationship to review, not a confirmed dependency. DeepSeek also mentions this uncertainty but retains separate tasks. |
+| **DeepSeek — E11** | “Reply confirming (or declining)” plus “Notify Omar to find another slot.” | Could represent alternative branches of one reply rather than two independent tasks. Potential double-counting; scoring depends on the agreed task convention. |
+
+The synthetic email-actor names in quotations are not interviewee names.
+
+### Smaller precision differences
+
+E05 asks for completion **before** the 4 PM meeting so others can read the findings. ChatGPT preserves “before 4:00 PM”; Claude, Copilot, DeepSeek, and Gemini list 4 PM in the task deadline field. Their surrounding descriptions often preserve the meeting dependency, so this is a boundary-precision issue rather than a wrong date.
+
+Claude flags the E11 interview and E12 workshop sharing a time; neither source establishes workshop acceptance. Flagging the overlap is useful context, but it should not become a confirmed scheduling conflict or mandatory workshop task. DeepSeek explicitly avoids asserting a conflict.
+
+## Theoretical reference
+
+Gonzalez, C., Donahue, K., Goldstein, D. G., Heidari, H., Jalali, M. S., Schelble, B., Singh, A., & Woolley, A. W. (2026). *Toward a science of human–AI teaming for decision making: A complementarity framework*. **PNAS Nexus, 5**(3), pgag030. [https://doi.org/10.1093/pnasnexus/pgag030](https://doi.org/10.1093/pnasnexus/pgag030).
+
+

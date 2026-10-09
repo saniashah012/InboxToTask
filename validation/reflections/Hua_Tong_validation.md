@@ -1,8 +1,8 @@
-#Prompting Notes
+# Prompting Notes
 
 DeepSeek was able to label all 18 emails that it had actually processed and assign confidence scores for each. However, DeepSeek failed to analyze the other two emails (E17 and E18) despite stating that all 20 emails were analyzed. The prompt words need to be changed, and completeness tests need to be applied such that the model should output one record per target email ID.
 
-#Interview Notes
+# Interview Notes
 
 Both participants agreed that they would not mind if AI helped them with the summary of emails, extraction of tasks and organization of the calendar, but hoped to keep the possibility of verifying the results. Tim did not object to giving AI more responsibility to organize things, suggested checking the created calendar events regularly and definitely refused AI's automatic replies to emails. Xuyuan said that he will personally check very important emails.
 

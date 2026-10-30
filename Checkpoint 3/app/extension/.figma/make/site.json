@@ -1,0 +1,10 @@
+{
+  "description": "Organizes email content into manageable tasks and passive updates with deadline tracking and calendar integration for efficient inbox management.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

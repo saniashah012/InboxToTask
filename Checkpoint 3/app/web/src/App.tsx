@@ -447,6 +447,7 @@ function App() {
             <img alt="" src={inboxToTaskLogo} />
           </div>
           <span className="brand-name">InboxToTask</span>
+          <span className="demo-badge">Demo data</span>
         </div>
         <div className="date-context">
           <span className="date-dot" />
@@ -1080,6 +1081,7 @@ function CalendarScreen({
             <Icon name="calendar" size={21} />
           </div>
           <strong>Calendar</strong>
+          <span className="demo-badge">Demo data</span>
         </div>
         <button className="back-button" onClick={onBack}>
           <Icon name="arrow" size={17} />

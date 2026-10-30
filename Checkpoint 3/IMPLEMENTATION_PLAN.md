@@ -39,7 +39,7 @@ Flow: scheduled/manual trigger -> verify account and preferences -> filter messa
 
 - Every earlier message must independently pass current rules before its body is retrieved for context.
 - Provide customizable message-count, age, and text-size limits, within enforced server limits.
-- Proposed starting context defaults: up to five earlier permitted messages from the past 30 days. The text/token cap remains to be selected; these numerical context defaults need confirmation.
+- Proposed starting context defaults: allow up to five earlier permitted messages from the past 30 days, but include only context needed to interpret the current message. Five is a ceiling, not an amount to attach to every request. The text/token cap remains to be selected; these numerical context defaults need confirmation.
 - Remove quoted history and signatures where practical; retrieve original earlier messages individually through filtering. Recognize that quoted-text removal is imperfect and inline copied private content may remain.
 - If necessary context is excluded, unavailable, or truncated, flag the suggestion as Needs Review and explain the limitation.
 - Sender/label/subject rules do not guarantee exclusion of all healthcare or financial topics. Semantic sensitive-topic classification is outside the current scope.
@@ -86,6 +86,36 @@ Selected model: `gemini-3.8-flash`. Google documents structured outputs and low/
 - Verify the selected Gemini service/tier's retention, training-use, and human-review terms before sending real personal email. Document the actual configuration and do not promise zero retention without evidence.
 
 Sources checked October 30, 2026: [model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash), [structured output documentation](https://ai.google.dev/gemini-api/docs/structured-output).
+
+## Token-cost requirements and optimization proposals
+
+These additions make cost controls explicit without removing core features. Numerical budgets and optional optimizations require validation; no percentage savings are assumed before measurement.
+
+### CP3: avoid unnecessary inference
+
+- A scheduled check is a Gmail/database operation, not automatically a Gemini call. With no new permitted content or eligible failed work, make zero model calls. A 15-minute interval does not mean reprocessing the inbox 96 times per day.
+- Make classification, task/commitment extraction, and a short informational summary branches of one structured response. Do not run separate classifier, summarizer, and extractor calls for every message. Information-only results still produce the required digest entry.
+- Process all actions in an eligible message in one call. If several new messages in the same thread arrive before a scan, consider one bounded thread request instead of repeatedly sending overlapping context; preserve per-message coverage and all distinct actions.
+- Strip HTML markup, tracking URLs, duplicate MIME representations, practical quote/signature boilerplate, and repeated content before token budgeting. Preserve meaningful URLs, deadline wording, negation, ownership, and evidence. Do not discard messages as noise solely because they are automated notifications or lack deadline keywords.
+- Use compact, versioned instructions with only useful few-shot examples, a concise schema, and short uncertainty codes. Do not ask for long explanations or chain-of-thought text. Return short titles, necessary fields, a short informational summary where applicable, and bounded evidence excerpts; attach deterministic metadata in code when possible.
+- Include the current message and directly relevant approved task state/context for an update. Do not attach the entire inbox, every task, or all five historical messages by default. For genuinely missing context, allow a bounded enrichment attempt or Needs Review rather than an unbounded agent loop. Test extra-call costs as well as context savings.
+- Reuse valid stored extraction results for unchanged permitted content, including information-only outcomes. Scope reuse by user, message/content identity, relevant context/task revision, prompt/model/schema version, and applicable processing settings. Recheck current permissions before reuse or display; changing rules does not grant access to an old cached excerpt.
+- Prompt/model version changes mark results as potentially stale, but do not automatically reprocess the whole mailbox. Re-extraction of history is an explicit, budgeted operation. Store minimal processing identifiers rather than full raw-email caches, and honor deletion/retention rules.
+- Approve, edit, complete, undo, dismiss, remind, filter, sort, create calendar entries, and export ICS through application code and stored structured fields. These actions do not require another model call unless the user explicitly requests new interpretation. Reuse informational summaries rather than regenerating the entire digest after each scan.
+- Start with the planned low-thinking trial and count thinking/reasoning usage where exposed. Keep task output concise, but do not set output limits so low that multi-action results are truncated or missing. On truncation, split or flag the item rather than saving partial output as complete.
+- Reserve a request budget before dispatching concurrent work. Bound input/output, retry attempts, and context-enrichment attempts within the per-user/day budget; surface deferred work and reset times. Failed/timeout requests may still incur provider charges, so never assume retries are free.
+- Keep a stable instruction/schema prefix for possible implicit caching, but do not pad short prompts to meet a cache threshold. Treat cache discounts as an observed bonus; use stateless requests for CP3 rather than chaining provider conversations that retain excluded or stale context.
+
+### CP4: evaluate additional optimizations
+
+- Compare a current-message-first approach with targeted thread context on a held-out set; report missed actions and deadline/ownership errors alongside tokens, cost, and latency.
+- Test same-thread grouping or small independent-email batches only when they reduce measured total cost without cross-message contamination, omissions, or expensive whole-batch retries. Do not mix users; map each output to its input and retry only failed work.
+- Consider Gemini's asynchronous Batch API for non-urgent historical backfills and offline evaluation, not manual refresh or the live demo. Check endpoint/model compatibility, provider retention of uploaded files/results, preference changes during queued jobs, and cleanup before adoption.
+- Consider explicit provider caching only after a break-even calculation including storage charges, minimum lengths, endpoint support, expiry, and privacy/deletion effects. Never cache raw email across users; a shared cache may contain only public static instructions/examples.
+
+Measurement: track uncached and cached input tokens, generated output, thinking tokens where exposed, retry/enrichment calls, and provider-cache storage fees if used. Derive estimates from the selected service's current rates without double-counting cached input or thinking/output fields; record pricing date and reconcile with provider billing. Compare cost per successfully reviewed task and extraction accuracy, not just cost per request.
+
+Sources checked October 30, 2026: [Gemini caching](https://ai.google.dev/gemini-api/docs/caching), [Batch API](https://ai.google.dev/gemini-api/docs/batch-api), [pricing and data-use tier distinctions](https://ai.google.dev/gemini-api/docs/pricing). Batch pricing reduces price per token, not the number of tokens; its documented target turnaround is 24 hours. Do not switch to a free tier for cost alone without checking email-data handling terms.
 
 ## Suggested defaults still requiring confirmation
 
@@ -142,6 +172,7 @@ Sources checked October 30, 2026: [model documentation](https://ai.google.dev/ge
 - [ ] Extract and validate ownership, dates, requirements, dependencies, and supporting evidence; preserve nullable/ambiguous fields.
 - [ ] Display progressive validated results with processed/excluded/failed/pending counts and clear scan scope.
 - [ ] Implement retry-safe extraction, multi-action handling, duplicate suppression, and reviewable update matching without overwriting edits.
+- [ ] Implement the token-cost requirements: zero inference on empty/unchanged scans, combined structured extraction, bounded relevant context, safe result reuse, and code-only task/calendar actions.
 
 ### CP3.5 Approval, calendars, and lifecycle
 
@@ -163,6 +194,8 @@ Sources checked October 30, 2026: [model documentation](https://ai.google.dev/ge
 - [ ] Exercise revoked consent, Gmail/model rate limits, timeouts, invalid/truncated output, and partial scan recovery.
 - [ ] Record request/scan IDs, latency, token use, estimated cost, prompt/model versions, and sanitized errors; omit sensitive payloads.
 - [ ] Set per-user message/token limits, concurrent work limits, and spending controls; do not silently skip work when limits are reached.
+- [ ] Test model-call counts for empty scans, repeated refresh, unchanged content, completion/undo, and calendar export; test that trimming/grouping preserves all actions and cannot bypass updated privacy rules.
+- [ ] Establish a token/cost baseline on the labeled set, including retry and thinking usage; verify budget reservations under concurrent scans and compare accuracy before accepting optimizations.
 - [ ] Perform a small human-alone / AI-alone / combined-workflow baseline check as specified in CP2; preserve cases, settings, and results for CP4.
 - [ ] Complete `app/INSTALL.md`, `app/.env.example`, `app/prompts/`, runnable scripts, and `tests/`.
 - [ ] Complete `docs/architecture.md` (diagram), `docs/use-cases.md`, `docs/observability.md`, and `docs/safety_privacy.md`.
@@ -183,6 +216,7 @@ The CP4 instructions have not been supplied. This is a provisional plan based on
 - [ ] Measure task detection precision/recall, ownership/deadline correctness, missed actions, duplicate rate, update matching, and uncertainty handling.
 - [ ] Evaluate filtering separately: rule enforcement, excluded context/quoted-content limitations, and unwanted external disclosures. Do not claim semantic privacy protection from metadata rules.
 - [ ] Measure end-to-end latency, time to first useful result, cost per email/scan, retry recovery, and scan completeness.
+- [ ] Evaluate context selection, same-thread grouping, and optional Batch API/provider caching using the cost section above; report measured savings and accuracy/privacy tradeoffs against the CP3 baseline.
 - [ ] For Track A, measure completion time, correction effort, source verification, understanding of privacy scope, and user control with consent and appropriate study data handling.
 - [ ] For Track B, report dataset composition, labels, scoring, baselines, per-scenario failures, and uncertainty/variation appropriate to the sample size.
 - [ ] Tune prompts, settings, context limits, and reminder/duplicate logic against observed errors, then rerun relevant tests and held-out evaluation.

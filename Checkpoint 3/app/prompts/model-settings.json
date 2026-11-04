@@ -1,0 +1,11 @@
+{
+  "version": "cp3-extraction-v1",
+  "model": "gemini-3.8-flash",
+  "schemaMode": "openapi",
+  "thinkingLevel": "LOW",
+  "maxOutputTokens": 8192,
+  "timeoutMs": 60000,
+  "maxAttempts": 1,
+  "contextLimits": { "maxMessages": 5, "maxAgeDays": 30, "maxMessageChars": 12000, "maxTotalChars": 24000 },
+  "notes": "Initial settings, not evaluated accuracy claims. Default sampling; no tools or conversation persistence. One attempt by default to bound cost. Character caps are not exact token estimates. Output budget includes provider thinking behavior."
+}

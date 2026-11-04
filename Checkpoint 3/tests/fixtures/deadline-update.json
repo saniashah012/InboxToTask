@@ -1,0 +1,22 @@
+{
+  "user": { "email": "student@example.org", "timeZone": "America/Chicago" },
+  "analysisTime": "2026-11-03T09:00:00-06:00",
+  "rules": {
+    "allow": { "labels": ["School"], "senders": [], "domains": [] },
+    "block": { "labels": ["Private"], "senders": [], "domains": [], "subjectKeywords": [] }
+  },
+  "message": {
+    "id": "update-1", "threadId": "project-deadline", "from": "professor@example.org",
+    "sentAt": "2026-11-03T08:00:00-06:00", "labels": ["School"],
+    "subject": "Re: Project report deadline",
+    "body": "The project report deadline has moved to November 8 at 5 pm. All requirements are unchanged."
+  },
+  "threadContext": [
+    {
+      "id": "update-history-1", "threadId": "project-deadline", "from": "professor@example.org",
+      "sentAt": "2026-11-01T10:00:00-06:00", "labels": ["School"],
+      "subject": "Project report deadline",
+      "body": "Please upload your five-page project report to Canvas by November 5 at 5 pm. Include your methods and findings."
+    }
+  ]
+}

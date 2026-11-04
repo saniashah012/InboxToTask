@@ -1,0 +1,4 @@
+# Local environment files; keep shareable configuration templates.
+.env
+.env.*
+!.env.example

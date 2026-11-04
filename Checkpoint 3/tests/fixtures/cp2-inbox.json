@@ -1,0 +1,375 @@
+{
+  "provenance": "Fictional inbox copied from CP2 PROMPTING_PROTOCOL.md Section 7 only; earlier date-only timestamps use midnight as a placeholder and preserve sentAtPrecision=date.",
+  "user": {
+    "email": "student@example.org",
+    "timeZone": "America/Chicago"
+  },
+  "analysisTime": "2026-10-05T09:00:00-05:00",
+  "rules": {
+    "allow": {
+      "labels": [],
+      "senders": [],
+      "domains": [
+        "example.org"
+      ]
+    },
+    "block": {
+      "labels": [],
+      "senders": [],
+      "domains": [],
+      "subjectKeywords": []
+    }
+  },
+  "cases": [
+    {
+      "message": {
+        "id": "E01",
+        "threadId": "thread-E01",
+        "from": "Professor Lee <lee@example.org>",
+        "sentAt": "2026-10-05T07:30:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Reading response",
+        "body": "Please upload this week's reading response by Wednesday, October 7, at 5 pm. We'll compare interpretations in class. The reading is posted in the weekly module."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E02",
+        "threadId": "thread-E02",
+        "from": "Jordan Park <jordan@example.org>",
+        "sentAt": "2026-10-05T07:20:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "energy project — findings section",
+        "body": "Could you add your findings to the energy project report by Thursday, October 8, at 6 pm? I can't finish the team's summary until your section is there. The submission is Friday morning."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E03",
+        "threadId": "thread-E03",
+        "from": "Priya Rao <priya@example.org>",
+        "sentAt": "2026-10-05T07:10:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Harbor Design — interview confirmation",
+        "body": "Hi, we still have your interview slot held. Please confirm by tomorrow, October 6, at noon. Unconfirmed slots will be released to other candidates after that time. Happy to answer questions about the format."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E04",
+        "threadId": "thread-E04",
+        "from": "Campus Deals <offers@example.org>",
+        "sentAt": "2026-10-05T07:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "URGENT: Last chance for 30% off",
+        "body": "Don't miss out! Buy your fall essentials before midnight tonight to claim 30% off. Shop now—these offers won't last!"
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E05",
+        "threadId": "thread-E05",
+        "from": "Maya Patel <maya@example.org>",
+        "sentAt": "2026-10-04T19:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "usability study write-up",
+        "body": "Hi, your usability findings section is the only part still missing from the shared report. We need it in the document before our meeting tomorrow, October 5, at 4 pm, so everyone can read it first. The rest of the report is ready."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E06",
+        "threadId": "thread-E06",
+        "from": "Professor Lee <lee@example.org>",
+        "sentAt": "2026-10-04T18:15:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Reflection submission for this week",
+        "body": "Hi,\nThanks for your question after class. Either of the two readings is fine for the reflection, so choose whichever gives you more to discuss. Please upload your response to Canvas by Thursday, October 8, at 5 pm. We will use a few examples in Friday's discussion.\nBest,\nProfessor Lee"
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E07",
+        "threadId": "thread-E07",
+        "from": "Professor Lee <lee@example.org>",
+        "sentAt": "2026-10-04T18:10:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Re: Proposal deadline",
+        "body": "The separate proposal submission is canceled. We will discuss the topic in class instead; there is nothing to upload."
+      },
+      "threadContext": [
+        {
+          "id": "E07-history-1",
+          "threadId": "thread-E07",
+          "from": "Professor Lee <lee@example.org>",
+          "sentAt": "2026-10-03T00:00:00-05:00",
+          "sentAtPrecision": "date",
+          "labels": [
+            "CP2-fixture"
+          ],
+          "subject": "Re: Proposal deadline",
+          "body": "The proposal deadline has moved to October 12."
+        },
+        {
+          "id": "E07-history-2",
+          "threadId": "thread-E07",
+          "from": "Professor Lee <lee@example.org>",
+          "sentAt": "2026-10-02T00:00:00-05:00",
+          "sentAtPrecision": "date",
+          "labels": [
+            "CP2-fixture"
+          ],
+          "subject": "Re: Proposal deadline",
+          "body": "Upload the proposal to Canvas by October 9."
+        }
+      ]
+    },
+    {
+      "message": {
+        "id": "E08",
+        "threadId": "thread-E08",
+        "from": "Maya Patel <maya@example.org>",
+        "sentAt": "2026-10-04T18:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Re: Updated slides",
+        "body": "Thanks, I opened the deck and your updated section is there. We're all set for the rehearsal."
+      },
+      "threadContext": [
+        {
+          "id": "E08-history-1",
+          "threadId": "thread-E08",
+          "from": "student@example.org",
+          "sentAt": "2026-10-04T00:00:00-05:00",
+          "sentAtPrecision": "date",
+          "labels": [
+            "CP2-fixture"
+          ],
+          "subject": "Re: Updated slides",
+          "body": "Just uploaded them—let me know if the link doesn't work."
+        },
+        {
+          "id": "E08-history-2",
+          "threadId": "thread-E08",
+          "from": "Maya Patel <maya@example.org>",
+          "sentAt": "2026-10-03T00:00:00-05:00",
+          "sentAtPrecision": "date",
+          "labels": [
+            "CP2-fixture"
+          ],
+          "subject": "Re: Updated slides",
+          "body": "Could you put your revised slides in the deck by Monday, October 5, at noon?"
+        }
+      ]
+    },
+    {
+      "message": {
+        "id": "E09",
+        "threadId": "thread-E09",
+        "from": "Maya Patel <maya@example.org>",
+        "sentAt": "2026-10-04T17:45:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Feedback on your draft",
+        "body": "Hey, I skimmed the draft and the structure looks good. I should have detailed comments to you by Thursday, October 8. If you haven't heard from me by Friday afternoon, October 9, please send me a reminder—this week is a bit packed. You can leave the draft as it is until then."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E10",
+        "threadId": "thread-E10",
+        "from": "Elena Ruiz, Recruiting <elena@example.org>",
+        "sentAt": "2026-10-04T16:30:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Northstar Studio — next steps for your application",
+        "body": "Hi,\nWe received your application to Northstar Studio and the team would like to meet you. Please choose an interview slot using the booking link by Wednesday, October 7, at noon. Also, reply to this email with a link to your portfolio by that same deadline so the interviewers can review it. The conversation will be about 30 minutes; there is no presentation to prepare.\nBest,\nElena"
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E11",
+        "threadId": "thread-E11",
+        "from": "Omar Ali <omar@example.org>",
+        "sentAt": "2026-10-04T15:15:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Cedar Labs — confirming your interview time",
+        "body": "Hi, following our conversation, we have held October 9 at 2 pm for your interview. Please reply by October 7 at noon to confirm whether that still works. If it doesn't, let me know and we'll find another slot."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E12",
+        "threadId": "thread-E12",
+        "from": "Design Club <club@example.org>",
+        "sentAt": "2026-10-04T15:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Portfolio workshop this Friday",
+        "body": "We're hosting a portfolio workshop October 9 at 2 pm. If you'd like to join, reserve a seat by October 7 through the event page. Bring a project you're happy to share. Snacks provided!"
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E13",
+        "threadId": "thread-E13",
+        "from": "Student Affairs <affairs@example.org>",
+        "sentAt": "2026-10-04T14:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Campus roundup",
+        "body": "This week's roundup includes photos from the volunteer fair, the new bike parking locations, and the weekend athletics schedule. Read the full newsletter on our website."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E14",
+        "threadId": "thread-E14",
+        "from": "Campus Bookstore <books@example.org>",
+        "sentAt": "2026-10-04T13:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Your order confirmation",
+        "body": "Your notebook order has been received. We will send a separate message when it is ready for pickup. Order total: $12.50."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E15",
+        "threadId": "thread-E15",
+        "from": "Maya Patel <maya@example.org>",
+        "sentAt": "2026-10-04T12:20:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Wednesday's project meeting",
+        "body": "Hey, I booked the room for Wednesday. Could you add your interview notes to our shared doc by Tuesday, October 6, at 6 pm? I want to pull the themes together before we meet. I'll bring the sticky notes this time."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E16",
+        "threadId": "thread-E16",
+        "from": "Nia Brooks <nia@example.org>",
+        "sentAt": "2026-10-04T12:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Juniper Digital — portfolio link",
+        "body": "Hi, the portfolio link in your application gives me an access error. Could you send a working link soon? I'd like to pass it along to the team. Thanks!"
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E17",
+        "threadId": "thread-E17",
+        "from": "Campus Dining <dining@example.org>",
+        "sentAt": "2026-10-04T11:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "This week's menu",
+        "body": "The fall menu is here, including new vegetarian bowls at the Union café. Breakfast service starts at 7:30 on weekdays."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E18",
+        "threadId": "thread-E18",
+        "from": "University Library <library@example.org>",
+        "sentAt": "2026-10-04T10:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Midterm hours",
+        "body": "The main library will stay open until midnight Monday through Thursday next week. The café will close at its usual time. Study rooms can still be booked through the library website."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E19",
+        "threadId": "thread-E19",
+        "from": "Alex Morgan <alex@example.org>",
+        "sentAt": "2026-10-01T13:40:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Signed reimbursement form",
+        "body": "Hi, I found the form in my downloads. I'll sign it and send it back by Friday, October 2. Thanks for putting the receipts together."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "E20",
+        "threadId": "thread-E20",
+        "from": "Alex Morgan <alex@example.org>",
+        "sentAt": "2026-10-01T11:00:00-05:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP2-fixture"
+        ],
+        "subject": "Recommendation draft",
+        "body": "Hi, I can send you a draft of the recommendation when I've had a chance to finish it. Thanks for the background notes; they're helpful."
+      },
+      "threadContext": []
+    }
+  ]
+}

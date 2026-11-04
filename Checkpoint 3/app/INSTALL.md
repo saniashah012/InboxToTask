@@ -49,5 +49,10 @@ variables are required for this demo.
    build command `pnpm build`, and output directory `dist`.
 4. Do not add environment variables for the current prototype.
 
-The deployed prototype displays sample demo data only. It does not connect to
-Gmail, Supabase, AI services, or a calendar.
+The app opens with an honest unavailable state because authentication, Gmail,
+Google Calendar, and background processing are not configured. Select
+**Preview onboarding** to walk through setup with a fictional Gmail account, or
+select **Explore demo** to skip directly to the sample dashboard. Preview scans,
+connection actions, calendar-event previews, and preference edits only update
+local in-memory state; they do not access external accounts, process real
+messages, or save preferences to Supabase.

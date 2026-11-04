@@ -1,0 +1,2 @@
+-- Intentionally empty: no real user records or email bodies are seeded.
+-- Database isolation tests create fictional users inside a rolled-back transaction.

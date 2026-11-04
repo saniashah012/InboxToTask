@@ -2,3 +2,10 @@
 .env
 .env.*
 !.env.example
+
+# Installed dependencies and local Supabase state.
+node_modules/
+**/supabase/.temp/
+**/supabase/.branches/
+# Generated deployment bundle; rebuild from canonical pipeline sources.
+**/supabase/functions/_shared/extraction/

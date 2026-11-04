@@ -1,5 +1,11 @@
 # Installation
 
+## Local Supabase foundation
+
+See [local Supabase setup](supabase/README.md) for the local-only permission migrations,
+authenticated fictional-email endpoint, database tests, and current verification limits.
+The hosted backend has not been modified by this local setup.
+
 ## Local AI extraction pipeline (no Supabase required)
 
 Requirements: Node.js 22 or later. No npm dependency installation is needed for this backend module.

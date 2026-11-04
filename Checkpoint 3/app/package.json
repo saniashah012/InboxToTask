@@ -2,12 +2,18 @@
   "name": "inbox-to-task-pipeline",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "node --test ../tests/pipeline.test.mjs",
+    "test": "node --test ../tests/pipeline.test.mjs ../tests/supabase-endpoint.test.mjs",
+    "supabase:prepare": "node pipeline/prepare-edge.mjs",
     "fixtures:cp2": "node pipeline/import-cp2.mjs",
     "extract:plan": "node pipeline/cli.mjs --all",
     "extract:live": "node pipeline/cli.mjs --live",
     "diagnose": "node pipeline/diagnose.mjs"
+  },
+  "devDependencies": {
+    "supabase": "^3.0.0"
   }
 }

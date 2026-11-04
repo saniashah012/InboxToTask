@@ -24,6 +24,8 @@ variables are required for this demo.
 
 The app opens with an honest unavailable state because authentication, Gmail,
 Google Calendar, and background processing are not configured. Select
-**Explore demo** to enter the local preview and view sample tasks. Demo actions
-only update in-memory preview state; they do not connect to external services
-or process real messages.
+**Preview onboarding** to walk through setup with a fictional Gmail account, or
+select **Explore demo** to skip directly to the sample dashboard. Preview scans,
+connection actions, calendar-event previews, and preference edits only update
+local in-memory state; they do not access external accounts, process real
+messages, or save preferences to Supabase.

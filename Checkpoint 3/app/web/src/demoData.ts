@@ -1,3 +1,5 @@
+export type ScanState = "ready" | "processing" | "cooldown" | "running" | "empty" | "failed" | "paused" | "missing-sources" | "disconnected"
+
 export type SourceRules = {
   allowedLabels: string[]
   allowedSenders: string[]
@@ -15,6 +17,14 @@ export const gmailLabels = [
   "Receipts",
   "Newsletters",
 ]
+
+export const processingActivityFixture = {
+  lastChecked: "10:42 a.m.",
+  processed: 18,
+  excluded: 6,
+  failed: 1,
+  initialBacklog: 34,
+}
 
 export function scopeSummary(rules: SourceRules) {
   const allowed = [

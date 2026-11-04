@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import gmailLogo from "./assets/gmail-logo.svg"
+import googleG from "./assets/google-g.svg"
 import inboxToTaskLogo from "./assets/inbox-to-task-logo.png"
-import { gmailLabels, scopeSummary, type SourceRules } from "./demoData"
+import {
+  gmailLabels,
+  processingActivityFixture,
+  scopeSummary,
+  type ScanState,
+  type SourceRules,
+} from "./demoData"
+import { previewAdapter } from "./previewAdapter"
 
 type Email = {
   sender: string
@@ -393,13 +401,31 @@ const emptyOnboardingPreferences: OnboardingPreferences = {
 
 function App() {
   const [screen, setScreen] = useState<AppScreen>("onboarding")
+  const [previewMode, setPreviewMode] = useState(false)
+  const [previewGmailAccount, setPreviewGmailAccount] = useState<string | null>(
+    null,
+  )
+  const [previewCalendarAccount, setPreviewCalendarAccount] =
+    useState<string | null>(null)
+  const [processingEnabled, setProcessingEnabled] = useState(false)
   const [savedPreferences, setSavedPreferences] =
     useState<OnboardingPreferences>(emptyOnboardingPreferences)
 
   if (screen === "onboarding") {
     return (
       <Onboarding
+        onConnectGmail={setPreviewGmailAccount}
+        previewMode={previewMode}
+        onFinish={(preferences) => {
+          setSavedPreferences(preferences)
+          setProcessingEnabled(true)
+          setScreen("dashboard")
+        }}
         onExplore={() => {
+          setPreviewMode(true)
+          setPreviewGmailAccount(null)
+          setPreviewCalendarAccount(null)
+          setProcessingEnabled(true)
           setSavedPreferences({
             includedTypes: ["School"],
             selectedSources: ["professor@illinois.edu"],
@@ -408,18 +434,30 @@ function App() {
           })
           setScreen("dashboard")
         }}
+        onPreviewOnboarding={() => setPreviewMode(true)}
       />
     )
   }
 
   return (
     <Dashboard
+      calendarAccount={previewCalendarAccount}
+      gmailAccount={previewGmailAccount}
+      onCalendarAccountChange={setPreviewCalendarAccount}
+      onGmailAccountChange={setPreviewGmailAccount}
+      onProcessingChange={setProcessingEnabled}
       onPreferencesChange={(preferences) => {
         setSavedPreferences(preferences)
       }}
+      previewMode={previewMode}
+      processingEnabled={processingEnabled}
       preferences={savedPreferences}
       onSignOut={() => {
         setScreen("onboarding")
+        setPreviewMode(false)
+        setPreviewGmailAccount(null)
+        setPreviewCalendarAccount(null)
+        setProcessingEnabled(false)
         setSavedPreferences(emptyOnboardingPreferences)
       }}
     />
@@ -427,10 +465,24 @@ function App() {
 }
 
 function Dashboard({
+  previewMode,
+  gmailAccount,
+  calendarAccount,
+  processingEnabled,
+  onGmailAccountChange,
+  onCalendarAccountChange,
+  onProcessingChange,
   preferences,
   onPreferencesChange,
   onSignOut,
 }: {
+  previewMode: boolean
+  gmailAccount: string | null
+  calendarAccount: string | null
+  processingEnabled: boolean
+  onGmailAccountChange: (email: string | null) => void
+  onCalendarAccountChange: (email: string | null) => void
+  onProcessingChange: (enabled: boolean) => void
   preferences: OnboardingPreferences
   onPreferencesChange: (preferences: OnboardingPreferences) => void
   onSignOut: () => void
@@ -456,7 +508,13 @@ function Dashboard({
   const [categoryFilter, setCategoryFilter] =
     useState<CategoryFilter>("All tasks")
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [scanState, setScanState] = useState<ScanState>(
+    previewMode ? "ready" : "disconnected",
+  )
   const [calendarPreview, setCalendarPreview] = useState<Task | null>(null)
+  const [calendarEvents, setCalendarEvents] = useState<Record<string, string>>(
+    {},
+  )
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -532,11 +590,32 @@ function Dashboard({
     }, 2000)
   }
 
+  const refreshPreview = async () => {
+    if (!previewMode || !processingEnabled) return
+    setScanState("processing")
+    try {
+      const state = await previewAdapter.refreshProcessing()
+      setScanState(state)
+      return state
+    } catch (error) {
+      console.error("Preview scan failed", error)
+      setScanState("failed")
+      return "failed" as const
+    }
+  }
+
   if (settingsOpen) {
     return (
       <SettingsScreen
+        calendarAccount={calendarAccount}
+        gmailAccount={gmailAccount}
         onBack={() => setSettingsOpen(false)}
+        onCalendarAccountChange={onCalendarAccountChange}
+        onGmailAccountChange={onGmailAccountChange}
         onPreferencesChange={onPreferencesChange}
+        onProcessingChange={onProcessingChange}
+        previewMode={previewMode}
+        processingEnabled={processingEnabled}
         preferences={preferences}
       />
     )
@@ -556,7 +635,7 @@ function Dashboard({
             <span className="date-dot" />
             Thursday, October 8, 2026
           </div>
-          <span className="demo-mode-badge">Demo mode · sample data</span>
+          <span className="demo-mode-badge">Preview mode · sample data</span>
           <div className="account-menu-wrap">
             <button
               aria-expanded={accountMenuOpen}
@@ -580,7 +659,7 @@ function Dashboard({
                 >
                   Settings
                 </button>
-                <button onClick={onSignOut}>Exit demo</button>
+                <button onClick={onSignOut}>Exit preview</button>
               </div>
             )}
           </div>
@@ -627,7 +706,30 @@ function Dashboard({
           </button>
         </nav>
 
-        <ScanStatus onAction={() => setSettingsOpen(true)} />
+        <ScanStatus
+          backlogCount={
+            previewMode ? processingActivityFixture.initialBacklog : 0
+          }
+          onAction={() => setSettingsOpen(true)}
+          onRefresh={refreshPreview}
+          onToggleProcessing={() => {
+            if (!previewMode) return
+            onProcessingChange(!processingEnabled)
+            setScanState(!processingEnabled ? "ready" : "paused")
+          }}
+          previewMode={previewMode}
+          state={
+            !previewMode
+              ? "disconnected"
+              : !processingEnabled
+                ? "paused"
+                : preferences.includedTypes.length +
+                      preferences.selectedSources.length ===
+                    0
+                  ? "missing-sources"
+                  : scanState
+          }
+        />
 
         {activeTab === "tasks" ? (
           <div className="content-grid">
@@ -715,6 +817,7 @@ function Dashboard({
                         completed.includes(task.id) ||
                         completionPending.includes(task.id)
                       }
+                      calendarAdded={Boolean(calendarEvents[task.id])}
                       key={task.id}
                       menuOpen={menuId === task.id}
                       onAdd={() => setCalendarPreview(task)}
@@ -896,8 +999,18 @@ function Dashboard({
 
       {calendarPreview && (
         <CalendarPreviewModal
+          calendarAccount={calendarAccount}
+          onCalendarAccountChange={onCalendarAccountChange}
           onCancel={() => setCalendarPreview(null)}
+          previewMode={previewMode}
           task={calendarPreview}
+          onSuccess={(eventId) => {
+            setCalendarEvents((current) => ({
+              ...current,
+              [calendarPreview.id]: eventId,
+            }))
+            setCalendarPreview(null)
+          }}
         />
       )}
 
@@ -943,6 +1056,7 @@ function TaskRow({
   task,
   status,
   completed,
+  calendarAdded,
   menuOpen,
   onComplete,
   onViewEmail,
@@ -956,6 +1070,7 @@ function TaskRow({
   task: Task
   status: "suggestions" | "active" | "completed"
   completed: boolean
+  calendarAdded: boolean
   menuOpen: boolean
   onComplete: () => void
   onViewEmail: () => void
@@ -1028,7 +1143,7 @@ function TaskRow({
       ) : status === "active" ? (
         <button className="calendar-button" onClick={onAdd}>
           <Icon name="calendar" size={16} />
-          Preview calendar event
+          {calendarAdded ? "Preview event added" : "Preview calendar event"}
         </button>
       ) : (
         <span className="deletion-date">Demo only</span>
@@ -1302,8 +1417,24 @@ function Brand() {
   )
 }
 
-function Onboarding({ onExplore }: { onExplore: () => void }) {
+function Onboarding({
+  previewMode,
+  onExplore,
+  onPreviewOnboarding,
+  onConnectGmail,
+  onFinish,
+}: {
+  previewMode: boolean
+  onExplore: () => void
+  onPreviewOnboarding: () => void
+  onConnectGmail: (email: string | null) => void
+  onFinish: (preferences: OnboardingPreferences) => void
+}) {
   const [step, setStep] = useState(0)
+  const [gmailConnected, setGmailConnected] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [setupError, setSetupError] = useState("")
   const [preferences, setPreferences] = useState<OnboardingPreferences>(
     emptyOnboardingPreferences,
   )
@@ -1390,6 +1521,10 @@ function Onboarding({ onExplore }: { onExplore: () => void }) {
                 Turn email into clear next steps.
               </p>
               <div className="sign-in-actions">
+                <button className="google-button" disabled>
+                  <img alt="" src={googleG} />
+                  <span>Continue with Google</span>
+                </button>
                 <div className="sign-in-unavailable" role="status">
                   <strong>Google sign-in is unavailable</strong>
                   <span>
@@ -1397,6 +1532,15 @@ function Onboarding({ onExplore }: { onExplore: () => void }) {
                     account has been connected.
                   </span>
                 </div>
+                <button
+                  className="text-link sign-in-demo-link"
+                  onClick={() => {
+                    onPreviewOnboarding()
+                    setStep(1)
+                  }}
+                >
+                  Preview onboarding
+                </button>
                 <button
                   className="text-link sign-in-demo-link"
                   onClick={onExplore}
@@ -1436,20 +1580,53 @@ function Onboarding({ onExplore }: { onExplore: () => void }) {
               </p>
               <div className="setup-connection unavailable">
                 <div>
-                  <strong>Gmail connection is unavailable</strong>
+                  <strong>
+                    {gmailConnected
+                      ? "Preview inbox connected"
+                      : "Gmail connection is unavailable"}
+                  </strong>
                   <span>
-                    Gmail integration is not configured. No mailbox has been
-                    accessed.
+                    {gmailConnected
+                      ? "Fictional account only. No real mailbox was accessed."
+                      : previewMode
+                        ? "Use the fictional preview inbox to continue this walkthrough."
+                        : "Gmail integration is not configured. No mailbox has been accessed."}
                   </span>
                 </div>
               </div>
+              {previewMode && !gmailConnected && (
+                <button
+                  className="secondary-button"
+                  disabled={connecting}
+                  onClick={async () => {
+                    setConnecting(true)
+                    setSetupError("")
+                    try {
+                      const account = await previewAdapter.connectGmail()
+                      onConnectGmail(account.email)
+                      setGmailConnected(true)
+                    } catch (error) {
+                      console.error("Preview Gmail connection failed", error)
+                      setSetupError(
+                        "Could not connect the fictional preview inbox. Please try again.",
+                      )
+                    } finally {
+                      setConnecting(false)
+                    }
+                  }}
+                >
+                  {connecting ? "Connecting preview inbox…" : "Connect Gmail"}
+                </button>
+              )}
               <p className="setup-helper">
-                Nothing is scanned until you finish setup and start.
+                {gmailConnected
+                  ? "This fictional connection is isolated from real Gmail."
+                  : "Nothing is scanned until you finish setup and start."}
               </p>
               <FooterActions
                 back={() => setStep(0)}
                 next={() => setStep(2)}
-                nextDisabled
+                nextDisabled={!previewMode || !gmailConnected}
               />
             </>
           )}
@@ -1667,7 +1844,11 @@ function Onboarding({ onExplore }: { onExplore: () => void }) {
                 <ReviewPreference
                   label="Gmail status"
                   onEdit={() => setStep(1)}
-                  values={["Unavailable in this deployment"]}
+                  values={[
+                    gmailConnected
+                      ? "Fictional preview account · no real mailbox accessed"
+                      : "Unavailable in this deployment",
+                  ]}
                 />
                 <ReviewPreference
                   label="Emails to check"
@@ -1701,13 +1882,37 @@ function Onboarding({ onExplore }: { onExplore: () => void }) {
                 You review task suggestions before approving them. Calendar
                 entries require separate approval.
               </p>
+              <p className="setup-helper">
+                Preview only. No account is accessed and these preferences are
+                not saved to Supabase.
+              </p>
               <FooterActions
                 back={() => setStep(3)}
-                next={() => undefined}
-                nextDisabled
-                nextLabel="Processing unavailable"
+                next={async () => {
+                  if (!previewMode || starting) return
+                  setStarting(true)
+                  setSetupError("")
+                  try {
+                    await previewAdapter.startProcessing()
+                    onFinish(preferences)
+                  } catch (error) {
+                    console.error("Preview onboarding could not start", error)
+                    setSetupError(
+                      "Could not start the preview flow. Please try again.",
+                    )
+                  } finally {
+                    setStarting(false)
+                  }
+                }}
+                nextDisabled={!previewMode || starting}
+                nextLabel={starting ? "Starting preview…" : "Review and start"}
               />
             </>
+          )}
+          {setupError && (
+            <div className="notice warning" role="alert">
+              {setupError}
+            </div>
           )}
         </section>
       </main>
@@ -2187,24 +2392,130 @@ function Chips({
   )
 }
 
-function ScanStatus({ onAction }: { onAction: () => void }) {
+function ScanStatus({
+  state,
+  previewMode,
+  backlogCount,
+  onAction,
+  onRefresh,
+  onToggleProcessing,
+}: {
+  state: ScanState
+  previewMode: boolean
+  backlogCount: number
+  onAction: () => void
+  onRefresh: () => Promise<ScanState | undefined>
+  onToggleProcessing: () => void
+}) {
+  const [activityOpen, setActivityOpen] = useState(false)
+  const [lastChecked, setLastChecked] = useState(
+    previewMode
+      ? `Preview fixture · ${processingActivityFixture.lastChecked}`
+      : null,
+  )
+  const stateCopy: Record<ScanState, [string, string]> = {
+    ready: ["Auto-check on", "Preview inbox is ready for a simulated check."],
+    processing: ["Checking preview inbox…", "Simulated scan in progress."],
+    running: ["Checking preview inbox…", "Simulated scan in progress."],
+    cooldown: ["Cooling down", "Try another simulated check in a moment."],
+    empty: ["Preview check complete", "No new sample messages were processed."],
+    failed: [
+      "Preview check failed",
+      "The simulated scan encountered an error.",
+    ],
+    paused: ["Auto-check paused", "Preview scans are paused."],
+    "missing-sources": [
+      "No sources selected",
+      "Choose an included type or sender in Settings.",
+    ],
+    disconnected: [
+      "Scanning unavailable",
+      "Gmail is not configured. No mailbox was accessed.",
+    ],
+  }
+  const [title, detail] = stateCopy[state]
+
   return (
     <section
       aria-label="Processing status"
-      className="processing-status state-disconnected"
+      className={`processing-status state-${state}`}
     >
       <div className="processing-status-copy" aria-live="polite">
         <span className="status-pulse" />
         <div>
-          <strong>Gmail integration unavailable</strong>
-          <span>No mailbox was accessed or processed.</span>
+          <strong>{title}</strong>
+          <span>{detail}</span>
+          <span className="scan-last-checked">
+            Last checked:{" "}
+            {previewMode ? (lastChecked ?? "Not yet") : "Unavailable"}
+            {previewMode &&
+              backlogCount > 0 &&
+              ` · ${backlogCount} sample items`}
+          </span>
         </div>
       </div>
       <div className="processing-status-actions">
-        <button className="text-link" onClick={onAction}>
-          View settings
+        {previewMode && (
+          <button className="text-link" onClick={onToggleProcessing}>
+            {state === "paused" ? "Resume" : "Pause"}
+          </button>
+        )}
+        <button
+          className="secondary-button scan-refresh"
+          disabled={
+            !previewMode ||
+            state === "processing" ||
+            state === "running" ||
+            state === "paused" ||
+            state === "missing-sources"
+          }
+          onClick={async () => {
+            const result = await onRefresh()
+            if (result && result !== "cooldown") {
+              setLastChecked("Just now (simulated)")
+            }
+          }}
+        >
+          Refresh
+        </button>
+        <button
+          className="text-link"
+          onClick={() => setActivityOpen((current) => !current)}
+        >
+          {activityOpen ? "Hide activity" : "View activity"}
         </button>
       </div>
+      {activityOpen && (
+        <div className="scan-activity" aria-live="polite">
+          {previewMode ? (
+            <>
+              <strong>Preview activity · sample only</strong>
+              <span>
+                {processingActivityFixture.processed} sample messages checked ·{" "}
+                {processingActivityFixture.excluded} excluded ·{" "}
+                {processingActivityFixture.failed} simulated failure
+              </span>
+              <span>
+                {backlogCount} sample messages remain in the preview backlog.
+              </span>
+              <button
+                className="text-link"
+                onClick={() => previewAdapter.simulateNextScanFailure()}
+              >
+                Simulate next scan error
+              </button>
+            </>
+          ) : (
+            <>
+              <strong>Activity unavailable</strong>
+              <span>
+                No real inbox activity is available because Gmail is not
+                configured.
+              </span>
+            </>
+          )}
+        </div>
+      )}
     </section>
   )
 }
@@ -2432,13 +2743,28 @@ function SettingsScreen({
   onBack,
   preferences,
   onPreferencesChange,
+  previewMode,
+  gmailAccount,
+  calendarAccount,
+  processingEnabled,
+  onGmailAccountChange,
+  onCalendarAccountChange,
+  onProcessingChange,
 }: {
   onBack: () => void
   preferences: OnboardingPreferences
   onPreferencesChange: (preferences: OnboardingPreferences) => void
+  previewMode: boolean
+  gmailAccount: string | null
+  calendarAccount: string | null
+  processingEnabled: boolean
+  onGmailAccountChange: (email: string | null) => void
+  onCalendarAccountChange: (email: string | null) => void
+  onProcessingChange: (enabled: boolean) => void
 }) {
   const [section, setSection] = useState("sources")
   const [saved, setSaved] = useState(false)
+  const [connectionError, setConnectionError] = useState("")
 
   const sections = [
     ["sources", "Sources & exclusions"],
@@ -2452,7 +2778,9 @@ function SettingsScreen({
       <header className="topbar">
         <Brand />
         <div className="topbar-actions">
-          <span className="demo-mode-badge">Demo mode · sample data</span>
+          <span className="demo-mode-badge">
+            {previewMode ? "Preview mode · sample data" : "Live mode"}
+          </span>
           <button className="secondary-button" onClick={onBack}>
             <Icon name="arrow" size={15} /> Back to dashboard
           </button>
@@ -2479,7 +2807,7 @@ function SettingsScreen({
             <>
               <SettingsHeading
                 title="Email preferences"
-                description="Preview preference controls. Changes are kept in this demo session only."
+                description="Preview preference controls. Changes are kept in this preview session only."
               />
               <div className="notice neutral">
                 <strong>Preview only</strong>
@@ -2497,7 +2825,8 @@ function SettingsScreen({
               />
               {saved && (
                 <div className="save-confirmation" role="status">
-                  Updated for this demo session only. No messages were read.
+                  Updated for this preview session only. No messages were read
+                  or saved to Supabase.
                 </div>
               )}
             </>
@@ -2506,18 +2835,31 @@ function SettingsScreen({
             <>
               <SettingsHeading
                 title="Processing and thread context"
-                description="Background processing controls are unavailable because Gmail is not configured."
+                description={
+                  previewMode
+                    ? "Only simulated controls are available; no real inbox processing is configured."
+                    : "Background processing controls are unavailable because Gmail is not configured."
+                }
               />
               <div className="settings-card split-card">
                 <div>
                   <strong>Automatic processing</strong>
                   <span>
-                    Background processing is not configured. This demo does not
-                    read or process messages.
+                    {previewMode
+                      ? "Preview checks change simulated status only and do not read real messages."
+                      : "Background processing is not configured. This preview does not read or process messages."}
                   </span>
                 </div>
-                <button className="secondary-button" disabled>
-                  Unavailable
+                <button
+                  className="secondary-button"
+                  disabled={!previewMode}
+                  onClick={() => onProcessingChange(!processingEnabled)}
+                >
+                  {previewMode
+                    ? processingEnabled
+                      ? "Pause preview checks"
+                      : "Resume preview checks"
+                    : "Unavailable"}
                 </button>
               </div>
               <div className="settings-card">
@@ -2570,18 +2912,43 @@ function SettingsScreen({
             <>
               <SettingsHeading
                 title="Connections"
-                description="No external accounts are connected in this deployment."
+                description={
+                  previewMode
+                    ? "Fictional connections are local to this preview."
+                    : "No external accounts are connected in this deployment."
+                }
               />
               <div className="settings-card connection-setting">
                 <div>
                   <span className="service-icon">G</span>
                   <div>
                     <strong>Gmail</strong>
-                    <span>Not configured</span>
+                    <span>
+                      {previewMode && gmailAccount
+                        ? `${gmailAccount} · fictional preview`
+                        : "Not configured"}
+                    </span>
                   </div>
                 </div>
-                <button className="secondary-button" disabled>
-                  Unavailable
+                <button
+                  className="secondary-button"
+                  disabled={!previewMode}
+                  onClick={async () => {
+                    setConnectionError("")
+                    try {
+                      const account = await previewAdapter.connectGmail()
+                      onGmailAccountChange(account.email)
+                    } catch (error) {
+                      console.error("Preview Gmail connection failed", error)
+                      setConnectionError("Could not connect the preview inbox.")
+                    }
+                  }}
+                >
+                  {previewMode
+                    ? gmailAccount
+                      ? "Reconnect preview inbox"
+                      : "Connect preview inbox"
+                    : "Unavailable"}
                 </button>
               </div>
               <div className="settings-card connection-setting">
@@ -2591,18 +2958,52 @@ function SettingsScreen({
                   </span>
                   <div>
                     <strong>Google Calendar</strong>
-                    <span>Not configured</span>
+                    <span>
+                      {previewMode && calendarAccount
+                        ? `${calendarAccount} · fictional preview`
+                        : "Not configured"}
+                    </span>
                   </div>
                 </div>
-                <button className="secondary-button" disabled>
-                  Unavailable
+                <button
+                  className="secondary-button"
+                  disabled={!previewMode}
+                  onClick={async () => {
+                    setConnectionError("")
+                    try {
+                      const account =
+                        await previewAdapter.connectGoogleCalendar()
+                      onCalendarAccountChange(account.email)
+                    } catch (error) {
+                      console.error("Preview Calendar connection failed", error)
+                      setConnectionError(
+                        "Could not connect the preview calendar.",
+                      )
+                    }
+                  }}
+                >
+                  {previewMode
+                    ? calendarAccount
+                      ? "Reconnect preview calendar"
+                      : "Connect preview calendar"
+                    : "Unavailable"}
                 </button>
               </div>
+              {connectionError && (
+                <div className="notice warning" role="alert">
+                  {connectionError}
+                </div>
+              )}
               <div className="notice neutral">
-                <strong>Integrations are unavailable</strong>
+                <strong>
+                  {previewMode
+                    ? "Preview connections only"
+                    : "Integrations are unavailable"}
+                </strong>
                 <span>
-                  Gmail and Google Calendar are not connected in this
-                  deployment. The demo uses local sample data only.
+                  {previewMode
+                    ? "These fictional accounts do not access Gmail or create real Calendar events."
+                    : "Gmail and Google Calendar are not connected in this deployment. The demo uses local sample data only."}
                 </span>
               </div>
               <p className="settings-footnote">
@@ -2610,7 +3011,7 @@ function SettingsScreen({
                 Gmail messages or calendar entries.
               </p>
               <p className="settings-footnote">
-                Exiting demo mode does not connect or disconnect any external
+                Exiting preview mode does not connect or disconnect any external
                 service.
               </p>
             </>
@@ -2701,9 +3102,17 @@ function RetentionRow({ title, value }: RetentionRowProps) {
 function CalendarPreviewModal({
   task,
   onCancel,
+  previewMode,
+  calendarAccount,
+  onCalendarAccountChange,
+  onSuccess,
 }: {
   task: Task
   onCancel: () => void
+  previewMode: boolean
+  calendarAccount: string | null
+  onCalendarAccountChange: (email: string | null) => void
+  onSuccess: (eventId: string) => void
 }) {
   const [kind, setKind] = useState<"all-day" | "timed">("timed")
   const [title, setTitle] = useState(task.title)
@@ -2713,14 +3122,21 @@ function CalendarPreviewModal({
   const [start, setStart] = useState(task.date.slice(11) || "")
   const [zone, setZone] = useState("America/Chicago")
   const [duration, setDuration] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
   return (
     <Modal onClose={onCancel} title="Preview calendar event" wide>
       <div className="calendar-disclosure">
-        <strong>Google Calendar is unavailable</strong>
+        <strong>
+          {previewMode && calendarAccount
+            ? "Fictional preview calendar connected"
+            : "Google Calendar is unavailable"}
+        </strong>
         <span>
-          Calendar integration is not configured. This preview will not connect
-          an account or create an event.
+          {previewMode
+            ? "Preview actions stay local; no real Calendar account is accessed or changed."
+            : "Calendar integration is not configured. This preview will not connect an account or create an event."}
         </span>
       </div>
       <div className="form-stack calendar-form">
@@ -2824,12 +3240,63 @@ function CalendarPreviewModal({
           </p>
         )}
       </div>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
       <div className="modal-actions calendar-modal-actions">
         <button className="secondary-button" onClick={onCancel}>
           Cancel
         </button>
-        <button className="primary-button" disabled>
-          Unavailable
+        <button
+          className="primary-button"
+          disabled={
+            !previewMode ||
+            submitting ||
+            Boolean(calendarAccount && kind === "timed" && !duration)
+          }
+          onClick={async () => {
+            if (!previewMode || submitting) return
+            setSubmitting(true)
+            setError("")
+            try {
+              if (!calendarAccount) {
+                const account = await previewAdapter.connectGoogleCalendar()
+                onCalendarAccountChange(account.email)
+                return
+              }
+              const event = await previewAdapter.createCalendarEvent(
+                {
+                  title,
+                  calendar: destination,
+                  allDay: kind === "all-day",
+                  startDate,
+                  endDate,
+                  startTime: kind === "timed" ? start : undefined,
+                  duration: kind === "timed" ? duration : undefined,
+                  timeZone: zone,
+                },
+                task.id,
+              )
+              onSuccess(event.id)
+            } catch (caught) {
+              console.error("Preview Calendar event creation failed", caught)
+              setError("Could not create the local preview event.")
+            } finally {
+              setSubmitting(false)
+            }
+          }}
+        >
+          {!previewMode
+            ? "Unavailable"
+            : submitting
+              ? "Working…"
+              : calendarAccount && kind === "timed" && !duration
+                ? "Choose duration first"
+                : calendarAccount
+                  ? "Add preview event"
+                  : "Connect preview Calendar"}
         </button>
       </div>
     </Modal>

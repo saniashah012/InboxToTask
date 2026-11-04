@@ -1828,6 +1828,11 @@ textarea:focus-visible {
   transform: translateY(1px);
 }
 
+.google-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .google-button img {
   position: absolute;
   left: 18px;
@@ -2910,6 +2915,21 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.processing-status-copy > div {
+  display: grid;
+  gap: 2px;
+}
+
+.processing-status-copy > div > span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.processing-status-copy > div > .scan-last-checked {
+  color: #78847e;
+  font-size: 8px;
+}
+
 .processing-status-actions {
   gap: 14px;
 }
@@ -2939,6 +2959,33 @@ textarea:focus-visible {
 .processing-status.state-disconnected {
   border-color: #ead0cd;
   background: #fffafa;
+}
+
+.processing-status:has(.scan-activity) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.scan-activity {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+  padding: 8px 0 2px 23px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.scan-activity strong {
+  color: var(--ink);
+}
+
+.scan-refresh {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 9px;
 }
 
 .compact-backlog {

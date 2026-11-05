@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildProbe, redactDiagnostic } from '../app/pipeline/isolate.mjs';
 import { toGeminiSchema, responseConfig } from '../app/pipeline/provider-schema.mjs';
+import { reviewChecks } from './extraction-review-evaluation.mjs';
 
 const fixtures = JSON.parse(await readFile(new URL('./fixtures/cp2-inbox.json', import.meta.url), 'utf8'));
 const settings = JSON.parse(await readFile(new URL('../app/prompts/model-settings.json', import.meta.url), 'utf8'));
@@ -122,6 +123,45 @@ test('missing deadline stays null and routes to review; invalid dates rejected',
   const r = await run(input(), async () => ({ value: v })); assert.equal(r.needsReview, true);
   const invalid = value(); invalid.tasks[0].deadline.date = '2026-02-30';
   assert.throws(() => validateExtraction(invalid, prepared().payload), /INVALID_DEADLINE/);
+});
+test('uncertain obligation routes Passive results with no task to review even at high confidence', async () => {
+  const x = input('E12');
+  const v = { ...value(), category: 'Passive', confidence: 99, tasks: [],
+    evidence: { messageId: 'E12', quote: "If you'd like to join" },
+    uncertainties: ['It is unclear whether you previously committed. Have you agreed to attend?'] };
+  const r = await run(x, async () => ({ value: v }));
+  assert.equal(r.needsReview, true);
+  assert.equal(r.result.tasks.length, 0);
+  assert.deepEqual(r.result.uncertainties, v.uncertainties);
+});
+test('clear optional results and date-only obligations do not require review without uncertainty', async () => {
+  const passive = { ...value(), category: 'Passive', tasks: [],
+    evidence: { messageId: 'E12', quote: "If you'd like to join" } };
+  assert.equal((await run(input('E12'), async () => ({ value: passive }))).needsReview, false);
+  const dated = value(); dated.tasks[0].deadline.time = null;
+  assert.equal((await run(input(), async () => ({ value: dated }))).needsReview, false);
+});
+test('uncertainty about a field retains the established action and routes it to review', async () => {
+  const v = value(); v.uncertainties = ['Which time zone does the sender mean?'];
+  const r = await run(input(), async () => ({ value: v }));
+  assert.equal(r.needsReview, true); assert.equal(r.result.tasks.length, 1);
+});
+test('review evaluation catches the historical wording errors missed by the original acceptance checks', async () => {
+  const baseline = JSON.parse((await readFile(new URL('./cp2-live-2026-11-03.json', import.meta.url), 'utf8')).replace(/^\uFEFF/, ''));
+  for (const id of ['E03', 'E09']) {
+    const output = baseline.cases.find((item) => item.messageId === id);
+    assert.equal(output.evaluation.passed, true); // Archived original scoring.
+    assert.equal(reviewChecks(output, expected[id], id, fixtures.user.email).passed, false);
+  }
+});
+test('new review fixtures prepare offline and keep scoring expectations out of inference input', async () => {
+  const probes = JSON.parse(await readFile(new URL('./fixtures/extraction-review.json', import.meta.url), 'utf8'));
+  for (const probe of probes) {
+    const x = input(); x.message.body = probe.body; x.message.id = probe.id;
+    const p = prepared(x);
+    assert.equal(p.status, 'prepared');
+    assert.ok(!JSON.stringify(p.payload).includes('needsReview'));
+  }
 });
 test('conditional reminders retain their trigger without creating a follow-up suggestion', () => {
   const x = input('E09'), v = value();

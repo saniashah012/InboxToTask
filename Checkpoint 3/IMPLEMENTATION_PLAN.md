@@ -1,6 +1,23 @@
 # InboxToTask: CP3 plan and CP4 implementation checklist
 
-Updated: October 30, 2026. This is a planning document, not a report of implemented features. Unchecked items are work to complete or verify. Decisions explicitly accepted by the team are separated from suggested defaults requiring confirmation.
+Updated: November 4, 2026. Checked items have implementation evidence within the scope stated beside them; they do not imply hosted deployment. Unchecked items may be partially implemented and retain their remaining integration or verification requirements. Decisions explicitly accepted by the team are separated from suggested defaults requiring confirmation.
+
+## Current progress and next work
+
+The local extraction/storage foundation is implemented and verified. CP3 is not complete: the real Gmail-to-scheduled-scan-to-review-to-Calendar workflow and a unified frontend remain unfinished. See the [November 4 progress log](docs/cp3-progress-2026-11-04.md), [local storage verification](docs/local-storage-verification-2026-11-04.md), and [storage contract](app/supabase/STORAGE.md) for evidence and boundaries.
+
+| Workstream | Current state | Remaining CP3 work |
+|---|---|---|
+| Repository/setup | React, canonical pipeline/prompts, Supabase migrations/functions, templates, and tests exist under Checkpoint 3 | Confirm assignment deliverable locations; rehearse fresh setup and reconcile hosted migration history |
+| Extraction | Original Gemini evaluation: 19/20 fictional cases passed; uncertainty/wording candidate passes 8/8 targeted and 20/20 full live checks under corrected E09 scoring | Address remaining detail/review-burden findings, freeze validated settings, and verify live Edge-to-storage-to-UI path; see [review verification](docs/extraction-review-verification-2026-11-04.md) |
+| Storage/review | Persistent proposals and accepted values, RLS, revision checks, budgets/leases/cache, review, completion/undo, deletion fencing, cleanup code | Integrate real permissions/scans; finalize retention and enable/test scheduled cleanup |
+| Frontend | Main `/` remains a simulated Figma prototype; opt-in `/storage` provides functional local review controls | Design and implement one integrated interface covering the CP3 workflows below; verify accessibility/Carbon conventions |
+| OAuth/privacy | Local app sessions verified; teammate OAuth work was identified in the handoff but is absent from this checkout | Integrate OAuth, protected token lifecycle, explicit consent, persisted rules, and pre-retrieval enforcement |
+| Scans | Fixture-only endpoint and bounded extraction coordination | Gmail retrieval, incremental state, initial backlog, manual cooldown, scheduler, retry dispatch, progressive counts |
+| Calendar | Separate approval storage; local ICS preview/serializer implemented | Connected event creation/update/reconciliation/undo; verify ICS file saving and destination import |
+| Delivery | Local verification evidence and synthetic live extraction baseline exist | Finish docs/evaluation, hosted integration, closed-dashboard scan, demo rehearsal, and submission |
+
+Recommended sequence: map the unified frontend and shared OAuth/session contract; integrate privacy settings and a real manual Gmail scan; add scheduled scans and recovery; implement connected Calendar operations; complete hosted verification, documentation, and the demo. Frontend design and documentation can proceed while the teammate completes OAuth. Do not treat connecting Google as permission to scan.
 
 ## Product and architecture
 
@@ -139,26 +156,39 @@ Sources checked October 30, 2026: [Gemini caching](https://ai.google.dev/gemini-
 - [ ] Confirm proposed defaults above, context caps, remaining retention periods, and resource budgets.
 - [ ] Confirm the instructor's actual due date/forum deadline; repository dates and the general assignment schedule should not be assumed interchangeable.
 - [ ] Establish root `app/`, `docs/`, and `tests/` deliverables as required by the assignment; keep this planning file under Checkpoint 3.
-- [ ] Scaffold the React app, Supabase configuration, migrations, backend functions, scripts, and environment templates without secrets.
-- [ ] Configure the Gemini model and version-controlled prompts/settings/schema; select and record validated settings.
+- [x] Scaffold the React app, Supabase configuration, migrations, backend functions, scripts, and environment templates without secrets. Local implementation exists; hosted rollout is separate.
+- [ ] Configure the Gemini model and version-controlled prompts/settings/schema; select and record validated settings. The development candidate is explicitly selected Gemini 3.6 Flash, while the canonical default remains 3.8 Flash. The versioned uncertainty/wording candidate passes 8/8 targeted and 20/20 full live checks under corrected E09 scoring; manual detail/review-burden findings and final configuration selection remain. See [original evaluation](docs/cp2-live-evaluation-2026-11-03.md) and [review verification](docs/extraction-review-verification-2026-11-04.md).
 
 ### CP3.2 Dashboard and persistence
 
 - [ ] Implement the Figma flows using the IBM Carbon component/accessibility conventions required by the CP2 design specification.
 - [ ] Implement Tasks, informational digest, Needs Review, Waiting For, Completed, scan activity, and settings.
 - [ ] Add category filters, deadline labels, keyboard access, visible focus, source links, and evidence excerpts.
-- [ ] Persist task approval/edit/dismiss/complete/restore decisions across reloads.
+- [x] Persist task approval/edit/dismiss/complete/restore decisions across reloads. Implemented in storage/RPCs and the opt-in dashboard; local API/browser evidence is linked above. Integration into the main frontend remains below.
 - [ ] Distinguish loading, empty, partial failure, uncertainty, missing context, and expired-excerpt states.
+
+The current frontend does not yet accommodate the complete CP3 product. Preserve the prototype and storage route while building the integrated interface; route replacement should be an explicit implementation decision. Prototype controls must remain visibly simulated until their backend integration works.
+
+#### Unified frontend work remaining
+
+- [ ] Map navigation and screen/state coverage for Tasks, Needs Review, Waiting For, Completed, digest, scan activity, Calendar operations, and settings; define how users move between evidence, corrections, approval, and recovery.
+- [ ] Integrate the existing persistent review, edit, dismiss/restore, complete/undo, waiting-for resolution/reminders, and ICS controls into the product design using the shared Auth client/session.
+- [ ] Implement connection and consent onboarding: Google status, data-flow/retention disclosures, explicit scanning consent, allowlists/exclusions, context limits, and readable effective scope.
+- [ ] Add real scan controls/status: manual refresh and cooldown, running scan, processed/excluded/failed/pending counts, backlog/Scan more, retry/deferred work, and budget/reset feedback.
+- [ ] Complete task filters/sorting, deadline/condition labels, source links and evidence inspection, uncertainty/missing-context/expired-excerpt states, and separate proposed updates from accepted edits.
+- [ ] Add separate Calendar destination/title/schedule approval, operation status, failure recovery, and explicit undo; retain the manual-import limitations on ICS exports.
+- [ ] Add account/privacy settings for pause/resume, reconnect, disconnect/revocation, deletion, and retention controls; reflect actual backend availability.
+- [ ] Verify keyboard navigation, visible focus, accessible labels/status announcements, responsive layouts, and the CP2 Carbon conventions across the integrated workflows; run authenticated browser checks after wiring persistence.
 
 ### CP3.3 Accounts, privacy, and Google connections
 
-- [ ] Implement app authentication and verify sessions in backend endpoints; derive ownership from verified identity.
-- [ ] Enable and test Row Level Security on user-facing tables; isolate credential storage from browser access and keep privileged keys server-side.
+- [x] Implement app authentication and verify sessions in backend endpoints; derive ownership from verified identity. Local email/password sign-in and fixture endpoint Auth are verified; Google onboarding and future endpoints still require integration.
+- [ ] Enable and test Row Level Security on user-facing tables; isolate credential storage from browser access and keep privileged keys server-side. Storage-table RLS/grants and two-user isolation are verified; protected Google credential storage remains to implement and test.
 - [ ] Implement Google OAuth with account-bound, single-use state validation, approved callback URLs, refresh handling, and least necessary Gmail/calendar scopes.
 - [ ] Protect refresh tokens with encryption and separately managed keys; prevent tokens in logs, URLs, and client responses.
 - [ ] Explain data flow, model-provider processing, filtering limits, and retention before automation consent.
-- [ ] Implement OR allowlists, overriding exclusions, no-allowlist notification, readable scope descriptions, and privacy settings.
-- [ ] Add pause/resume, reconnect, disconnect/revocation, deletion controls, and stale-job protection.
+- [ ] Implement OR allowlists, overriding exclusions, no-allowlist notification, readable scope descriptions, and privacy settings. Canonical fixture filtering exists; persisted user configuration and enforcement before Gmail body/context retrieval remain.
+- [ ] Add pause/resume, reconnect, disconnect/revocation, deletion controls, and stale-job protection. Storage pause/resume, deletion, and generation fencing exist; Google lifecycle and real scan integration remain.
 - [ ] Document Google verification/testing status; use dedicated test accounts and fictional content for the demo.
 
 ### CP3.4 Scanning and real inference
@@ -168,23 +198,24 @@ Sources checked October 30, 2026: [Gemini caching](https://ai.google.dev/gemini-
 - [ ] Use incremental scan state, bounded batches, concurrency protection, and a separate failed-item retry queue; do not mark failures successful.
 - [ ] Enforce current filters before retrieving bodies, on every context message, and again before external inference.
 - [ ] Add customizable thread limits with backend-enforced maximums; remove quoted history where practical and flag missing context.
-- [ ] Call real Gemini inference for permitted messages and distinguish noise, tasks, events, and external commitments.
+- [ ] Call real Gemini inference for permitted messages and distinguish noise, tasks, events, and external commitments. Real fictional-case inference is evaluated; real Gmail processing and a live Gemini-to-Edge-to-database-to-UI trial remain unverified.
 - [ ] Extract and validate ownership, dates, requirements, dependencies, and supporting evidence; preserve nullable/ambiguous fields.
 - [ ] Display progressive validated results with processed/excluded/failed/pending counts and clear scan scope.
-- [ ] Implement retry-safe extraction, multi-action handling, duplicate suppression, and reviewable update matching without overwriting edits.
-- [ ] Implement the token-cost requirements: zero inference on empty/unchanged scans, combined structured extraction, bounded relevant context, safe result reuse, and code-only task/calendar actions.
+- [ ] Implement retry-safe extraction, multi-action handling, duplicate suppression, and reviewable update matching without overwriting edits. Canonical multi-action extraction, storage retry/cache/deletion safeguards, and explicitly targeted proposals exist; automatic matching and real scan integration remain.
+- [ ] Implement the token-cost requirements: zero inference on empty/unchanged scans, combined structured extraction, bounded relevant context, safe result reuse, and code-only task/calendar actions. Fixture extraction/storage provide combined output, bounded input, reservations/cache reuse, and code-only review; verify these properties across real Gmail scans and connected Calendar operations.
 
 ### CP3.5 Approval, calendars, and lifecycle
 
-- [ ] Keep task approval separate from calendar authorization; enforce approval server-side.
+- [ ] Keep task approval separate from calendar authorization; enforce approval server-side. Review RPCs and separate calendar approval records exist; the future Calendar executor must enforce these approvals before external writes.
 - [ ] Preview Google Calendar destination, title, all-day/timed choice, time zone, and duration; prepopulate explicit times and avoid private excerpts/attendees by default.
 - [ ] Create real Google Calendar entries, record event IDs, handle ambiguous retry outcomes, and prevent duplicate creation.
 - [ ] Implement approved event updates and explicit undo of app-created entries, with visible failure recovery.
-- [ ] Generate valid ICS exports and label them as manual import, without claiming synchronized updates or remote undo.
-- [ ] Add dashboard waiting-for reminders, recipients/rationale, and user-confirmed resolution.
-- [ ] Propose deadline/commitment changes for approval; retain prior approved values until accepted.
-- [ ] Implement completion undo and reset the 30-day countdown on recompletion.
-- [ ] Implement scheduled retention cleanup, manual deletion, and excerpt expiry; prevent deleted tasks being unintentionally recreated by retries.
+- [x] Generate valid ICS exports and label them as manual import, without claiming synchronized updates or remote undo. Implemented on the opt-in storage dashboard; serializer tests and isolated preview browser check pass. File saving and destination-calendar import remain to verify; see [storage contract](app/supabase/STORAGE.md#manual-calendar-export).
+- [ ] Verify ICS file saving and import into a destination calendar from the authenticated task flow; verify all-day and timed schedules and document duplicate-import behavior.
+- [x] Add dashboard waiting-for reminders, recipients/rationale, and user-confirmed resolution. Implemented in storage and the opt-in dashboard; reminders do not send email or notifications.
+- [ ] Propose deadline/commitment changes for approval; retain prior approved values until accepted. Explicitly targeted task-update RPCs preserve accepted fields; automatic matching, commitment-change workflow, and integrated review UI remain.
+- [x] Implement completion undo and reset the 30-day countdown on recompletion. Database semantics and local completion/undo behavior verified.
+- [ ] Implement scheduled retention cleanup, manual deletion, and excerpt expiry; prevent deleted tasks being unintentionally recreated by retries. Cleanup/deletion/expiry/suppression code exists and storage semantics are tested; finalize policies and enable/test the actual cleanup schedule.
 
 ### CP3.6 Tests, observability, documentation, and demo
 
@@ -202,6 +233,8 @@ Sources checked October 30, 2026: [Gemini caching](https://ai.google.dev/gemini-
 - [ ] Verify fresh local setup and hosted operation, including an automatic scan with the dashboard closed.
 - [ ] Rehearse a 5-8 minute presentation with at least half devoted to live use: allowed/blocked email, extraction, uncertainty correction, calendar approval/undo, and recovery. Use manual refresh to demonstrate the same pipeline without waiting 15 minutes; explain the schedule honestly.
 - [ ] Submit required forum materials and document actual limitations rather than simulating unfinished core features.
+
+Verification baseline: 75 offline tests, 28 database checks, seven local API groups, frontend type/build checks, Edge type checks, and synthetic browser persistence checks are recorded in the [storage report](docs/local-storage-verification-2026-11-04.md). The later ICS addition passed five separate export tests, frontend type/build checks, and isolated synthetic preview checks. These counts are separate; no new full-suite run or hosted/real-inbox integration is implied. Architecture, use-case, observability, and safety/privacy documents currently contain TODO placeholders. See the [progress log](docs/cp3-progress-2026-11-04.md) for the current handoff.
 
 CP3 exit condition: another teammate can reproduce setup, connect a real test account, demonstrate automatic and manual permitted-email processing with actual inference, persist review decisions, perform approved calendar operations, and recover from a realistic failure. Core CP2 commitments above remain CP3 work; unresolved core features are gaps to disclose, not automatically CP4 scope.
 

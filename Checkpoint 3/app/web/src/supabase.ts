@@ -1,11 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
+import type { SourceRules } from "./demoData"
 
-export type OnboardingPreferences = {
-  includedTypes: string[]
-  selectedSources: string[]
-  excludedTypes: string[]
-  excludedSources: string[]
-}
+export type OnboardingPreferences = SourceRules
 
 type PreferenceRow = {
   user_id: string
@@ -79,11 +75,50 @@ const preferenceColumns =
   "user_id,included_types,selected_sources,excluded_types,excluded_sources,created_at,updated_at"
 
 function fromPreferenceRow(row: PreferenceRow): OnboardingPreferences {
+  const allowedSenders: string[] = []
+  const allowedDomains: string[] = []
+  const excludedSenders: string[] = []
+  const excludedDomains: string[] = []
+  const excludedSubjects: string[] = []
+
+  for (const source of row.selected_sources) {
+    if (source.startsWith("domain:")) {
+      allowedDomains.push(source.slice("domain:".length))
+    } else if (source.startsWith("sender:")) {
+      allowedSenders.push(source.slice("sender:".length))
+    } else if (source.startsWith("@")) {
+      allowedDomains.push(source.slice(1))
+    } else if (source.includes("@")) {
+      allowedSenders.push(source)
+    } else {
+      allowedDomains.push(source)
+    }
+  }
+
+  for (const source of row.excluded_sources) {
+    if (source.startsWith("domain:")) {
+      excludedDomains.push(source.slice("domain:".length))
+    } else if (source.startsWith("sender:")) {
+      excludedSenders.push(source.slice("sender:".length))
+    } else if (source.startsWith("subject:")) {
+      excludedSubjects.push(source.slice("subject:".length))
+    } else if (source.startsWith("@")) {
+      excludedDomains.push(source.slice(1))
+    } else if (source.includes("@")) {
+      excludedSenders.push(source)
+    } else {
+      excludedDomains.push(source)
+    }
+  }
+
   return {
-    includedTypes: row.included_types,
-    selectedSources: row.selected_sources,
-    excludedTypes: row.excluded_types,
-    excludedSources: row.excluded_sources,
+    allowedLabels: row.included_types,
+    allowedSenders,
+    allowedDomains,
+    excludedLabels: row.excluded_types,
+    excludedSenders,
+    excludedDomains,
+    excludedSubjects,
   }
 }
 
@@ -110,10 +145,17 @@ export async function saveOnboardingPreferences(
     .upsert(
       {
         user_id: userId,
-        included_types: preferences.includedTypes,
-        selected_sources: preferences.selectedSources,
-        excluded_types: preferences.excludedTypes,
-        excluded_sources: preferences.excludedSources,
+        included_types: preferences.allowedLabels,
+        selected_sources: [
+          ...preferences.allowedSenders.map((sender) => `sender:${sender}`),
+          ...preferences.allowedDomains.map((domain) => `domain:${domain}`),
+        ],
+        excluded_types: preferences.excludedLabels,
+        excluded_sources: [
+          ...preferences.excludedSenders.map((sender) => `sender:${sender}`),
+          ...preferences.excludedDomains.map((domain) => `domain:${domain}`),
+          ...preferences.excludedSubjects.map((subject) => `subject:${subject}`),
+        ],
       },
       { onConflict: "user_id" },
     )

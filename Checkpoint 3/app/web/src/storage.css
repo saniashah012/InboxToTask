@@ -20,4 +20,5 @@
 .storage-eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: .8rem; }
 .storage-muted { color: #536675; font-size: .85rem; }
 .storage-error { color: #9c2323; background: #fff1f1; padding: 14px; border-radius: 5px; }
+.storage-review { border-left: 4px solid #946200; background: #fff8e6; padding: 14px; margin: 16px 0; }
 @media (max-width: 520px) { .storage-page { padding: 24px 16px; } .storage-page header { flex-wrap: wrap; } }

@@ -42,6 +42,14 @@ These defaults support controlled fixture trials. They do not authorize real-ema
 
 [Cleanup](functions/storage_cleanup/index.ts) is disabled by default. Enable it only with a separately configured scheduler secret of at least 32 characters. The optional [schedule installer](operations/install_cleanup_schedule.sql) references Vault secrets and is not applied by migrations. Confirm schedule/time-zone behavior and configure secrets privately before installing it. Cleanup currently locks preference rows across users; batch it before public-scale use.
 
-Remaining integration: OAuth/revocation, protected tokens, permitted Gmail retrieval, incremental/manual/scheduled scan dispatch, semantic task matching, Calendar writes/reconciliation/undo/ICS, final retention policies, and deployment. Dashboard reminder dates do not send email or notifications.
+Remaining integration: OAuth/revocation, protected tokens, permitted Gmail retrieval, incremental/manual/scheduled scan dispatch, semantic task matching, Calendar writes/reconciliation/undo, final retention policies, and deployment. Dashboard reminder dates do not send email or notifications.
+
+## Manual calendar export
+
+The storage dashboard offers **Export calendar file** on accepted approved/completed tasks. The separate preview lets the user edit the calendar title, choose an all-day or timed entry, and supply a date. Timed entries require a start time, valid IANA time zone, and explicit duration (1–1440 minutes). An explicit task deadline can prepopulate the start; it does not imply duration or authorize a connected Calendar write. Missing task deadlines stay empty until the user chooses a calendar date. Export does not change accepted task values or call a model/backend.
+
+[The ICS serializer](../web/src/calendarExport.ts) emits RFC 5545 text with stable task UIDs, CRLF line endings, escaped text, UTF-8 folding, exclusive all-day end dates, and UTC timed entries. Skipped/repeated daylight-saving wall times require another user choice. Files include only the chosen title and schedule, without evidence excerpts or attendees. Users choose the destination during manual import and manage imported entries there; exports provide no synchronization or remote undo, and repeated imports can create duplicates.
+
+Run `npm.cmd run test:calendar` from the app directory with Node 22.6+ (verified on Node 24). Five offline tests cover date boundaries, time zones/DST, duration validation, text injection, and UTF-8 folding. TypeScript and the production frontend build passed on November 4, 2026. An isolated browser component check with synthetic task fields verified all-day preview, required timed duration, and ambiguous-time rejection. The browser tool did not deliver a download event; saving the file and importing into a destination calendar remain unverified. The authenticated task-to-export flow was not repeated in this check.
 
 Read [the verification report](../../docs/local-storage-verification-2026-11-04.md) for actual tested behavior and limitations.

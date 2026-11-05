@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js"
 import { loadStorageSnapshot, processStoredFixture, reviewStoredRecord, storageClient,
   type Deadline, type Snapshot, type StoredRow, type TaskFields } from "./storageAdapter"
 import "./storage.css"
+import CalendarExport from "./CalendarExportPanel"
 
 const empty: Snapshot = { tasks: [], suggestions: [], extractions: [], evidence: [], sources: [], waiting: [], followups: [], preferences: [] }
 const fieldsFor = (row: StoredRow): TaskFields => row.accepted_fields ?? row.review_fields ?? row.fields ?? {
@@ -51,6 +52,7 @@ export default function StorageDashboard() {
   const [caseId, setCaseId] = useState("E01")
   const [tab, setTab] = useState("suggestions")
   const [editor, setEditor] = useState<{ kind: string; row: StoredRow } | null>(null)
+  const [exportTaskId, setExportTaskId] = useState<string | null>(null)
   const [reminders, setReminders] = useState<Record<string, string>>({})
   const activeUser = useRef<string | null>(null)
   const generation = useRef(0)
@@ -71,7 +73,7 @@ export default function StorageDashboard() {
     const apply = (next: Session | null) => {
       if (!live) return
       if (activeUser.current !== next?.user.id) {
-        generation.current++; setSnapshot(empty); setEditor(null); setNotice(""); setError("")
+        generation.current++; setSnapshot(empty); setEditor(null); setExportTaskId(null); setNotice(""); setError("")
       }
       activeUser.current = next?.user.id ?? null; setSession(next); setLoading(false)
     }
@@ -144,7 +146,7 @@ export default function StorageDashboard() {
     <nav aria-label="Stored views" className="storage-actions">{[
       ["suggestions", `Suggestions (${suggestions.length})`], ["tasks", `Tasks (${activeTasks.length})`],
       ["completed", `Completed (${completed.length})`], ["digest", "Informational digest"], ["waiting", "Waiting for"], ["dismissed", "Dismissed"],
-    ].map(([id, label]) => <button key={id} aria-pressed={tab === id} onClick={() => { setTab(id); setEditor(null) }}>{label}</button>)}</nav>
+    ].map(([id, label]) => <button key={id} aria-pressed={tab === id} onClick={() => { setTab(id); setEditor(null); setExportTaskId(null) }}>{label}</button>)}</nav>
     {loading && <p role="status">Loading saved records…</p>}
     <p className="storage-muted">Showing up to 200 records per view. Task approval does not create a calendar event.</p>
     {editor && <section className="storage-panel"><h2>Edit action</h2><FieldEditor key={editor.row.id} busy={busy} initial={fieldsFor(editor.row)}
@@ -176,7 +178,11 @@ export default function StorageDashboard() {
           {row.status === "approved" && <button disabled={busy} onClick={() => void review("task", row, "complete")}>Complete</button>}
           {row.status === "completed" && <button disabled={busy} onClick={() => void review("task", row, "undo")}>Undo completion</button>}
           {row.status === "pending" && <button disabled={busy || !row.accepted_fields} onClick={() => void review("task", row, "approve")}>Approve reviewed task</button>}
-          <button disabled={busy} onClick={() => void review("task", row, "delete")}>Delete</button></div></article>
+          {row.accepted_fields && ["approved", "completed"].includes(row.status) && <button disabled={busy} aria-expanded={exportTaskId === row.id}
+            onClick={() => setExportTaskId(exportTaskId === row.id ? null : row.id)}>Export calendar file</button>}
+          <button disabled={busy} onClick={() => void review("task", row, "delete")}>Delete</button></div>
+        {exportTaskId === row.id && row.accepted_fields && ["approved", "completed"].includes(row.status) && <CalendarExport
+          key={`${row.id}-${row.revision}`} task={row} fields={doc} close={() => setExportTaskId(null)} />}</article>
     })}{!(tab === "tasks" ? activeTasks : completed).length && !loading && <p>No tasks in this view.</p>}</section>}
     {tab === "digest" && <section aria-label="Informational digest">{snapshot.extractions.filter((row) => row.category === "Passive" && row.summary && new Date(row.digest_expires_at) > new Date()).map((row) =>
       <article className="storage-panel" key={row.id}><p>{row.summary}</p>{row.needs_review && <p>Needs review: {row.warnings.join(" ")}</p>}</article>)}

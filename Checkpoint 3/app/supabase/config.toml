@@ -433,7 +433,7 @@ verify_jwt = false
 entrypoint = "./functions/storage_cleanup/index.ts"
 
 [auth.external.google]
-enabled = false
+enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 skip_nonce_check = false

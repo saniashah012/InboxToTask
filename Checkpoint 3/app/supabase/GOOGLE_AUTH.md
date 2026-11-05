@@ -83,7 +83,138 @@ Read-only inspection of the linked `IS492_c3` project found:
 Preserve hosted suggestions/onboarding data. The recovered onboarding fields are
 not a validated scanning consent/allowlist contract. Do not infer consent from them.
 
-## Google Cloud setup
+## Step-by-step local Google setup
+
+This walkthrough uses two Google Cloud projects and the existing local Supabase
+stack. Keep the existing Gemini project unchanged. No hosted deployment is needed
+for these steps. Use `127.0.0.1` consistently for this walkthrough.
+
+### 1. Locate the private files
+
+These files are ignored by Git. Blank copies were created for the current local
+checkout; on another checkout, copy the corresponding example if the private file
+does not exist. Preserve any existing configuration rather than overwriting it.
+
+| Private file | What to enter | Shareable template |
+| --- | --- | --- |
+| [supabase/.env](.env) | Sign-in project ID, sign-in client ID and client secret | [Auth template](.env.example) |
+| [supabase/functions/.env](functions/.env) | Gmail project ID, Gmail client ID and client secret, backend URLs and encryption key | [Functions template](functions/.env.example) |
+| [web/.env](../web/.env) | Public local Supabase URL/key and frontend flags | [Frontend template](../web/.env.example) |
+
+Enter values after `=` without placeholder angle brackets. The project-ID fields
+are handoff notes; runtime configuration uses the OAuth client IDs. Do not paste
+client secrets into chat or put them in the frontend file. These ignored files
+remain on this computer and will not be delivered to teammates by a Git push.
+
+### 2. Create the sign-in project and consent configuration
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/), use the project
+   selector, and choose **New Project**. Name it `InboxToTask Sign-In`.
+2. Select the new project. Record its **project ID** (not its project number) as
+   `GOOGLE_SIGNIN_PROJECT_ID` in the private Auth file.
+3. Open **Google Auth Platform** and choose **Get started** if prompted. Configure
+   **Branding** with an app name such as `InboxToTask Sign-In`, support email, and
+   developer contact email.
+4. In **Audience**, select **External** if using personal Google accounts or
+   accounts outside your organization. Keep the app in **Testing** and add the
+   dedicated test account under **Test users**. If using a school-managed account,
+   its administrator may restrict authorization.
+5. In **Data Access**, configure only basic identity scopes: `openid`,
+   `https://www.googleapis.com/auth/userinfo.email`, and
+   `https://www.googleapis.com/auth/userinfo.profile`. Gmail and Calendar scopes
+   do not belong in this sign-in project.
+
+### 3. Create the sign-in OAuth client
+
+1. In **Google Auth Platform > Clients**, choose **Create client**.
+2. Select **Web application** and name it `InboxToTask Local Sign-In`.
+3. Under **Authorized redirect URIs**, add exactly:
+   `http://127.0.0.1:54321/auth/v1/callback`.
+4. Authorized JavaScript origins are not required for this server OAuth flow.
+   If configuring one, use `http://127.0.0.1:5173` with no path.
+5. Create the client and immediately save its client ID and client secret into
+   `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and
+   `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` in the private Auth file.
+
+The Google redirect above goes to **Supabase Auth**. The frontend callback
+`http://127.0.0.1:5173/storage/auth/callback` is a separate redirect allowed by
+Supabase in [config.toml](config.toml); do not substitute it for Google's redirect.
+The current configuration uses the variable name ending in `_SECRET` exactly as
+written above, even if an external tutorial uses `_CLIENT_SECRET`.
+
+### 4. Create the Gmail project and consent configuration
+
+1. Create and select a second project named `InboxToTask Gmail`.
+2. Save its project ID as `GOOGLE_GMAIL_PROJECT_ID` in the private Functions file.
+3. Under **APIs & Services > Library**, find **Gmail API** and enable it.
+4. Configure **Google Auth Platform > Branding** with the name `InboxToTask Gmail`
+   and your support/developer contacts.
+5. Configure **Audience** as External/Testing for this walkthrough. Add the same
+   dedicated test account used for sign-in.
+6. Under **Data Access > Add or remove scopes**, add `openid`,
+   `https://www.googleapis.com/auth/userinfo.email`, and
+   `https://www.googleapis.com/auth/gmail.readonly`. The last is a restricted
+   scope. Calendar access is a later milestone.
+
+### 5. Create the Gmail OAuth client
+
+1. Under **Clients**, create a **Web application** named `InboxToTask Local Gmail`.
+2. Under **Authorized redirect URIs**, add exactly:
+   `http://127.0.0.1:54321/functions/v1/google_callback`.
+3. Save the new client ID and secret as `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET` in the private Functions file. These must be the Gmail
+   client's values, not the sign-in client's values.
+4. Leave `GOOGLE_CALLBACK_URL` and `GOOGLE_RETURN_URL` at their local defaults.
+   The return URL is `http://127.0.0.1:5173/storage`; it is the backend's final
+   destination, not the redirect URI to register with Google.
+5. Leave `ENABLE_GOOGLE_CONNECTION=false` and `GOOGLE_TOKEN_KEYS` blank for the
+   handoff. Keep `ENABLE_FIXTURE_EXTRACTION=false`. Gemini credentials are not
+   needed for sign-in/connection testing.
+
+### 6. Hand off the completed configuration
+
+After filling both credential pairs, tell the coding agent:
+
+> Both Google projects and Web OAuth clients are created. I filled the private
+> Auth and Functions environment files. Gmail API is enabled, and the same test
+> account is listed in both projects. Please finish local configuration and help
+> verify Google sign-in and Gmail connection. Keep scanning disabled.
+
+No secrets need to be included in that message. The frontend's public local key
+and the encryption key can be configured during this handoff. The agent should:
+
+1. Check required fields without printing values and verify the files are ignored.
+2. Generate a private random 32-byte encryption key only if none exists; save its
+   base64 value in the `GOOGLE_TOKEN_KEYS` JSON map with active key ID `v1`.
+   Preserve existing keys if credentials have already been encrypted.
+3. Configure the frontend's local public URL/key, enable the local Auth provider
+   and relevant frontend/backend flags, and reload services while preserving data.
+4. Apply pending local migrations if needed, serve both Google functions, and
+   open `http://127.0.0.1:5173/storage` through Vite development.
+5. Have you complete Google login/consent in the browser using the same test
+   account for both steps, then verify reload and disconnect/reconnect behavior.
+
+Success means app sign-in and a real Gmail connection work. It does not establish
+Gmail retrieval, scanning, inference, Calendar execution, or hosted readiness.
+
+### 7. Recognize the common setup failures
+
+- **redirect_uri_mismatch:** compare the exact URL Google received with the
+  matching client's registered redirect. Ports, paths, and hosts must match.
+- **Access blocked/test-user error:** check the selected project, Audience,
+  test-user list, and any school administrator restrictions.
+- **Wrong mailbox:** sign in and connect Gmail with the same verified email.
+- **Connection expires after a week:** Testing-mode Gmail refresh tokens expire
+  after seven days; reconnect for continued testing.
+- **Changes have no effect:** restart the relevant local service after changing
+  startup configuration. Hosted dashboard edits do not configure local Auth.
+
+Sources checked November 5, 2026: [Supabase Google configuration and local callback](https://supabase.com/docs/guides/auth/social-login/auth-google),
+[Google Auth platform setup](https://developers.google.com/workspace/gmail/api/quickstart/nodejs),
+[testing audience limits](https://support.google.com/cloud/answer/15549945), and
+[Google refresh-token expiry](https://developers.google.com/identity/protocols/oauth2).
+
+## Google Cloud setup reference
 
 Use dedicated test accounts containing fictional content. Configure branding,
 support contact, audience, test users, and the appropriate OAuth testing status.

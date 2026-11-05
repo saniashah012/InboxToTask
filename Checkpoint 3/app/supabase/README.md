@@ -87,10 +87,10 @@ These pgTAP tests check actual role privileges, anonymous denial, two-user read/
 
 ## Enable the local fixture endpoint
 
-1. Copy [functions/.env.example](functions/.env.example) to `functions/.env`.
-2. Fill `GEMINI_API_KEY` privately. The pipeline CLI's app-level environment file is not automatically loaded by Edge Functions; configure the function environment separately.
+1. Copy [functions/.env.example](functions/.env.example) to `functions/.env` only if the private file does not already exist. Preserve existing Google credentials.
+2. Add `GEMINI_API_KEY` privately for this extraction trial. It is intentionally absent from the Google connection setup template. The pipeline CLI's app-level environment file is not automatically loaded by Edge Functions; configure the function environment separately.
 3. Set `ENABLE_FIXTURE_EXTRACTION=true` only when ready for billable requests.
-4. The example explicitly selects `gemini-3.6-flash`, the previously evaluated candidate. This is a local override; the canonical default is unchanged.
+4. Add `GEMINI_MODEL=gemini-3.6-flash` to explicitly select the previously evaluated candidate for this trial. This is a local override; the canonical default is unchanged.
 5. Set `APP_ORIGINS` to exact frontend origins if testing through a browser. The defaults assume Vite port 5173; change them if needed. CORS is not authentication. Authenticated CLI requests without Origin are allowed.
 6. Serve locally:
 

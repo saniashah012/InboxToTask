@@ -1,11 +1,18 @@
 import { createClient } from "@supabase/supabase-js"
+import {
+  readStoredKeywordRules,
+  type FilterKeywordGroup,
+  writeStoredKeywordRules,
+} from "./filterPresets"
 
 export type OnboardingPreferences = {
   scanRevision?: number
   includedTypes: string[]
+  includedCategoryGroups: FilterKeywordGroup[]
   selectedSenders: string[]
   selectedDomains: string[]
   excludedTypes: string[]
+  excludedCategoryGroups: FilterKeywordGroup[]
   excludedSenders: string[]
   excludedDomains: string[]
   excludedSubjects: string[]
@@ -127,9 +134,11 @@ function fromPreferenceRow(row: PreferenceRow): OnboardingPreferences {
 
   return {
     includedTypes: row.included_types,
+    includedCategoryGroups: [],
     selectedSenders,
     selectedDomains,
     excludedTypes: row.excluded_types,
+    excludedCategoryGroups: [],
     excludedSenders,
     excludedDomains,
     excludedSubjects,
@@ -142,12 +151,21 @@ export async function loadOnboardingPreferences(userId: string): Promise<Onboard
   if (!supabase) throw new Error("Supabase is not configured.")
   const { data: settings, error: settingsError } = await supabase.rpc("scan_settings_get")
   if (settingsError) throw new Error("Could not load filter settings. Check the local migration and retry.")
-  if (settings.revision > 0) return {
-    scanRevision: settings.revision,
-    includedTypes: settings.rules.allow.keywords ?? [], selectedSenders: settings.rules.allow.senders,
-    selectedDomains: settings.rules.allow.domains, excludedTypes: settings.rules.block.keywords ?? [],
-    excludedSenders: settings.rules.block.senders, excludedDomains: settings.rules.block.domains,
-    excludedSubjects: settings.rules.block.subjectKeywords,
+  if (settings.revision > 0) {
+    const allow = readStoredKeywordRules(settings.rules.allow)
+    const block = readStoredKeywordRules(settings.rules.block)
+    return {
+      scanRevision: settings.revision,
+      includedTypes: allow.customKeywords,
+      includedCategoryGroups: allow.groups,
+      selectedSenders: settings.rules.allow.senders,
+      selectedDomains: settings.rules.allow.domains,
+      excludedTypes: block.customKeywords,
+      excludedCategoryGroups: block.groups,
+      excludedSenders: settings.rules.block.senders,
+      excludedDomains: settings.rules.block.domains,
+      excludedSubjects: settings.rules.block.subjectKeywords,
+    }
   }
   const { data, error } = await supabase.from("user_onboarding_preferences").select(preferenceColumns).eq("user_id", userId).maybeSingle()
   if (error) throw new Error("Could not load previous preferences.")
@@ -161,12 +179,33 @@ export async function saveOnboardingPreferences(_userId: string, preferences: On
   const { data, error } = await supabase.rpc("scan_settings_save", {
     p_revision: preferences.scanRevision ?? 0,
     p_rules: {
-      allow: { labels: [], senders: preferences.selectedSenders, domains: preferences.selectedDomains, keywords: preferences.includedTypes, subjectKeywords: [] },
-      block: { labels: [], senders: preferences.excludedSenders, domains: preferences.excludedDomains, keywords: preferences.excludedTypes, subjectKeywords: preferences.excludedSubjects },
+      allow: {
+        labels: [],
+        senders: preferences.selectedSenders,
+        domains: preferences.selectedDomains,
+        ...writeStoredKeywordRules(preferences.includedTypes, preferences.includedCategoryGroups),
+        subjectKeywords: [],
+      },
+      block: {
+        labels: [],
+        senders: preferences.excludedSenders,
+        domains: preferences.excludedDomains,
+        ...writeStoredKeywordRules(preferences.excludedTypes, preferences.excludedCategoryGroups),
+        subjectKeywords: preferences.excludedSubjects,
+      },
     },
     p_context: current.context_limits, p_consent: current.consent, p_paused: current.paused,
     p_disclosure: current.consent ? "gmail-scan-v1" : null,
   })
   if (error) throw new Error(error.code === "PT409" ? "Settings changed in another window. Reload before saving again." : "Filters were not saved. Check your entries and retry.")
-  return { ...preferences, scanRevision: data.revision, includedTypes: data.rules.allow.keywords, excludedTypes: data.rules.block.keywords }
+  const allow = readStoredKeywordRules(data.rules.allow)
+  const block = readStoredKeywordRules(data.rules.block)
+  return {
+    ...preferences,
+    scanRevision: data.revision,
+    includedTypes: allow.customKeywords,
+    includedCategoryGroups: allow.groups,
+    excludedTypes: block.customKeywords,
+    excludedCategoryGroups: block.groups,
+  }
 }

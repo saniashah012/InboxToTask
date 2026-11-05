@@ -51,6 +51,15 @@ Google connection generations at each external boundary and commit. Deterministi
 retrieval/inference enforcement remains unconnected. See
 [verification and limitations](../../docs/scan-settings-verification-2026-11-05.md).
 
+The [category-group migration](migrations/20261105170000_category_filter_groups.sql)
+stores selected suggestion groups separately from custom phrases while preserving
+`allow.keywords` and `block.keywords` as the effective terms consumed by the
+scanner. A group stores its category name and exact keyword bundle, so future
+preset edits do not silently change saved filtering. Existing keyword-only rows
+are retained as custom phrases; no category is inferred from a coincidental
+keyword set. Apply this migration before the updated frontend saves category
+metadata. It does not change scanning consent or authorize Gmail access.
+
 ## Trial limits and lifecycle
 
 - Per-user defaults: 20 requests and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.

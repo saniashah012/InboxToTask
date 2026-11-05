@@ -2632,10 +2632,6 @@ textarea:focus-visible {
   margin: 0 0 8px;
 }
 
-.category-preferences .rule-chip small {
-  display: none;
-}
-
 .rule-heading {
   justify-content: space-between;
 }

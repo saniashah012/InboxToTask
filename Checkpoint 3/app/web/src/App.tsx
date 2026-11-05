@@ -1,4 +1,10 @@
-import { filterPresets, uniqueTerms, preferenceScope } from "./filterPresets"
+import {
+  effectiveFilterKeywords,
+  filterPresets,
+  preferenceScope,
+  uniqueTerms,
+  type FilterKeywordGroup,
+} from "./filterPresets"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import gmailLogo from "./assets/gmail-logo.svg"
 import googleG from "./assets/google-g.svg"
@@ -393,9 +399,11 @@ type AppScreen = "onboarding" | "dashboard"
 
 const emptyOnboardingPreferences: OnboardingPreferences = {
   includedTypes: [],
+  includedCategoryGroups: [],
   selectedSenders: [],
   selectedDomains: [],
   excludedTypes: [],
+  excludedCategoryGroups: [],
   excludedSenders: [],
   excludedDomains: [],
   excludedSubjects: [],
@@ -609,9 +617,15 @@ function App() {
           setProcessingEnabled(true)
           setSavedPreferences({
             ...emptyOnboardingPreferences,
-            includedTypes: ["School"],
+            includedCategoryGroups: [{
+              category: "School",
+              keywords: filterPresets.School,
+            }],
             selectedSenders: ["professor@illinois.edu"],
-            excludedTypes: ["Financial"],
+            excludedCategoryGroups: [{
+              category: "Financial",
+              keywords: filterPresets.Financial,
+            }],
           })
           setScreen("dashboard")
         }}
@@ -1722,6 +1736,7 @@ function Onboarding({
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
   const hasPreferences =
     preferences.includedTypes.length +
+      preferences.includedCategoryGroups.length +
       preferences.selectedSenders.length +
       preferences.selectedDomains.length >
     0
@@ -1961,7 +1976,11 @@ function Onboarding({
                 <ReviewPreference
                   label="Included words and phrases"
                   onEdit={() => setStep(2)}
-                  values={preferences.includedTypes}
+                  values={categoryPreferenceLabels(
+                    preferences.includedTypes,
+                    preferences.includedCategoryGroups,
+                    ["School", "Job applications", "Research", "Meetings"],
+                  )}
                   emptyLabel="No words or phrases selected"
                 />
                 <ReviewPreference
@@ -1976,7 +1995,11 @@ function Onboarding({
                 <ReviewPreference
                   label="Excluded words and phrases"
                   onEdit={() => setStep(3)}
-                  values={preferences.excludedTypes}
+                  values={categoryPreferenceLabels(
+                    preferences.excludedTypes,
+                    preferences.excludedCategoryGroups,
+                    ["Financial", "Health", "Promotions", "Family & friends"],
+                  )}
                   emptyLabel="No words or phrases excluded"
                 />
                 <ReviewPreference
@@ -2130,7 +2153,14 @@ function FooterActions({
   )
 }
 
-type RuleKey = Exclude<keyof OnboardingPreferences, "scanRevision">
+type RuleKey =
+  | "includedTypes"
+  | "selectedSenders"
+  | "selectedDomains"
+  | "excludedTypes"
+  | "excludedSenders"
+  | "excludedDomains"
+  | "excludedSubjects"
 
 type RuleField = {
   key: RuleKey
@@ -2236,15 +2266,18 @@ function RulesEditor({
         <div className="rule-heading">
           <div>
             <strong>Email categories to check</strong>
-            <span>Suggestions add editable words and phrases. Add your own below.</span>
+            <span>Choose a suggestion or add your own phrase.</span>
           </div>
         </div>
         <CategorySelector
           label="Add an included email category"
           categoryKey="includedTypes"
           suggestions={["School", "Job applications", "Research", "Meetings"]}
-          value={rules.includedTypes}
-          onChange={(includedTypes) => onChange({ ...rules, includedTypes })}
+          customKeywords={rules.includedTypes}
+          groups={rules.includedCategoryGroups}
+          onChange={(includedTypes, includedCategoryGroups) =>
+            onChange({ ...rules, includedTypes, includedCategoryGroups })
+          }
         />
         <div className="rule-heading">
           <div>
@@ -2277,15 +2310,18 @@ function RulesEditor({
         <div className="rule-heading">
           <div>
             <strong>Email categories to skip</strong>
-            <span>Add a word or phrase that you would like to exclude.</span>
+            <span>Choose a suggestion or add your own phrase to exclude.</span>
           </div>
         </div>
         <CategorySelector
           label="Add an excluded email category"
           categoryKey="excludedTypes"
           suggestions={["Financial", "Health", "Promotions", "Family & friends"]}
-          value={rules.excludedTypes}
-          onChange={(excludedTypes) => onChange({ ...rules, excludedTypes })}
+          customKeywords={rules.excludedTypes}
+          groups={rules.excludedCategoryGroups}
+          onChange={(excludedTypes, excludedCategoryGroups) =>
+            onChange({ ...rules, excludedTypes, excludedCategoryGroups })
+          }
         />
         <div className="rule-heading">
           <div>
@@ -2326,14 +2362,16 @@ function CategorySelector({
   label,
   categoryKey,
   suggestions,
-  value,
+  customKeywords,
+  groups,
   onChange,
 }: {
   label: string
   categoryKey: "includedTypes" | "excludedTypes"
   suggestions: string[]
-  value: string[]
-  onChange: (value: string[]) => void
+  customKeywords: string[]
+  groups: FilterKeywordGroup[]
+  onChange: (customKeywords: string[], groups: FilterKeywordGroup[]) => void
 }) {
   const [draft, setDraft] = useState("")
   const [error, setError] = useState("")
@@ -2341,15 +2379,62 @@ function CategorySelector({
   const add = (rawValue = draft) => {
     const category = rawValue.trim()
     if (!category) return
-    if (category.length > 254 || /[\x00-\x1f\x7f]/.test(category) || value.length >= 200) { setError("Use up to 200 terms, each 1-254 characters without control characters."); return }
-    if (value.some((current) => current.toLowerCase() === category.toLowerCase())) {
+    const effectiveKeywords = effectiveFilterKeywords(customKeywords, groups)
+    if (category.length > 254 || /[\x00-\x1f\x7f]/.test(category) || effectiveKeywords.length >= 200) { setError("Use up to 200 terms, each 1-254 characters without control characters."); return }
+    if (
+      customKeywords.some((current) => current.toLowerCase() === category.toLowerCase()) ||
+      effectiveKeywords.some((current) => current === category.toLowerCase()) ||
+      groups.some((group) => group.category.toLowerCase() === category.toLowerCase())
+    ) {
       setError("That word or phrase is already selected.")
       return
     }
-    onChange([...value, category])
+    onChange([...customKeywords, category], groups)
     setDraft("")
     setError("")
   }
+
+  const toggleSuggestion = (suggestion: string) => {
+    const existingGroup = groups.find(
+      (group) => group.category.toLowerCase() === suggestion.toLowerCase(),
+    )
+    const legacyCustom = customKeywords.some(
+      (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
+    )
+    if (existingGroup || legacyCustom) {
+      onChange(
+        customKeywords.filter(
+          (keyword) => keyword.toLowerCase() !== suggestion.toLowerCase(),
+        ),
+        groups.filter(
+          (group) => group.category.toLowerCase() !== suggestion.toLowerCase(),
+        ),
+      )
+      setError("")
+      return
+    }
+
+    const keywords = filterPresets[suggestion] ?? [suggestion]
+    const nextGroups = [
+      ...groups,
+      { category: suggestion, keywords: uniqueTerms(keywords) },
+    ]
+    if (effectiveFilterKeywords(customKeywords, nextGroups).length > 200) {
+      setError("Use up to 200 terms.")
+      return
+    }
+    onChange(customKeywords, nextGroups)
+    setError("")
+  }
+
+  const visibleCustomKeywords = customKeywords.filter((keyword) => {
+    const suggestion = suggestions.find(
+      (item) => item.toLowerCase() === keyword.toLowerCase(),
+    )
+    return !suggestion || groups.some(
+      (group) => group.category.toLowerCase() === suggestion.toLowerCase(),
+    )
+  })
 
   return (
     <div className="category-preferences">
@@ -2358,7 +2443,7 @@ function CategorySelector({
         <div>
           <input
             aria-label={label}
-            placeholder="Type a word or phrase"
+            placeholder="Type a word or phrase."
             value={draft}
             onChange={(event) => {
               setDraft(event.target.value)
@@ -2382,43 +2467,98 @@ function CategorySelector({
         </div>
       </div>
       <Chips
-        entries={value.map((category) => ({
+        entries={visibleCustomKeywords.map((category) => ({
           key: categoryKey,
           value: category,
           prefix: "Phrase",
         }))}
         onRemove={(_key, category) =>
-          onChange(value.filter((current) => current !== category))
+          onChange(
+            customKeywords.filter((current) => current !== category),
+            groups,
+          )
         }
       />
-      {suggestions.some(
-        (suggestion) =>
-          !value.some((selected) => selected.toLowerCase() === suggestion.toLowerCase()),
-      ) && (
-        <div className="category-suggestions">
-          <p className="suggestions-label">Suggestions — unselected by default.</p>
-          <div className="selection-chips">
-            {suggestions
-              .filter(
-                (suggestion) =>
-                !value.some((selected) => selected.toLowerCase() === suggestion.toLowerCase()),
+      <div className="category-suggestions">
+        <p className="suggestions-label">Suggestions</p>
+        <div className="type-selection-chips">
+          {suggestions.map((suggestion) => {
+            const selected =
+              groups.some(
+                (group) =>
+                  group.category.toLowerCase() === suggestion.toLowerCase(),
+              ) ||
+              customKeywords.some(
+                (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
               )
-              .map((suggestion) => (
+            return (
+              <span
+                className={`type-chip ${selected ? "selected" : ""}`}
+                key={suggestion}
+              >
                 <button
-                  key={suggestion}
-                  onClick={() => { const next = uniqueTerms([...value, ...(filterPresets[suggestion] ?? [suggestion])]); if (next.length > 200) { setError("Use up to 200 terms."); return } onChange(next); setError("") }}
+                  aria-pressed={selected}
+                  className="type-chip-toggle"
+                  onClick={() => toggleSuggestion(suggestion)}
                   type="button"
                 >
-                  <span aria-hidden="true" className="chip-plus">+</span>
-                  {suggestion}: {(filterPresets[suggestion] ?? [suggestion]).join(", ")}
+                  {!selected && (
+                    <span aria-hidden="true" className="chip-plus">
+                      +
+                    </span>
+                  )}
+                  {suggestion}
                 </button>
-              ))}
-          </div>
+                {selected && (
+                  <button
+                    aria-label={`Remove ${suggestion}`}
+                    className="type-chip-remove"
+                    onClick={() => toggleSuggestion(suggestion)}
+                    type="button"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                )}
+              </span>
+            )
+          })}
         </div>
-      )}
+      </div>
       {error && <p className="notice warning" role="alert">{error}</p>}
     </div>
   )
+}
+
+function categoryPreferenceLabels(
+  customKeywords: string[],
+  groups: FilterKeywordGroup[],
+  suggestions: string[],
+) {
+  const selectedSuggestionNames = suggestions.filter(
+    (suggestion) =>
+      groups.some(
+        (group) => group.category.toLowerCase() === suggestion.toLowerCase(),
+      ) ||
+      customKeywords.some(
+        (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
+      ),
+  )
+  const customPhrases = customKeywords.filter(
+    (keyword) =>
+      !suggestions.some(
+        (suggestion) => suggestion.toLowerCase() === keyword.toLowerCase(),
+      ),
+  )
+  const unknownGroups = groups
+    .filter(
+      (group) =>
+        !suggestions.some(
+          (suggestion) =>
+            suggestion.toLowerCase() === group.category.toLowerCase(),
+        ),
+    )
+    .map((group) => group.category)
+  return [...selectedSuggestionNames, ...unknownGroups, ...customPhrases]
 }
 
 function RuleInput({

@@ -5,7 +5,7 @@ import {PGlite} from '../app/node_modules/@electric-sql/pglite/dist/index.js';
 
 test('saved scanning settings: permissions, validation, revisions, and stale-work fencing',async(t)=>{
   const db=new PGlite();
-  const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
+  const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222',C='44444444-4444-4444-8444-444444444444',D='55555555-5555-4555-8555-555555555555';
   const q=async(sql,args=[]) => (await db.query(sql,args)).rows;
   const scalar=async(sql,args=[])=>Object.values((await q(sql,args))[0])[0];
   const as=async(role,user,fn)=>{
@@ -22,7 +22,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       create schema auth;grant usage on schema auth to anon,authenticated,service_role;
       create table auth.users(id uuid primary key,email text);
       create function auth.uid() returns uuid language sql stable as $$select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid$$;`);
-    await q('insert into auth.users values($1,$2),($3,$4)',[A,'student@example.org',B,'b@example.org']);
+    await q('insert into auth.users values($1,$2),($3,$4),($5,$6)',[A,'student@example.org',B,'b@example.org',C,'c@example.org']);
     const path=new URL('../app/supabase/migrations/',import.meta.url);
     const legacyUser='33333333-3333-4333-8333-333333333333';
     for(const name of (await readdir(path)).filter(n=>n.endsWith('.sql')).sort()) {
@@ -31,6 +31,12 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
         await q('insert into public.storage_preferences(user_id) values($1)',[legacyUser]);
         await q(`insert into public.scan_settings(user_id,consent,consent_at,disclosure_version,paused,rules)
           values($1,true,now(),'gmail-scan-v1',false,$2)`,[legacyUser,{allow:{labels:['School'],senders:[],domains:[],subjectKeywords:['assignment']},block:{labels:['Private'],senders:[],domains:[],subjectKeywords:['receipt']}}]);
+      }
+      if(name==='20261105170000_category_filter_groups.sql') {
+        const oldRules={allow:{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:['homework','assignment','syllabus','my custom phrase']},block:{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:['receipt']}};
+        await q('insert into auth.users values($1,$2)',[D,'d@example.org']);
+        await q('insert into public.storage_preferences(user_id) values($1)',[D]);
+        await q('insert into public.scan_settings(user_id,paused,rules) values($1,true,$2)',[D,oldRules]);
       }
       await db.exec(await readFile(new URL(name,path),'utf8'));
     }
@@ -44,8 +50,36 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
     });
     await t.test('new users default to no consent, pause, empty rules and no prior context',async()=>{
       const settings=await get();assert.equal(settings.revision,0);assert.equal(settings.consent,false);assert.equal(settings.paused,true);
-      assert.deepEqual(settings.rules.allow,{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[]});assert.equal(settings.context_limits.maxMessages,0);
-      assert.equal(await scalar('select count(*) from public.scan_settings'),0);
+      assert.deepEqual(settings.rules.allow,{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[],customKeywords:[],keywordGroups:[]});assert.equal(settings.context_limits.maxMessages,0);
+      assert.equal(await scalar('select count(*) from public.scan_settings where user_id=$1',[A]),0);
+    });
+    await t.test('category groups round-trip and legacy keyword rows remain unchanged custom phrases',async()=>{
+      const legacy=await get(D);
+      assert.deepEqual(legacy.rules.allow.keywords,['homework','assignment','syllabus','my custom phrase']);
+      assert.deepEqual(legacy.rules.allow.customKeywords,['homework','assignment','syllabus','my custom phrase']);
+      assert.deepEqual(legacy.rules.allow.keywordGroups,[]);
+      assert.deepEqual(legacy.rules.block.keywords,['receipt']);
+
+      const school={category:'School',keywords:['homework','assignment','syllabus']};
+      const financial={category:'Financial',keywords:['invoice','payment','bank','receipt']};
+      const groupedRules={
+        allow:{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:['custom phrase','homework','assignment','syllabus'],customKeywords:['custom phrase'],keywordGroups:[school]},
+        block:{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:['receipt','invoice','payment','bank'],customKeywords:[],keywordGroups:[financial]},
+      };
+      const saved=await save(0,groupedRules,context,false,true,null,C);
+      assert.deepEqual(saved.rules.allow.keywords,['custom phrase','homework','assignment','syllabus']);
+      assert.deepEqual(saved.rules.allow.customKeywords,['custom phrase']);
+      assert.deepEqual(saved.rules.allow.keywordGroups,[school]);
+      assert.deepEqual(saved.rules.block.keywords,['invoice','payment','bank','receipt']);
+      assert.deepEqual((await get(C)).rules.block.keywordGroups,[financial]);
+
+      const removed=await save(1,{
+        allow:{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[],customKeywords:['custom phrase'],keywordGroups:[]},
+        block:{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[],customKeywords:[],keywordGroups:[]},
+      },context,false,true,null,C);
+      assert.deepEqual(removed.rules.allow.keywords,['custom phrase']);
+      assert.deepEqual(removed.rules.allow.keywordGroups,[]);
+      assert.deepEqual(removed.rules.block.keywords,[]);
     });
     await t.test('anonymous, owner injection and direct writes cannot bypass the RPC',async()=>{
       await as('anon',A,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
@@ -97,7 +131,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       const revoked=await get();assert.equal(revoked.consent,false);assert.equal(revoked.consent_at,null);
     });
     await t.test('account deletion removes saved privacy settings',async()=>{
-      await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings'),0);
+      await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings where user_id=$1',[A]),0);
     });
   } finally {await db.close();}
 });

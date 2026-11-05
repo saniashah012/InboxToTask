@@ -1,0 +1,28 @@
+{
+  "mode": "LIVE_API",
+  "startedAt": "2026-11-05T04:20:01.862Z",
+  "settings": {
+    "version": "cp3-extraction-v2-review",
+    "model": "gemini-3.6-flash",
+    "schemaMode": "openapi",
+    "thinkingLevel": "LOW",
+    "maxOutputTokens": 8192,
+    "timeoutMs": 60000,
+    "maxAttempts": 1,
+    "contextLimits": {
+      "maxMessages": 5,
+      "maxAgeDays": 30,
+      "maxMessageChars": 12000,
+      "maxTotalChars": 24000
+    },
+    "notes": "Initial settings, not evaluated accuracy claims. Default sampling; no tools or conversation persistence. One attempt by default to bound cost. Character caps are not exact token estimates. Output budget includes provider thinking behavior."
+  },
+  "promptSha256": "5f627100d9a60aa99acb9a5cffa42ff49353115eab36255391099a7de5996a60",
+  "selected": 8,
+  "results": [
+    {
+      "id": "E03",
+      "error": "NETWORK_OR_TIMEOUT"
+    }
+  ]
+}

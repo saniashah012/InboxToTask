@@ -6,6 +6,8 @@ export function evaluate(result, expected, userEmail) {
   if (expected.deadlineDates) checks.deadlines = expected.deadlineDates.every((d) => result.tasks.some((t) => t.deadline?.date === d));
   if (expected.nullDeadline) checks.noInventedDeadline = result.tasks.every((t) => t.deadline === null);
   if (expected.conditional) checks.condition = result.tasks.some((t) => t.condition !== null);
+  if (expected.conditionTerms) checks.conditionTiming = result.tasks.some((t) =>
+    expected.conditionTerms.every((term) => t.condition?.toLowerCase().includes(term.toLowerCase())));
   if (expected.before) checks.beforeBoundary = result.tasks.some((t) => t.deadline?.boundary === 'before');
   if (expected.waiting) checks.waitingFor = result.waitingFor.length > 0;
   if (expected.followUp) checks.suggestedFollowUp = result.suggestedFollowUps.length > 0;

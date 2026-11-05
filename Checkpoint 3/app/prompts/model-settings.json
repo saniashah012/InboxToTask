@@ -1,5 +1,5 @@
 {
-  "version": "cp3-extraction-v1",
+  "version": "cp3-extraction-v2-review",
   "model": "gemini-3.8-flash",
   "schemaMode": "openapi",
   "thinkingLevel": "LOW",

@@ -7,7 +7,7 @@
   "E06": { "category": "Actionable", "minTasks": 1, "deadlineDates": ["2026-10-08"] },
   "E07": { "category": "Passive", "taskCount": 0 },
   "E08": { "category": "Passive", "taskCount": 0 },
-  "E09": { "category": "Actionable", "taskCount": 1, "conditional": true, "deadlineDates": ["2026-10-09"] },
+  "E09": { "category": "Actionable", "taskCount": 1, "conditional": true, "nullDeadline": true, "conditionTerms": ["Friday", "afternoon", "October 9"], "humanReview": "October 9 afternoon is the no-response checkpoint, not a send-by deadline. Preserve it in the condition without inventing an hour." },
   "E10": { "category": "Actionable", "taskCount": 2, "deadlineDates": ["2026-10-07", "2026-10-07"] },
   "E11": { "category": "Actionable", "taskCount": 1, "deadlineDates": ["2026-10-07"], "humanReview": "Preserve confirm/decline/reschedule alternatives; do not assume availability." },
   "E12": { "category": "Passive", "taskCount": 0 },

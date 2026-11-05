@@ -12,6 +12,45 @@ A subsequent evaluation explicitly using Gemini 3.6 Flash completed all 20 cases
 
 ## Run locally
 
+### Uncertainty and wording regression checks
+
+The `cp3-extraction-v2-review` candidate strengthens optional-invitation handling,
+requires specific user-verification reasons for ambiguous obligations/fields,
+and preserves by/before boundaries and conditional reminder checkpoints. It
+uses the existing `uncertainties` / `needsReview` storage contract; no migration
+is required. A model confidence score cannot override a review reason.
+
+From the repository root:
+
+```powershell
+# Prepare eight fictional cases without reading credentials or calling a model.
+node "Checkpoint 3/tests/extraction-review-evaluation.mjs"
+# Billable live checks: eight targeted cases, then the full twenty-case set.
+node "Checkpoint 3/tests/extraction-review-evaluation.mjs" --live
+node "Checkpoint 3/tests/extraction-review-evaluation.mjs" --live --cp2
+```
+
+The runner explicitly selects the previously evaluated Gemini 3.6 Flash candidate,
+LOW thinking, and one attempt per case, with 20-second spacing. It stops on the
+first provider/validation failure and saves a uniquely named fictional-output
+report after each case. Reports record effective settings, prompt hash and scoring
+expectations. This does not change the default model or enable the Edge fixture
+endpoint. Semantic failures remain in the report; there is no automatic tuning,
+retry, or fallback. Inspect wording/evidence manually as well as automated scores.
+
+E09 scoring now requires a null reminder deadline and the Friday-afternoon/October-9
+checkpoint in its condition. The previous answer key incorrectly required that
+checkpoint as a task deadline. Original evaluation artifacts remain unchanged;
+new scores are not directly comparable to the old 19/20 headline.
+
+The storage UI shows verification reasons on suggestions, waiting-for entries,
+and Passive digest entries (including results with no proposed task). Passive
+results cannot yet be reclassified or converted into a task through the digest;
+that richer resolution workflow remains separate work. Existing proposal edits,
+approval and dismissal use stored fields/RPCs and do not invoke the model.
+
+### Existing CLI
+
 Use Node.js 22 or later. From the repository root in PowerShell:
 
 ```powershell

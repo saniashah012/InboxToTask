@@ -1,0 +1,1364 @@
+{
+  "mode": "LIVE_API",
+  "startedAt": "2026-11-05T04:26:47.290Z",
+  "settings": {
+    "version": "cp3-extraction-v2-review",
+    "model": "gemini-3.6-flash",
+    "schemaMode": "openapi",
+    "thinkingLevel": "LOW",
+    "maxOutputTokens": 8192,
+    "timeoutMs": 60000,
+    "maxAttempts": 1,
+    "contextLimits": {
+      "maxMessages": 5,
+      "maxAgeDays": 30,
+      "maxMessageChars": 12000,
+      "maxTotalChars": 24000
+    },
+    "notes": "Initial settings, not evaluated accuracy claims. Default sampling; no tools or conversation persistence. One attempt by default to bound cost. Character caps are not exact token estimates. Output budget includes provider thinking behavior."
+  },
+  "promptSha256": "8486c3cb18ff1cbe1e7ff1b0830a5cabab1dfb69e62bbffcf76ae6eab40f1302",
+  "evaluatorVersion": "review-v2-condition-checkpoint",
+  "cases": [
+    {
+      "id": "E01",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 1,
+        "deadlineDates": [
+          "2026-10-07"
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 1,
+        "deadlineDates": [
+          "2026-10-08"
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 1,
+        "deadlineDates": [
+          "2026-10-06"
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0
+      }
+    },
+    {
+      "id": "E05",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 1,
+        "deadlineDates": [
+          "2026-10-05"
+        ],
+        "before": true
+      }
+    },
+    {
+      "id": "E06",
+      "expected": {
+        "category": "Actionable",
+        "minTasks": 1,
+        "deadlineDates": [
+          "2026-10-08"
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0
+      }
+    },
+    {
+      "id": "E08",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0
+      }
+    },
+    {
+      "id": "E09",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 1,
+        "conditional": true,
+        "nullDeadline": true,
+        "conditionTerms": [
+          "Friday",
+          "afternoon",
+          "October 9"
+        ],
+        "humanReview": "October 9 afternoon is the no-response checkpoint, not a send-by deadline. Preserve it in the condition without inventing an hour."
+      }
+    },
+    {
+      "id": "E10",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 2,
+        "deadlineDates": [
+          "2026-10-07",
+          "2026-10-07"
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 1,
+        "deadlineDates": [
+          "2026-10-07"
+        ],
+        "humanReview": "Preserve confirm/decline/reschedule alternatives; do not assume availability."
+      }
+    },
+    {
+      "id": "E12",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0
+      }
+    },
+    {
+      "id": "E13",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0
+      }
+    },
+    {
+      "id": "E14",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0
+      }
+    },
+    {
+      "id": "E15",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 1,
+        "deadlineDates": [
+          "2026-10-06"
+        ]
+      }
+    },
+    {
+      "id": "E16",
+      "expected": {
+        "category": "Actionable",
+        "taskCount": 1,
+        "nullDeadline": true
+      }
+    },
+    {
+      "id": "E17",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0
+      }
+    },
+    {
+      "id": "E18",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0
+      }
+    },
+    {
+      "id": "E19",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0,
+        "waiting": true,
+        "followUp": true
+      }
+    },
+    {
+      "id": "E20",
+      "expected": {
+        "category": "Passive",
+        "taskCount": 0,
+        "waiting": true,
+        "noFollowUp": true
+      }
+    }
+  ],
+  "selected": 20,
+  "results": [
+    {
+      "id": "E01",
+      "output": {
+        "status": "extracted",
+        "messageId": "E01",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Actionable",
+          "confidence": 100,
+          "evidence": {
+            "messageId": "E01",
+            "quote": "Please upload this week's reading response by Wednesday, October 7, at 5 pm."
+          },
+          "explanation": "Professor Lee requests that the student upload this week's reading response by Wednesday, October 7, at 5 pm.",
+          "summary": "Upload this week's reading response by Wednesday, October 7, at 5 pm.",
+          "tasks": [
+            {
+              "action": "Upload this week's reading response",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-07",
+                "time": "17:00",
+                "timeZone": "America/Chicago",
+                "wording": "by Wednesday, October 7, at 5 pm",
+                "boundary": "by"
+              },
+              "condition": null,
+              "requirements": [
+                "Upload this week's reading response by Wednesday, October 7, at 5 pm"
+              ],
+              "evidence": {
+                "messageId": "E01",
+                "quote": "Please upload this week's reading response by Wednesday, October 7, at 5 pm."
+              }
+            }
+          ],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1590,
+          "cachedInputTokens": 0,
+          "outputTokens": 348,
+          "thinkingTokens": null,
+          "totalTokens": 1938
+        },
+        "latencyMs": 3207
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "deadlines": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E02",
+      "output": {
+        "status": "extracted",
+        "messageId": "E02",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E02",
+            "quote": "Could you add your findings to the energy project report by Thursday, October 8, at 6 pm?"
+          },
+          "explanation": "The email contains an explicit request for the inbox owner to add their findings to the energy project report by Thursday, October 8, at 6 pm.",
+          "summary": "Jordan Park requested that you add your findings to the energy project report by Thursday, October 8, at 6 pm.",
+          "tasks": [
+            {
+              "action": "Add findings to the energy project report",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-08",
+                "time": "18:00",
+                "timeZone": "America/Chicago",
+                "wording": "by Thursday, October 8, at 6 pm",
+                "boundary": "by"
+              },
+              "condition": null,
+              "requirements": [
+                "Add your findings to the energy project report by Thursday, October 8, at 6 pm"
+              ],
+              "evidence": {
+                "messageId": "E02",
+                "quote": "Could you add your findings to the energy project report by Thursday, October 8, at 6 pm?"
+              }
+            }
+          ],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1601,
+          "cachedInputTokens": 0,
+          "outputTokens": 252,
+          "thinkingTokens": null,
+          "totalTokens": 1853
+        },
+        "latencyMs": 2152
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "deadlines": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E03",
+      "output": {
+        "status": "extracted",
+        "messageId": "E03",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E03",
+            "quote": "Please confirm by tomorrow, October 6, at noon."
+          },
+          "explanation": "The email explicitly requests the user to confirm their held interview slot by noon on October 6, 2026.",
+          "summary": "Priya Rao requested confirmation for your held Harbor Design interview slot by noon on October 6, 2026.",
+          "tasks": [
+            {
+              "action": "Confirm interview slot",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-06",
+                "time": "12:00",
+                "timeZone": "America/Chicago",
+                "wording": "by tomorrow, October 6, at noon",
+                "boundary": "by"
+              },
+              "condition": null,
+              "requirements": [
+                "Confirm interview slot by noon on October 6"
+              ],
+              "evidence": {
+                "messageId": "E03",
+                "quote": "Please confirm by tomorrow, October 6, at noon."
+              }
+            }
+          ],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1602,
+          "cachedInputTokens": 0,
+          "outputTokens": 322,
+          "thinkingTokens": null,
+          "totalTokens": 1924
+        },
+        "latencyMs": 2760
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "deadlines": true,
+          "byBoundary": true,
+          "noBeforeNoon": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E04",
+      "output": {
+        "status": "extracted",
+        "messageId": "E04",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Passive",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E04",
+            "quote": "Don't miss out! Buy your fall essentials before midnight tonight to claim 30% off."
+          },
+          "explanation": "The message is a promotional marketing email offering a discount and does not create an obligation or commitment for the inbox owner.",
+          "summary": "Campus Deals sent a promotional offer for 30% off fall essentials expiring tonight.",
+          "tasks": [],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1594,
+          "cachedInputTokens": 0,
+          "outputTokens": 106,
+          "thinkingTokens": null,
+          "totalTokens": 1700
+        },
+        "latencyMs": 1892
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E05",
+      "output": {
+        "status": "extracted",
+        "messageId": "E05",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E05",
+            "quote": "your usability findings section is the only part still missing from the shared report. We need it in the document before our meeting tomorrow, October 5, at 4 pm"
+          },
+          "explanation": "The inbox owner is requested to add the usability findings section to the shared report before the meeting on October 5 at 4 pm.",
+          "summary": "Add usability findings section to the shared report before the meeting on October 5 at 4 pm.",
+          "tasks": [
+            {
+              "action": "Add usability findings section to the shared report",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-05",
+                "time": "16:00",
+                "timeZone": "America/Chicago",
+                "wording": "before our meeting tomorrow, October 5, at 4 pm",
+                "boundary": "before"
+              },
+              "condition": null,
+              "requirements": [
+                "Include usability findings section in the shared document",
+                "Complete before the meeting at 4 pm on October 5"
+              ],
+              "evidence": {
+                "messageId": "E05",
+                "quote": "We need it in the document before our meeting tomorrow, October 5, at 4 pm"
+              }
+            }
+          ],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1609,
+          "cachedInputTokens": 0,
+          "outputTokens": 258,
+          "thinkingTokens": null,
+          "totalTokens": 1867
+        },
+        "latencyMs": 2447
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "deadlines": true,
+          "beforeBoundary": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E06",
+      "output": {
+        "status": "extracted",
+        "messageId": "E06",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E06",
+            "quote": "Please upload your response to Canvas by Thursday, October 8, at 5 pm."
+          },
+          "explanation": "The sender explicitly instructs the recipient to upload their reflection response to Canvas by a specific deadline.",
+          "summary": "Professor Lee requested that you upload your reflection response to Canvas by Thursday, October 8, at 5:00 PM.",
+          "tasks": [
+            {
+              "action": "Upload reflection response to Canvas",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-08",
+                "time": "17:00",
+                "timeZone": "America/Chicago",
+                "wording": "by Thursday, October 8, at 5 pm",
+                "boundary": "by"
+              },
+              "condition": null,
+              "requirements": [
+                "Base response on either of the two readings",
+                "Upload to Canvas by Thursday, October 8, at 5 pm"
+              ],
+              "evidence": {
+                "messageId": "E06",
+                "quote": "Please upload your response to Canvas by Thursday, October 8, at 5 pm."
+              }
+            }
+          ],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1623,
+          "cachedInputTokens": 0,
+          "outputTokens": 349,
+          "thinkingTokens": null,
+          "totalTokens": 1972
+        },
+        "latencyMs": 2854
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "deadlines": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E07",
+      "output": {
+        "status": "extracted",
+        "messageId": "E07",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [
+          "An earlier message has date-only timing; midnight is a fixture placeholder, not a known sent time."
+        ],
+        "needsReview": true,
+        "result": {
+          "category": "Passive",
+          "confidence": 98,
+          "evidence": {
+            "messageId": "E07",
+            "quote": "The separate proposal submission is canceled."
+          },
+          "explanation": "Professor Lee explicitly canceled the proposal upload obligation in the current message, stating there is nothing to upload.",
+          "summary": "The proposal submission has been canceled and replaced by in-class discussion.",
+          "tasks": [],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": [
+            "An earlier message has date-only timing; midnight is a fixture placeholder, not a known sent time."
+          ]
+        },
+        "usage": {
+          "inputTokens": 1753,
+          "cachedInputTokens": 0,
+          "outputTokens": 155,
+          "thinkingTokens": null,
+          "totalTokens": 1908
+        },
+        "latencyMs": 1939
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E08",
+      "output": {
+        "status": "extracted",
+        "messageId": "E08",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [
+          "An earlier message has date-only timing; midnight is a fixture placeholder, not a known sent time."
+        ],
+        "needsReview": true,
+        "result": {
+          "category": "Passive",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E08",
+            "quote": "Thanks, I opened the deck and your updated section is there. We're all set for the rehearsal."
+          },
+          "explanation": "Maya confirmed receipt of the updated slides and noted that everything is set, fulfilling the previous request.",
+          "summary": "Maya confirmed that the updated slides are in the deck and everything is ready for the rehearsal.",
+          "tasks": [],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": [
+            "An earlier message has date-only timing; midnight is a fixture placeholder, not a known sent time."
+          ]
+        },
+        "usage": {
+          "inputTokens": 1762,
+          "cachedInputTokens": 0,
+          "outputTokens": 173,
+          "thinkingTokens": null,
+          "totalTokens": 1935
+        },
+        "latencyMs": 1703
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E09",
+      "output": {
+        "status": "extracted",
+        "messageId": "E09",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": true,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E09",
+            "quote": "If you haven't heard from me by Friday afternoon, October 9, please send me a reminder—this week is a bit packed."
+          },
+          "explanation": "Maya promised detailed feedback by Thursday, Oct 8, and explicitly requested a conditional reminder if she hasn't responded by Friday afternoon, Oct 9.",
+          "summary": "Maya promised feedback by Thursday, Oct 8, and asked for a reminder on Friday afternoon, Oct 9, if she hasn't responded.",
+          "tasks": [
+            {
+              "action": "Send Maya a reminder about draft feedback",
+              "owner": "student@example.org",
+              "deadline": null,
+              "condition": "If Maya has not provided detailed comments by Friday afternoon, October 9",
+              "requirements": [
+                "Check if comments were received from Maya by Friday afternoon, October 9",
+                "Send a reminder email to Maya if no comments were received"
+              ],
+              "evidence": {
+                "messageId": "E09",
+                "quote": "If you haven't heard from me by Friday afternoon, October 9, please send me a reminder—this week is a bit packed."
+              }
+            }
+          ],
+          "waitingFor": [
+            {
+              "action": "Provide detailed comments on the draft",
+              "owner": "Maya Patel <maya@example.org>",
+              "promisedDeadline": {
+                "date": "2026-10-08",
+                "time": null,
+                "timeZone": "America/Chicago",
+                "wording": "Thursday, October 8",
+                "boundary": "by"
+              },
+              "evidence": {
+                "messageId": "E09",
+                "quote": "I should have detailed comments to you by Thursday, October 8."
+              }
+            }
+          ],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1622,
+          "cachedInputTokens": 0,
+          "outputTokens": 333,
+          "thinkingTokens": null,
+          "totalTokens": 1955
+        },
+        "latencyMs": 2757
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "noInventedDeadline": true,
+          "condition": true,
+          "conditionTiming": true,
+          "noInventedHour": true,
+          "triggerPreserved": true,
+          "noReminderSendBy": true
+        },
+        "passed": true,
+        "humanReview": "October 9 afternoon is the no-response checkpoint, not a send-by deadline. Preserve it in the condition without inventing an hour."
+      }
+    },
+    {
+      "id": "E10",
+      "output": {
+        "status": "extracted",
+        "messageId": "E10",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E10",
+            "quote": "Please choose an interview slot using the booking link by Wednesday, October 7, at noon. Also, reply to this email with a link to your portfolio by that same deadline"
+          },
+          "explanation": " The sender requests two explicit actions from the user by Wednesday, October 7, at noon: book an interview slot and reply with a link to their portfolio.",
+          "summary": "Elena Ruiz requests that you select an interview slot and reply with your portfolio link by noon on Wednesday, October 7.",
+          "tasks": [
+            {
+              "action": "Select an interview slot using the booking link",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-07",
+                "time": "12:00",
+                "timeZone": "America/Chicago",
+                "wording": "by Wednesday, October 7, at noon",
+                "boundary": "by"
+              },
+              "condition": null,
+              "requirements": [
+                "Choose an interview slot using the provided booking link by noon"
+              ],
+              "evidence": {
+                "messageId": "E10",
+                "quote": "Please choose an interview slot using the booking link by Wednesday, October 7, at noon."
+              }
+            },
+            {
+              "action": "Reply to the email with portfolio link",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-07",
+                "time": "12:00",
+                "timeZone": "America/Chicago",
+                "wording": "by that same deadline",
+                "boundary": "by"
+              },
+              "condition": null,
+              "requirements": [
+                "Reply to the email with a link to your portfolio by Wednesday, October 7, at noon"
+              ],
+              "evidence": {
+                "messageId": "E10",
+                "quote": "Also, reply to this email with a link to your portfolio by that same deadline so the interviewers can review it."
+              }
+            }
+          ],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1649,
+          "cachedInputTokens": 0,
+          "outputTokens": 556,
+          "thinkingTokens": null,
+          "totalTokens": 2205
+        },
+        "latencyMs": 3350
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "deadlines": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E11",
+      "output": {
+        "status": "extracted",
+        "messageId": "E11",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E11",
+            "quote": "Please reply by October 7 at noon to confirm whether that still works."
+          },
+          "explanation": "Omar requested a reply by October 7 at noon to confirm whether the held interview time of October 9 at 2 pm works or to request another slot.",
+          "summary": "Omar requested confirmation by October 7 at noon regarding the scheduled interview time on October 9 at 2 pm.",
+          "tasks": [
+            {
+              "action": "Reply to confirm interview time or request a new slot",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-07",
+                "time": "12:00",
+                "timeZone": "America/Chicago",
+                "wording": "by October 7 at noon",
+                "boundary": "by"
+              },
+              "condition": null,
+              "requirements": [
+                "Reply by October 7 at noon",
+                "Confirm whether October 9 at 2 pm works or ask for another slot"
+              ],
+              "evidence": {
+                "messageId": "E11",
+                "quote": "Please reply by October 7 at noon to confirm whether that still works."
+              }
+            }
+          ],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1610,
+          "cachedInputTokens": 0,
+          "outputTokens": 239,
+          "thinkingTokens": null,
+          "totalTokens": 1849
+        },
+        "latencyMs": 2175
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "deadlines": true
+        },
+        "passed": true,
+        "humanReview": "Preserve confirm/decline/reschedule alternatives; do not assume availability."
+      }
+    },
+    {
+      "id": "E12",
+      "output": {
+        "status": "extracted",
+        "messageId": "E12",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Passive",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E12",
+            "quote": "If you'd like to join, reserve a seat by October 7 through the event page."
+          },
+          "explanation": "The email is an optional event invitation with no established commitment or obligation required from the inbox owner.",
+          "summary": "The Design Club is hosting an optional portfolio workshop on October 9, with seat reservations open through October 7 for interested attendees.",
+          "tasks": [],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1603,
+          "cachedInputTokens": 0,
+          "outputTokens": 152,
+          "thinkingTokens": 190,
+          "totalTokens": 1945
+        },
+        "latencyMs": 3267
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E13",
+      "output": {
+        "status": "extracted",
+        "messageId": "E13",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Passive",
+          "confidence": 100,
+          "evidence": {
+            "messageId": "E13",
+            "quote": "This week's roundup includes photos from the volunteer fair, the new bike parking locations, and the weekend athletics schedule."
+          },
+          "explanation": "This email is an informational newsletter roundup containing optional links and news without any requests or commitments for the recipient.",
+          "summary": "Student Affairs shared a weekly campus roundup newsletter.",
+          "tasks": [],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1586,
+          "cachedInputTokens": 0,
+          "outputTokens": 142,
+          "thinkingTokens": null,
+          "totalTokens": 1728
+        },
+        "latencyMs": 2160
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E14",
+      "output": {
+        "status": "extracted",
+        "messageId": "E14",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Passive",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E14",
+            "quote": "We will send a separate message when it is ready for pickup."
+          },
+          "explanation": "This email is an order confirmation. The bookstore promises to send a notification when the order is ready, which is an external commitment (waitingFor). No action is currently required from the user.",
+          "summary": "The campus bookstore confirmed your notebook order and will notify you when it is ready for pickup.",
+          "tasks": [],
+          "waitingFor": [
+            {
+              "action": "Send notification when notebook order is ready for pickup",
+              "owner": "books@example.org",
+              "promisedDeadline": null,
+              "evidence": {
+                "messageId": "E14",
+                "quote": "We will send a separate message when it is ready for pickup."
+              }
+            }
+          ],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1584,
+          "cachedInputTokens": 0,
+          "outputTokens": 240,
+          "thinkingTokens": null,
+          "totalTokens": 1824
+        },
+        "latencyMs": 2657
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E15",
+      "output": {
+        "status": "extracted",
+        "messageId": "E15",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": true,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E15",
+            "quote": "Could you add your interview notes to our shared doc by Tuesday, October 6, at 6 pm?"
+          },
+          "explanation": "Maya requested that the user add their interview notes to the shared doc by Tuesday, October 6 at 6:00 PM.",
+          "summary": "Maya requested that you add your interview notes to the shared doc by Tuesday, October 6 at 6:00 PM.",
+          "tasks": [
+            {
+              "action": "Add interview notes to shared doc",
+              "owner": "student@example.org",
+              "deadline": {
+                "date": "2026-10-06",
+                "time": "18:00",
+                "timeZone": "America/Chicago",
+                "wording": "by Tuesday, October 6, at 6 pm",
+                "boundary": "by"
+              },
+              "condition": null,
+              "requirements": [
+                "Add interview notes to the shared document",
+                "Complete by Tuesday, October 6, at 6:00 PM"
+              ],
+              "evidence": {
+                "messageId": "E15",
+                "quote": "Could you add your interview notes to our shared doc by Tuesday, October 6, at 6 pm?"
+              }
+            }
+          ],
+          "waitingFor": [
+            {
+              "action": "Bring sticky notes to Wednesday's meeting",
+              "owner": "maya@example.org",
+              "promisedDeadline": null,
+              "evidence": {
+                "messageId": "E15",
+                "quote": "I'll bring the sticky notes this time."
+              }
+            }
+          ],
+          "suggestedFollowUps": [],
+          "uncertainties": [
+            "October 6, 2026 is actually a Tuesday (Oct 4 is Sunday, Oct 5 is Monday, Oct 6 is Tuesday). Please verify the doc location if unspecified."
+          ]
+        },
+        "usage": {
+          "inputTokens": 1608,
+          "cachedInputTokens": 0,
+          "outputTokens": 493,
+          "thinkingTokens": null,
+          "totalTokens": 2101
+        },
+        "latencyMs": 3545
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "deadlines": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E16",
+      "output": {
+        "status": "extracted",
+        "messageId": "E16",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": true,
+        "result": {
+          "category": "Actionable",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E16",
+            "quote": "Could you send a working link soon?"
+          },
+          "explanation": "The email asks the recipient to send a working portfolio link because the current one gives an access error.",
+          "summary": "Nia Brooks requested a working portfolio link to share with the team.",
+          "tasks": [
+            {
+              "action": "Send a working portfolio link",
+              "owner": "student@example.org",
+              "deadline": null,
+              "condition": null,
+              "requirements": [
+                "Provide a working portfolio link to replace the broken application link"
+              ],
+              "evidence": {
+                "messageId": "E16",
+                "quote": "Could you send a working link soon?"
+              }
+            }
+          ],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1594,
+          "cachedInputTokens": 0,
+          "outputTokens": 146,
+          "thinkingTokens": null,
+          "totalTokens": 1740
+        },
+        "latencyMs": 1851
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "noInventedDeadline": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E17",
+      "output": {
+        "status": "extracted",
+        "messageId": "E17",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Passive",
+          "confidence": 98,
+          "evidence": {
+            "messageId": "E17",
+            "quote": "The fall menu is here, including new vegetarian bowls at the Union café."
+          },
+          "explanation": "This email is an informational newsletter about dining options and schedules, requiring no action or response from the recipient.",
+          "summary": "Campus Dining shared updates regarding the new fall menu and café breakfast hours.",
+          "tasks": [],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1583,
+          "cachedInputTokens": 0,
+          "outputTokens": 137,
+          "thinkingTokens": 82,
+          "totalTokens": 1802
+        },
+        "latencyMs": 2645
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E18",
+      "output": {
+        "status": "extracted",
+        "messageId": "E18",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Passive",
+          "confidence": 100,
+          "evidence": {
+            "messageId": "E18",
+            "quote": "The main library will stay open until midnight Monday through Thursday next week."
+          },
+          "explanation": "This is an informational announcement regarding library midterm hours with no direct request or action required from the recipient.",
+          "summary": "The library announced extended midterm hours until midnight Monday through Thursday next week.",
+          "tasks": [],
+          "waitingFor": [],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1588,
+          "cachedInputTokens": 0,
+          "outputTokens": 136,
+          "thinkingTokens": 72,
+          "totalTokens": 1796
+        },
+        "latencyMs": 2542
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E19",
+      "output": {
+        "status": "extracted",
+        "messageId": "E19",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Passive",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E19",
+            "quote": "I'll sign it and send it back by Friday, October 2."
+          },
+          "explanation": "The current message contains a commitment from Alex Morgan to sign and return a reimbursement form, which creates a waitingFor item for the user rather than an action for the inbox owner.",
+          "summary": "Alex Morgan committed to signing and returning the reimbursement form by Friday, October 2.",
+          "tasks": [],
+          "waitingFor": [
+            {
+              "action": "Sign and return the reimbursement form",
+              "owner": "alex@example.org",
+              "promisedDeadline": {
+                "date": "2026-10-02",
+                "time": null,
+                "timeZone": "America/Chicago",
+                "wording": "by Friday, October 2",
+                "boundary": "by"
+              },
+              "evidence": {
+                "messageId": "E19",
+                "quote": "I'll sign it and send it back by Friday, October 2."
+              }
+            }
+          ],
+          "suggestedFollowUps": [
+            {
+              "action": "Follow up regarding the signed reimbursement form",
+              "recipient": "alex@example.org",
+              "waitingForIndex": 0,
+              "rationale": "The promised date of Friday, October 2, 2026, has passed as of the analysis time (October 5, 2026), and no follow-up or resolution is visible in the provided thread context.",
+              "evidence": {
+                "messageId": "E19",
+                "quote": "I'll sign it and send it back by Friday, October 2."
+              }
+            }
+          ],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1587,
+          "cachedInputTokens": 0,
+          "outputTokens": 442,
+          "thinkingTokens": null,
+          "totalTokens": 2029
+        },
+        "latencyMs": 3382
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "waitingFor": true,
+          "suggestedFollowUp": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    },
+    {
+      "id": "E20",
+      "output": {
+        "status": "extracted",
+        "messageId": "E20",
+        "modelCalls": 1,
+        "returnedModelVersion": "gemini-3.6-flash",
+        "contextWarnings": [],
+        "needsReview": false,
+        "result": {
+          "category": "Passive",
+          "confidence": 95,
+          "evidence": {
+            "messageId": "E20",
+            "quote": "Hi, I can send you a draft of the recommendation when I've had a chance to finish it."
+          },
+          "explanation": "Alex Morgan stated they will send a draft of the recommendation once finished. There are no outstanding actions or responsibilities for the user.",
+          "summary": "Alex Morgan promised to send a draft of the recommendation once finished.",
+          "tasks": [],
+          "waitingFor": [
+            {
+              "action": "Send a draft of the recommendation",
+              "owner": "alex@example.org",
+              "promisedDeadline": null,
+              "evidence": {
+                "messageId": "E20",
+                "quote": "I can send you a draft of the recommendation when I've had a chance to finish it."
+              }
+            }
+          ],
+          "suggestedFollowUps": [],
+          "uncertainties": []
+        },
+        "usage": {
+          "inputTokens": 1586,
+          "cachedInputTokens": 0,
+          "outputTokens": 160,
+          "thinkingTokens": null,
+          "totalTokens": 1746
+        },
+        "latencyMs": 2101
+      },
+      "evaluation": {
+        "checks": {
+          "category": true,
+          "taskCount": true,
+          "owners": true,
+          "waitingFor": true,
+          "noInventedFollowUp": true
+        },
+        "passed": true,
+        "humanReview": "Manually verify actions, dates/times, conditions, evidence and omissions."
+      }
+    }
+  ]
+}

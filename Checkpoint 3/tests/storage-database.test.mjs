@@ -57,6 +57,20 @@ test('PostgreSQL storage migrations, transactions, privileges and lifecycle', as
       await as('authenticated',A,()=>assert.rejects(rpc('storage_claim',[A,key(1),key(999),meta(),12000]),{code:'42501'}));
       await as('authenticated',A,()=>assert.rejects(query("insert into public.tasks(user_id,title) values($1,'Forged')",[A]),{code:'42501'}));
     });
+    await t.test('uncertain Passive extraction persists warnings and evidence without creating a task', async()=>{
+      const lease=await claim(B,850,'E12');
+      const data=output('b@example.org');
+      data.needsReview=true; data.contextWarnings=['Earlier discussion is unavailable.'];
+      data.result.category='Passive'; data.result.tasks=[];
+      data.result.uncertainties=['Have you agreed to attend?'];
+      const saved=await finish(B,lease,data);
+      assert.equal(saved.suggestionCount,0);
+      const row=(await as('authenticated',B,()=>query('select * from public.storage_extractions where id=$1',[saved.extractionId])))[0];
+      assert.equal(row.needs_review,true);
+      assert.deepEqual(row.warnings,['Earlier discussion is unavailable.','Have you agreed to attend?']);
+      assert.equal(await scalar('select count(*) from public.storage_evidence where extraction_id=$1',[row.id]),1);
+      assert.equal(await scalar('select count(*) from public.tasks where user_id=$1',[B]),0);
+    });
     let receipt, suggestion, taskId;
     await t.test('claim reserves once and prevents overlapping inference',async()=>{
       const lease=await claim(A,1); assert.equal(lease.state,'claimed');

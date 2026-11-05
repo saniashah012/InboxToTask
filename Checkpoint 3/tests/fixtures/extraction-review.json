@@ -1,0 +1,7 @@
+[
+  { "id": "R01", "body": "If you are interested, join our optional poster workshop on October 12. Reserve a seat by October 8 and bring your poster. No response is required if you do not wish to attend.", "expected": { "category": "Passive", "taskCount": 0, "needsReview": false } },
+  { "id": "R02", "body": "You confirmed that you will attend our poster workshop. Please reserve your agreed seat by October 8. No other preparation is required.", "expected": { "category": "Actionable", "taskCount": 1, "deadlineDates": ["2026-10-08"], "needsReview": false } },
+  { "id": "R03", "body": "Team, someone may already have agreed to handle workshop registration. I cannot remember who volunteered. Registration closes October 8; this is not a new assignment. Please check the earlier discussion if you need to know who is responsible.", "expected": { "category": "Passive", "taskCount": 0, "needsReview": true } },
+  { "id": "R04", "body": "Please upload your revised poster. The deadline is 10/11; I have not said whether I mean October 11 or November 10.", "expected": { "category": "Actionable", "taskCount": 1, "nullDeadline": true, "needsReview": true } },
+  { "id": "R05", "body": "Please send the draft before October 8 at 4 pm America/Chicago.", "expected": { "category": "Actionable", "taskCount": 1, "deadlineDates": ["2026-10-08"], "before": true, "needsReview": false } }
+]

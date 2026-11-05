@@ -9,7 +9,7 @@ The local extraction/storage foundation is implemented and verified. CP3 is not 
 | Workstream | Current state | Remaining CP3 work |
 |---|---|---|
 | Repository/setup | React, canonical pipeline/prompts, Supabase migrations/functions, templates, and tests exist under Checkpoint 3 | Confirm assignment deliverable locations; rehearse fresh setup and reconcile hosted migration history |
-| Extraction | Real Gemini evaluation on 20 fictional cases: 19 passed existing checks; strict schema/evidence validation exists | Fix optional-invitation handling and wording issues; freeze validated settings; verify live Edge-to-storage-to-UI path |
+| Extraction | Original Gemini evaluation: 19/20 fictional cases passed; uncertainty/wording candidate passes 8/8 targeted and 20/20 full live checks under corrected E09 scoring | Address remaining detail/review-burden findings, freeze validated settings, and verify live Edge-to-storage-to-UI path; see [review verification](docs/extraction-review-verification-2026-11-04.md) |
 | Storage/review | Persistent proposals and accepted values, RLS, revision checks, budgets/leases/cache, review, completion/undo, deletion fencing, cleanup code | Integrate real permissions/scans; finalize retention and enable/test scheduled cleanup |
 | Frontend | Main `/` remains a simulated Figma prototype; opt-in `/storage` provides functional local review controls | Design and implement one integrated interface covering the CP3 workflows below; verify accessibility/Carbon conventions |
 | OAuth/privacy | Local app sessions verified; teammate OAuth work was identified in the handoff but is absent from this checkout | Integrate OAuth, protected token lifecycle, explicit consent, persisted rules, and pre-retrieval enforcement |
@@ -157,7 +157,7 @@ Sources checked October 30, 2026: [Gemini caching](https://ai.google.dev/gemini-
 - [ ] Confirm the instructor's actual due date/forum deadline; repository dates and the general assignment schedule should not be assumed interchangeable.
 - [ ] Establish root `app/`, `docs/`, and `tests/` deliverables as required by the assignment; keep this planning file under Checkpoint 3.
 - [x] Scaffold the React app, Supabase configuration, migrations, backend functions, scripts, and environment templates without secrets. Local implementation exists; hosted rollout is separate.
-- [ ] Configure the Gemini model and version-controlled prompts/settings/schema; select and record validated settings. Configuration exists; the tested development candidate is explicitly selected Gemini 3.6 Flash, while the canonical default remains 3.8 Flash. Resolve known extraction issues before freezing settings; see [evaluation](docs/cp2-live-evaluation-2026-11-03.md).
+- [ ] Configure the Gemini model and version-controlled prompts/settings/schema; select and record validated settings. The development candidate is explicitly selected Gemini 3.6 Flash, while the canonical default remains 3.8 Flash. The versioned uncertainty/wording candidate passes 8/8 targeted and 20/20 full live checks under corrected E09 scoring; manual detail/review-burden findings and final configuration selection remain. See [original evaluation](docs/cp2-live-evaluation-2026-11-03.md) and [review verification](docs/extraction-review-verification-2026-11-04.md).
 
 ### CP3.2 Dashboard and persistence
 

@@ -4,13 +4,20 @@ This is a local React + TypeScript + Vite application imported from Figma. It do
 
 ## Entry points and integration boundaries
 
-- [src/main.tsx](src/main.tsx) mounts React and chooses the route. `/` uses the prototype. `/storage` uses the lazy-loaded storage dashboard only when `VITE_STORAGE_ENABLED=true`.
+- [src/main.tsx](src/main.tsx) mounts React and chooses the route. `/` uses the prototype. `/storage` and its Auth callback require a local-host Vite development server plus `VITE_STORAGE_ENABLED=true`. Production builds omit the dashboard entirely and show Page not found for `/storage` paths, regardless of flags. Product OAuth must use a separate production callback when onboarding is integrated.
 - [src/App.tsx](src/App.tsx), [src/previewAdapter.ts](src/previewAdapter.ts), and [src/demoData.ts](src/demoData.ts) implement the simulated prototype/onboarding. Preview actions do not establish real backend behavior.
 - [src/StorageDashboard.tsx](src/StorageDashboard.tsx) implements authenticated storage review; [src/storageAdapter.ts](src/storageAdapter.ts) owns the shared Supabase client, reads, RPC calls, and fixed user-facing errors. Reuse the shared client/session when integrating OAuth; avoid adding another Auth client per component.
 - [src/index.css](src/index.css) supplies global Tailwind v4 styling; [src/storage.css](src/storage.css) scopes storage UI styles. Follow the surrounding component's conventions and avoid broad restyling during integration work.
 - [vite.config.ts](vite.config.ts) configures React, Tailwind, and the `@` alias. Runtime/tool versions and scripts come from [package.json](package.json).
 
 Preserve both routes unless the task explicitly replaces the prototype. Do not silently wire simulated connection/calendar controls to real services. The storage route currently supports fixture trials, not Gmail retrieval or Calendar execution.
+
+Product onboarding must use Google sign-in without a separate password account,
+saved scanning consent/source rules, and optional Calendar connection with Skip
+for now. Add production callback/return routes before enabling hosted OAuth.
+Preserve the [custom sender/domain/subject filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan),
+including the accessible info icon and unresolved subject-inclusion matching
+decision; do not replace custom inputs with presets or silently choose semantics.
 
 ## Commands
 

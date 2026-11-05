@@ -20,12 +20,7 @@ This implements local fixture extraction, persistent suggestions, and user revie
 - The canonical Gemini pipeline performs filtering and strict schema/evidence/ownership validation. Successful transactional persistence returns `saved: true` and a receipt. Duplicate requests reuse saved output without inference.
 - Inference is disabled by default. No real keys were copied or printed. Error responses are fixed codes, with no raw provider logging.
 
-Persistent budgets, shared rate limits, leases, normalized storage, review
-transactions, cleanup, and the opt-in React sign-in/review route are
-implemented. Gmail OAuth/retrieval, automatic scan dispatch, semantic
-task-update matching, and real Calendar execution remain. Keep the fixture
-endpoint disabled outside controlled local testing. The known E12
-optional-invitation error is not fixed here.
+Persistent budgets, shared rate limits, leases, normalized storage, review transactions, cleanup, and a localhost-only development review route are implemented. The main frontend now shares Supabase Auth and saves basic onboarding preferences. The protected backend Gmail connection lifecycle exists, disabled pending private configuration and live verification. Validated scanning consent/source rules, real Gmail retrieval, scan dispatch, semantic task-update matching, and connected Calendar authorization/execution remain. Keep the fixture endpoint disabled outside controlled local testing. Later extraction findings are recorded in [the extraction review report](../../docs/extraction-review-verification-2026-11-04.md).
 
 ## Frontend Auth configuration
 
@@ -134,7 +129,7 @@ Verify missing/invalid bearer tokens are rejected before inference. Repeating an
 
 ## React review interface
 
-From `web`, run `corepack pnpm install --frozen-lockfile`. Copy [the public environment template](../web/.env.example) to a local environment file, enable `VITE_STORAGE_ENABLED`, and fill the local Supabase URL and public key. Never place server credentials in browser configuration. Run `corepack pnpm dev` and open `/storage` on the displayed origin. Sign in with a confirmed local test account. The original prototype remains available at `/`.
+From `web`, run `corepack pnpm install --frozen-lockfile` when dependencies are needed. Copy [the public environment template](../web/.env.example) to a local environment file, enable `VITE_STORAGE_ENABLED`, and fill the local Supabase URL and public key. Never place server credentials in browser configuration. Run `corepack pnpm dev --host 127.0.0.1` and open `/storage` on that local origin. Sign in with a confirmed local test account. This is development tooling: production builds omit the dashboard and reject its routes regardless of flags. The normal product will use Google-only onboarding and separate production callback/return routes; it must not require a password account. The original prototype remains available at `/`.
 
 ## Packaging and validation
 
@@ -149,6 +144,6 @@ The first Deno command may download its runner. Node tests exercise the handler 
 
 ## Verification status
 
-Updated November 4, 2026. All 75 offline tests pass, including PostgreSQL semantics through PGlite with simulated Auth roles. Frontend TypeScript/build pass. Actual Docker integration results are recorded in [the local verification report](../../docs/local-storage-verification-2026-11-04.md). PGlite and mocked tests alone do not establish Supabase Auth/PostgREST/Edge behavior or live model accuracy. No hosted migration or deployment was performed.
+Updated November 5, 2026. The latest [Google verification report](../../docs/google-auth-verification-2026-11-05.md) records 99 offline tests, 40 real local database checks, four Google local API/Edge groups, frontend type/build, Edge types, and browser checks. The earlier [storage report](../../docs/local-storage-verification-2026-11-04.md) records the original storage HTTP/browser coverage. Counts describe separate dated runs; provider simulations do not establish successful live Google OAuth, Gmail retrieval, or live model accuracy. No hosted migration or deployment was performed.
 
-Before hosted deployment, reconcile existing migrations, review permissions, implement the real request/preferences boundary, validate deployment configuration and user isolation, and separately authorize the rollout. The new request contract differs from the currently deployed Groq endpoint.
+Hosted history/schema were inspected, the missing onboarding migration was recovered locally, and pending SQL was rehearsed against the inspected schema with fictional rows preserved. Before hosted deployment, recheck hosted state, review permissions and legacy clients, implement the real request/preferences boundary and product callbacks, validate configuration/isolation, and separately authorize rollout. The new request contract differs from the deployed legacy endpoint. Keep the [custom source-filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan), including its unresolved subject-inclusion matching decision, intact when implementing preferences.

@@ -61,3 +61,26 @@ revocation. The browser test account was subsequently deleted through local Auth
 - Temporary frontend and function-serve processes were stopped after verification;
   the pre-existing local database stack was not reset or stopped. Do not assume a
   frontend/function server is running when resuming.
+
+## Subsequent local handoff updates
+
+The implementation above was subsequently committed locally as `bf5a5fb`, without
+a push or deployment. A follow-up local handoff commit packages the plan/docs and
+developer-route restriction. Check Git status/log for the current checkout state;
+this supersedes the earlier uncommitted-state snapshot above.
+
+The storage dashboard and callback now require localhost Vite development plus
+the storage flag. Frontend type checking and a production build with all Google/
+storage flags enabled passed; storage dashboard code/chunks were absent. Browser
+checks confirmed Page not found for both production storage routes, the homepage
+still worked, and the localhost development dashboard remained available. The
+temporary production-preview process was stopped. A localhost frontend/review
+account was later retained for the user's inspection; check runtime state before
+resuming and keep test credentials out of source/docs.
+
+The handoff now records Google-only product onboarding, optional Calendar access
+with Skip for now, separate consent/approval boundaries, and the custom filter
+plan from another chat. That filter plan remains planned work with an unresolved
+subject-inclusion matching decision. No runtime filter, live Google, Gmail, or
+Calendar functionality was added by this documentation reconciliation; earlier
+test counts are not a new suite run.

@@ -1,6 +1,6 @@
 # Storage contract and local trial
 
-Use [the local setup guide](README.md) to start the stack and review UI. The endpoint accepts fictional E01–E20 fixtures only. A teammate's Google OAuth work must eventually use the same signed-in Supabase user/session and keep Google refresh tokens server-side.
+Use [the local setup guide](README.md) to start the stack and development review UI. The endpoint accepts fictional E01–E20 fixtures only. The [Google connection backend](GOOGLE_AUTH.md) uses the shared signed-in Supabase identity and keeps Gmail credentials encrypted/server-side; private configuration and live verification remain. The `/storage` UI/callback are localhost-development-only and excluded from production. Product onboarding must use separate routes and Google sign-in without a password prerequisite.
 
 ## Data flow
 
@@ -10,7 +10,7 @@ The browser cannot submit source bodies, owner identity, prompts, or model setti
 
 ## Database and RPCs
 
-Apply migrations in timestamp order. The first two establish legacy tasks; the next four add storage and controlled mutations; the seventh upgrades conflict responses for initialized trials. Existing legacy rows retain nullable normalized fields until explicitly reviewed. Reconcile hosted schema/history before considering deployment; local baseline migrations are not proof of compatibility with the hosted project.
+Apply migrations in timestamp order. The original seven establish legacy tasks, normalized storage, controlled mutations, and conflict responses. Additional migrations recover the existing hosted onboarding schema and add private Google connection/state storage and scoped RPCs. Existing legacy rows retain nullable normalized fields until explicitly reviewed. Hosted history has been inspected/recovered locally; recheck it before rollout. Local tests and the schema rehearsal do not establish hosted runtime compatibility.
 
 | Data | Purpose |
 | --- | --- |
@@ -47,7 +47,7 @@ implied by a connection. Existing fixture processing controls remain independent
 
 [Cleanup](functions/storage_cleanup/index.ts) is disabled by default. Enable it only with a separately configured scheduler secret of at least 32 characters. The optional [schedule installer](operations/install_cleanup_schedule.sql) references Vault secrets and is not applied by migrations. Confirm schedule/time-zone behavior and configure secrets privately before installing it. Cleanup currently locks preference rows across users; batch it before public-scale use.
 
-Remaining integration: OAuth/revocation, protected tokens, permitted Gmail retrieval, incremental/manual/scheduled scan dispatch, semantic task matching, Calendar writes/reconciliation/undo, final retention policies, and deployment. Dashboard reminder dates do not send email or notifications.
+Remaining integration: private Google/provider configuration and live OAuth/refresh/revocation verification, Google-only product onboarding, persisted consent/source rules and permitted Gmail retrieval, incremental/manual/scheduled scans, semantic task matching, optional Calendar authorization plus approved writes/reconciliation/undo, final retention policies, and hosted rollout. Protected token and lifecycle code exist locally; they do not enable scanning. Preserve the [custom filter requirements](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan) while implementing source rules. Dashboard reminders do not send email or notifications.
 
 ## Manual calendar export
 

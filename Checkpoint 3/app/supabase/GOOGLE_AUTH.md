@@ -2,7 +2,11 @@
 
 This implements app sign-in and an account-bound Google connection. It does not
 retrieve Gmail messages, enable scanning, call a model, or connect Calendar.
-The prototype at `/` remains simulated; real controls are on `/storage`.
+The prototype at `/` remains simulated; development controls are on `/storage`
+only through a localhost Vite development server with `VITE_STORAGE_ENABLED=true`.
+Production builds exclude the development dashboard regardless of that flag;
+`/storage` and its callback show Page not found. Normal users will use the designed
+Google-only onboarding/dashboard once that separate integration is implemented.
 
 ## Architecture and decisions
 
@@ -38,6 +42,22 @@ No manual account merge is implemented. Supabase manages supported automatic
 identity linking for matching verified email addresses; verify that behavior with
 the project's Auth configuration before inviting existing users. Different-email
 mailboxes are intentionally unsupported in this milestone.
+
+## Product onboarding work still pending
+
+The agreed user journey is Google-only sign-in, Gmail connection, saved source
+rules and explicit scanning consent, optional Calendar connection / Skip for now,
+then the designed dashboard. Do not turn the development password form into a
+product prerequisite. Calendar permission can also be requested later when the
+user chooses Add to Calendar; its backend and separately approved event executor
+are not implemented by this Gmail-only milestone.
+
+Preserve the [custom sender/domain/subject filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan),
+including its info icon, existing label rules, and unresolved subject-inclusion
+matching decision. The saved scanning consent/rules model remains implementation
+work. Neither connecting a Google account nor saving filters authorizes scanning
+by itself. See the [current handoff](../../docs/frontend-integration-handoff-2026-11-04.md)
+for the frontend integration priorities and no-push/Vercel constraint.
 
 ## Hosted inspection, November 5, 2026
 
@@ -140,9 +160,13 @@ corepack pnpm build
 corepack pnpm dev --host 127.0.0.1
 ```
 
-Open `/storage`. Register `/storage/auth/callback` with your frontend hosting SPA
-fallback so a direct callback request serves the React app. There is no second
-Supabase client and no frontend Gmail token handoff.
+Open `/storage` through the local Vite development server. Its callback
+`/storage/auth/callback` is local-development-only too. Before hosted sign-in,
+implement the product onboarding and its own callback/return routes, update the
+sign-in redirect and `GOOGLE_RETURN_URL`, and register those exact product routes
+with the hosted Auth allowlist and frontend SPA fallback. Do not use `/storage`
+as a hosted callback or return destination. There is no second Supabase client
+and no frontend Gmail token handoff.
 
 ## API and integration contract
 
@@ -226,7 +250,8 @@ revoking the grant in Google settings and performing controlled credential clean
    migrations precede the hosted onboarding migration; use the CLI's reviewed
    include-all migration workflow if required. Do not repair history by marking
    unexecuted SQL as applied.
-3. Configure hosted Google provider credentials, Site URL, exact redirect allowlist,
+3. Implement Google-only product onboarding/callback routes first; the development
+   `/storage` routes are not shipped in production. Configure hosted Google provider credentials, Site URL, exact redirect allowlist,
    Google Cloud clients/test users, Edge secrets, and deployment origins privately.
    Local config edits do not configure hosted Auth.
 4. Apply reviewed pending migrations; deploy `google_connection` and

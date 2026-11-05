@@ -4,6 +4,14 @@ This implements local fixture extraction, persistent suggestions, and user revie
 
 ## What is implemented
 
+- The Vite frontend can sign in with Google through Supabase Auth, restore a
+  session, sign out, and save/load each user's onboarding preferences. Sign-in
+  requests profile/email scopes only; it does not authorize Gmail.
+- `user_onboarding_preferences` stores the onboarding selection arrays with
+  owner-only RLS. Its migration and pgTAP isolation test are version controlled.
+- The frontend does not enable scanning after preference save. There is no real
+  Gmail OAuth/API integration yet; scanning remains unavailable until Gmail is
+  separately authorized and a later milestone implements it.
 - A baseline migration recreates the inspected task table for a fresh local database. `CREATE TABLE IF NOT EXISTS` preserves any existing table and rows; it is not a substitute for reconciling hosted migration history/schema drift.
 - Owner-scoped RLS permits browser reads; authenticated review RPCs control edits, approval, completion, undo, and deletion. Direct browser writes are denied. Anonymous users get no task access. Unnecessary privileges, including TRUNCATE, are removed.
 - Ownership, source-email associations, model proposals, confidence, IDs, and timestamps cannot be overwritten by a browser client. Backend service access remains privileged and must stay server-side.
@@ -12,7 +20,33 @@ This implements local fixture extraction, persistent suggestions, and user revie
 - The canonical Gemini pipeline performs filtering and strict schema/evidence/ownership validation. Successful transactional persistence returns `saved: true` and a receipt. Duplicate requests reuse saved output without inference.
 - Inference is disabled by default. No real keys were copied or printed. Error responses are fixed codes, with no raw provider logging.
 
-Persistent budgets, shared rate limits, leases, normalized storage, review transactions, cleanup, and an opt-in React sign-in/review route are implemented. Gmail preferences/OAuth/retrieval, automatic scan dispatch, semantic task-update matching, and real Calendar execution remain. Keep the fixture endpoint disabled outside controlled local testing. The known E12 optional-invitation error is not fixed here.
+Persistent budgets, shared rate limits, leases, normalized storage, review
+transactions, cleanup, and the opt-in React sign-in/review route are
+implemented. Gmail OAuth/retrieval, automatic scan dispatch, semantic
+task-update matching, and real Calendar execution remain. Keep the fixture
+endpoint disabled outside controlled local testing. The known E12
+optional-invitation error is not fixed here.
+
+## Frontend Auth configuration
+
+The Vite app reads only `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY`; set them in a private local
+`Checkpoint 3/app/web/.env.local` or in Vercel Project Settings. A publishable
+key is intended for browser use and is not an authorization boundary; RLS is.
+Never place a service-role key or Gemini key in a `VITE_` variable.
+
+In Supabase Dashboard, enable Google under Authentication → Providers and
+configure the Google OAuth client ID and secret there. In Authentication → URL
+Configuration, set the production Site URL and allow only the production,
+preview, and local app origins needed for redirects. Register the Supabase
+Google callback URL shown by the provider setup in the Google Cloud OAuth
+client. The app requests `openid email profile` only. Do not add Gmail scopes
+to this sign-in flow.
+
+The frontend preference migration is not applied to any hosted database by
+this change. Reconcile hosted migration history first, then apply migrations
+using the approved deployment workflow. Do not deploy the `analysis_email`
+fixture function as part of this milestone.
 
 ## Prerequisites
 

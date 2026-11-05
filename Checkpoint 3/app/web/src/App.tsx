@@ -3,11 +3,8 @@ import gmailLogo from "./assets/gmail-logo.svg"
 import googleG from "./assets/google-g.svg"
 import inboxToTaskLogo from "./assets/inbox-to-task-logo.png"
 import {
-  gmailLabels,
   processingActivityFixture,
-  scopeSummary,
   type ScanState,
-  type SourceRules,
 } from "./demoData"
 import { previewAdapter } from "./previewAdapter"
 import {
@@ -393,10 +390,10 @@ function Modal({
 type AppScreen = "onboarding" | "dashboard"
 
 const emptyOnboardingPreferences: OnboardingPreferences = {
-  allowedLabels: [],
-  allowedSenders: [],
-  allowedDomains: [],
-  excludedLabels: [],
+  includedTypes: [],
+  selectedSenders: [],
+  selectedDomains: [],
+  excludedTypes: [],
   excludedSenders: [],
   excludedDomains: [],
   excludedSubjects: [],
@@ -610,9 +607,9 @@ function App() {
           setProcessingEnabled(true)
           setSavedPreferences({
             ...emptyOnboardingPreferences,
-            allowedLabels: ["School"],
-            allowedSenders: ["professor@illinois.edu"],
-            excludedLabels: ["Receipts"],
+            includedTypes: ["School"],
+            selectedSenders: ["professor@illinois.edu"],
+            excludedTypes: ["Financial"],
           })
           setScreen("dashboard")
         }}
@@ -966,9 +963,8 @@ function Dashboard({
               ? "disconnected"
               : !processingEnabled
                 ? "paused"
-                : preferences.allowedLabels.length +
-                      preferences.allowedSenders.length +
-                      preferences.allowedDomains.length ===
+                : preferences.selectedSenders.length +
+                      preferences.selectedDomains.length ===
                     0
                   ? "missing-sources"
                   : scanState
@@ -1721,7 +1717,11 @@ function Onboarding({
     emptyOnboardingPreferences,
   )
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
-  const hasSources = preferences.allowedLabels.length + preferences.allowedSenders.length + preferences.allowedDomains.length > 0
+  const hasPreferences =
+    preferences.includedTypes.length +
+      preferences.selectedSenders.length +
+      preferences.selectedDomains.length >
+    0
 
   return (
     <div className="onboarding-shell">
@@ -1895,20 +1895,20 @@ function Onboarding({
 
           {step === 2 && (
             <>
-              <h2>Which emails should we check?</h2>
+              <h2>Which email categories should we check?</h2>
               <p className="setup-description">
-                Choose Gmail labels, sender addresses, or domains. A message only
-                needs to match one allowed source (OR).
+                Choose categories and optional sender or domain preferences.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" />
               <p className="setup-helper requirement-helper">
-                No allowed sources means scanning is disabled. Select at least
-                one Gmail label, sender, or domain to continue.
+                Categories are saved as preferences but are not yet used to
+                filter email. Gmail scanning is a separate, unavailable
+                integration.
               </p>
               <FooterActions
                 back={() => setStep(1)}
                 next={() => setStep(3)}
-                nextDisabled={!hasSources}
+                nextDisabled={!hasPreferences}
               />
             </>
           )}
@@ -1917,18 +1917,21 @@ function Onboarding({
             <>
               <h2>What would you like to keep private?</h2>
               <p className="setup-description">
-                Block Gmail labels, senders, domains, or subject keywords.
-                Any matching exclusion overrides all allowed sources.
+                Choose categories, senders, or domains to exclude from your
+                preferences.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="excluded" />
+              <p className="setup-helper requirement-helper">
+                Category exclusions are saved but are not yet applied by the
+                scanner. Gmail scanning is unavailable.
+              </p>
               <details className="privacy-disclosure">
                 <summary>How privacy filtering works</summary>
                 <ul>
-                  <li>Rules match message metadata before bodies are retrieved. No AI topic screening is used.</li>
-                  <li>Every earlier message used as thread context must independently pass the same rules.</li>
-                  <li>Label, sender, domain, and subject rules cannot guarantee that all health or financial content is excluded.</li>
-                  <li>Quoted history and signatures are removed where practical, but inline copied private content may remain.</li>
-                  <li>This preview uses fictional labels and does not retrieve or send real email.</li>
+                  <li>Email categories are stored as preferences and are not currently used to filter messages.</li>
+                  <li>The extraction pipeline supports metadata rules; real Gmail scanning and authorization are not connected here.</li>
+                  <li>Metadata rules cannot guarantee that all health or financial content is excluded.</li>
+                  <li>This preview uses fictional data and does not retrieve or send real email.</li>
                 </ul>
               </details>
               <FooterActions back={() => setStep(2)} next={() => setStep(4)} />
@@ -1956,30 +1959,41 @@ function Onboarding({
                   ]}
                 />
                 <ReviewPreference
-                  label="Emails to check"
+                  label="Included email categories"
                   onEdit={() => setStep(2)}
-                  values={[
-                    ...preferences.allowedLabels.map((value) => `Label: ${value}`),
-                    ...preferences.allowedSenders.map((value) => `From: ${value}`),
-                    ...preferences.allowedDomains.map((value) => `Domain: ${value}`),
-                  ]}
+                  values={preferences.includedTypes}
+                  emptyLabel="No categories selected"
                 />
                 <ReviewPreference
-                  label="Emails to skip"
+                  label="Included senders and domains"
+                  onEdit={() => setStep(2)}
+                  values={[
+                    ...preferences.selectedSenders.map((value) => `From: ${value}`),
+                    ...preferences.selectedDomains.map((value) => `Domain: ${value}`),
+                  ]}
+                  emptyLabel="No senders or domains selected"
+                />
+                <ReviewPreference
+                  label="Excluded email categories"
+                  onEdit={() => setStep(3)}
+                  values={preferences.excludedTypes}
+                  emptyLabel="No categories excluded"
+                />
+                <ReviewPreference
+                  label="Excluded senders, domains, and subjects"
                   onEdit={() => setStep(3)}
                   values={[
-                    ...preferences.excludedLabels.map((value) => `Label: ${value}`),
                     ...preferences.excludedSenders.map((value) => `From: ${value}`),
                     ...preferences.excludedDomains.map((value) => `Domain: ${value}`),
                     ...preferences.excludedSubjects.map((value) => `Subject contains: ${value}`),
                   ]}
-                  emptyLabel="No exclusions selected"
+                  emptyLabel="No senders, domains, or subjects excluded"
                 />
               </div>
-              <div className="scope-summary live" aria-live="polite">
-                <span>Effective scope</span>
-                <strong>{scopeSummary(preferences)}</strong>
-              </div>
+              <p className="setup-helper requirement-helper">
+                Email categories are saved preferences; category-based scanner
+                filtering is not implemented.
+              </p>
               <div className="scan-plan">
                 <div>
                   <span>Initial scan</span>
@@ -2037,7 +2051,7 @@ function Onboarding({
                     }
                   }
                 }}
-                nextDisabled={!hasSources || starting || savingPreferences}
+                nextDisabled={!hasPreferences || starting || savingPreferences}
                 nextLabel={
                   savingPreferences
                     ? "Saving preferences…"
@@ -2116,7 +2130,7 @@ function FooterActions({
   )
 }
 
-type RuleKey = keyof SourceRules
+type RuleKey = keyof OnboardingPreferences
 
 type RuleField = {
   key: RuleKey
@@ -2142,16 +2156,16 @@ function RulesEditor({
   compact = false,
   section = "all",
 }: {
-  rules: SourceRules
-  onChange: (rules: SourceRules) => void
+  rules: OnboardingPreferences
+  onChange: (rules: OnboardingPreferences) => void
   compact?: boolean
   section?: "allowed" | "excluded" | "all"
 }) {
   const [drafts, setDrafts] = useState<Record<RuleKey, string>>({
-    allowedLabels: "",
-    allowedSenders: "",
-    allowedDomains: "",
-    excludedLabels: "",
+    includedTypes: "",
+    selectedSenders: "",
+    selectedDomains: "",
+    excludedTypes: "",
     excludedSenders: "",
     excludedDomains: "",
     excludedSubjects: "",
@@ -2161,8 +2175,8 @@ function RulesEditor({
   const add = (key: RuleKey, rawValue?: string) => {
     let value = (rawValue ?? drafts[key]).trim()
     if (!value) return
-    const isSender = key === "allowedSenders" || key === "excludedSenders"
-    const isDomain = key === "allowedDomains" || key === "excludedDomains"
+    const isSender = key === "selectedSenders" || key === "excludedSenders"
+    const isDomain = key === "selectedDomains" || key === "excludedDomains"
     if (isSender || isDomain) value = value.toLowerCase()
     if (isDomain) value = value.replace(/^@/, "")
     if ((isSender && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) ||
@@ -2184,12 +2198,12 @@ function RulesEditor({
 
   const fields: RuleField[] = [
     {
-      key: "allowedSenders",
+      key: "selectedSenders",
       label: "Sender address",
       placeholder: "name@example.edu",
     },
     {
-      key: "allowedDomains",
+      key: "selectedDomains",
       label: "Sender domain",
       placeholder: "example.edu",
     },
@@ -2215,135 +2229,184 @@ function RulesEditor({
       {section !== "excluded" && <div className="rule-group">
         <div className="rule-heading">
           <div>
-            <strong>Allowed sources</strong>
-            <span>One or more required</span>
+            <strong>Email categories to check</strong>
+            <span>Suggestions are optional; add custom categories as needed.</span>
           </div>
         </div>
-        <label className="rule-input">
-          <span>Gmail label</span>
-          <div>
-            <select
-              aria-label="Select allowed Gmail label"
-              value={drafts.allowedLabels}
-              onChange={(event) => {
-                setDrafts((current) => ({
-                  ...current,
-                  allowedLabels: event.target.value,
-                }))
-                add("allowedLabels", event.target.value)
-              }}
-            >
-              <option value="">Choose fictional label</option>
-              {gmailLabels.map((label) => (
-                <option key={label}>{label}</option>
-              ))}
-            </select>
-          </div>
-        </label>
-        {fields.slice(0, 2).map((field) => (
-          <RuleInput
-            field={field}
-            key={field.key}
-            onAdd={() => add(field.key)}
-            onChange={(value) =>
-              setDrafts((current) => ({ ...current, [field.key]: value }))
-            }
-            value={drafts[field.key]}
-          />
-        ))}
-        <Chips
-          entries={[
-            ...rules.allowedLabels.map((value) => ({
-              key: "allowedLabels" as RuleKey,
-              value,
-              prefix: "Label",
-            })),
-            ...rules.allowedSenders.map((value) => ({
-              key: "allowedSenders" as RuleKey,
-              value,
-              prefix: "From",
-            })),
-            ...rules.allowedDomains.map((value) => ({
-              key: "allowedDomains" as RuleKey,
-              value: `@${value}`,
-              raw: value,
-              prefix: "Domain",
-            })),
-          ]}
-          onRemove={remove}
+        <CategorySelector
+          label="Add an included email category"
+          categoryKey="includedTypes"
+          suggestions={["School", "Job applications", "Research", "Meetings"]}
+          value={rules.includedTypes}
+          onChange={(includedTypes) => onChange({ ...rules, includedTypes })}
         />
+        <div className="rule-heading">
+          <div>
+            <strong>Sender and domain preferences</strong>
+            <span>Saved separately from email categories.</span>
+          </div>
+        </div>
+        {fields.slice(0, 2).map((field) => {
+          const entries = rules[field.key].map((value) => ({
+            key: field.key,
+            value,
+            prefix: field.label,
+          }))
+          return (
+            <div className="rule-field" key={field.key}>
+              <RuleInput
+                field={field}
+                onAdd={() => add(field.key)}
+                onChange={(value) =>
+                  setDrafts((current) => ({ ...current, [field.key]: value }))
+                }
+                value={drafts[field.key]}
+              />
+              <Chips entries={entries} onRemove={remove} />
+            </div>
+          )
+        })}
       </div>}
       {section !== "allowed" && <div className="rule-group exclusion">
         <div className="rule-heading">
           <div>
-            <strong>Exclusions</strong>
-            <span>Always override allowed sources</span>
+            <strong>Email categories to skip</strong>
+            <span>Categories are saved preferences, not scanner filters yet.</span>
           </div>
         </div>
-        <label className="rule-input">
-          <span>Blocked Gmail label</span>
-          <div>
-            <select
-              aria-label="Select excluded Gmail label"
-              value={drafts.excludedLabels}
-              onChange={(event) => {
-                setDrafts((current) => ({
-                  ...current,
-                  excludedLabels: event.target.value,
-                }))
-                add("excludedLabels", event.target.value)
-              }}
-            >
-              <option value="">Choose fictional label</option>
-              {gmailLabels.map((label) => (
-                <option key={label}>{label}</option>
-              ))}
-            </select>
-          </div>
-        </label>
-        {fields.slice(2).map((field) => (
-          <RuleInput
-            field={field}
-            key={field.key}
-            onAdd={() => add(field.key)}
-            onChange={(value) =>
-              setDrafts((current) => ({ ...current, [field.key]: value }))
-            }
-            value={drafts[field.key]}
-          />
-        ))}
-        <Chips
-          entries={[
-            ...rules.excludedLabels.map((value) => ({
-              key: "excludedLabels" as RuleKey,
-              value,
-              prefix: "Label",
-            })),
-            ...rules.excludedSenders.map((value) => ({
-              key: "excludedSenders" as RuleKey,
-              value,
-              prefix: "From",
-            })),
-            ...rules.excludedDomains.map((value) => ({
-              key: "excludedDomains" as RuleKey,
-              value: `@${value}`,
-              raw: value,
-              prefix: "Domain",
-            })),
-            ...rules.excludedSubjects.map((value) => ({
-              key: "excludedSubjects" as RuleKey,
-              value,
-              prefix: "Subject",
-            })),
-          ]}
-          onRemove={remove}
+        <CategorySelector
+          label="Add an excluded email category"
+          categoryKey="excludedTypes"
+          suggestions={["Financial", "Health", "Promotions", "Family & friends"]}
+          value={rules.excludedTypes}
+          onChange={(excludedTypes) => onChange({ ...rules, excludedTypes })}
         />
+        <div className="rule-heading">
+          <div>
+            <strong>Excluded senders, domains, and subjects</strong>
+            <span>Saved separately from email categories.</span>
+          </div>
+        </div>
+        {fields.slice(2).map((field) => {
+          const entries = rules[field.key].map((value) => ({
+            key: field.key,
+            value,
+            prefix: field.label,
+          }))
+          return (
+            <div className="rule-field" key={field.key}>
+              <RuleInput
+                field={field}
+                onAdd={() => add(field.key)}
+                onChange={(value) =>
+                  setDrafts((current) => ({ ...current, [field.key]: value }))
+                }
+                value={drafts[field.key]}
+              />
+              <Chips entries={entries} onRemove={remove} />
+            </div>
+          )
+        })}
       </div>}
       {ruleError && <p className="notice warning" role="alert">{ruleError}</p>}
-      <div className="scope-summary live" aria-live="polite">
-        <span>Effective scope</span>
-        <strong>{scopeSummary(rules)}</strong>
+    </div>
+  )
+}
+
+function CategorySelector({
+  label,
+  categoryKey,
+  suggestions,
+  value,
+  onChange,
+}: {
+  label: string
+  categoryKey: "includedTypes" | "excludedTypes"
+  suggestions: string[]
+  value: string[]
+  onChange: (value: string[]) => void
+}) {
+  const [draft, setDraft] = useState("")
+  const [error, setError] = useState("")
+
+  const add = (rawValue = draft) => {
+    const category = rawValue.trim()
+    if (!category) return
+    if (value.some((current) => current.toLowerCase() === category.toLowerCase())) {
+      setError("That category is already selected.")
+      return
+    }
+    onChange([...value, category])
+    setDraft("")
+    setError("")
+  }
+
+  return (
+    <div className="category-preferences">
+      <div className="rule-input">
+        <span>{label}</span>
+        <div>
+          <input
+            aria-label={label}
+            placeholder="Type an email category…"
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              setError("")
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                add()
+              }
+            }}
+          />
+          <button
+            className="secondary-button"
+            disabled={!draft.trim()}
+            onClick={() => add()}
+            type="button"
+          >
+            Add
+          </button>
+        </div>
       </div>
+      {suggestions.some(
+        (suggestion) =>
+          !value.some((selected) => selected.toLowerCase() === suggestion.toLowerCase()),
+      ) && (
+        <div className="category-suggestions">
+          <p className="suggestions-label">Suggestions — unselected by default.</p>
+          <div className="selection-chips">
+            {suggestions
+              .filter(
+                (suggestion) =>
+                !value.some((selected) => selected.toLowerCase() === suggestion.toLowerCase()),
+              )
+              .map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => add(suggestion)}
+                  type="button"
+                >
+                  <span aria-hidden="true" className="chip-plus">+</span>
+                  {suggestion}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+      <Chips
+        entries={value.map((category) => ({
+          key: categoryKey,
+          value: category,
+          prefix: "Category",
+        }))}
+        onRemove={(_key, category) =>
+          onChange(value.filter((current) => current !== category))
+        }
+      />
+      {error && <p className="notice warning" role="alert">{error}</p>}
     </div>
   )
 }
@@ -2448,7 +2511,7 @@ function ScanStatus({
     paused: ["Auto-check paused", "Preview scans are paused."],
     "missing-sources": [
       "No sources selected",
-      "Choose an allowed Gmail label, sender, or domain in Settings.",
+      "Add a sender or domain rule in Settings. Email categories are saved preferences, not scan filters.",
     ],
     disconnected: [
       "Scanning unavailable",
@@ -2632,7 +2695,7 @@ function SettingsScreen({
                 <span>
                   {previewMode
                     ? "These sample settings do not screen or retrieve any real messages."
-                    : "Saving choices does not grant Gmail access or start scanning."}
+                    : "Email categories are saved but not yet used by the scanner. Saving choices does not grant Gmail access or start scanning."}
                 </span>
               </div>
               <SettingsPreferenceControls

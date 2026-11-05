@@ -2621,6 +2621,21 @@ textarea:focus-visible {
   background: #fdfcfb;
 }
 
+.rule-field,
+.category-preferences {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.category-suggestions .suggestions-label {
+  margin: 0 0 8px;
+}
+
+.category-preferences .rule-chip small {
+  display: none;
+}
+
 .rule-heading {
   justify-content: space-between;
 }

@@ -26,6 +26,25 @@ Current fixture defaults are 20 requests and 200,000 tokens per user per UTC day
 
 A valid cache hit and code-only review actions should invoke zero model calls; offline tests verify those paths. Real empty/unchanged Gmail scans are not yet available to measure. Dollar cost reporting remains planned: store applicable token categories, pricing date/model/tier, and retry uncertainty, calculate estimates without double-counting cached or thinking tokens, and reconcile against provider billing. This document makes no current-price or measured-cost claim.
 
+### Planned class-project abuse-control visibility
+
+The [safety/privacy implementation plan](safety_privacy.md#proposed-class-project-implementation)
+proposes private tester access, global daily budgets, an inference kill switch,
+and shared scan coordination. None is established by today's activity RPC.
+Expose owner-only allowance/reset, next manual-refresh time, running scan, and
+deferred counts with fixed reasons. Keep tester lists and operator controls
+private. Record bounded gate outcomes and reservation/attempt IDs to distinguish
+denied, cached, deferred, and dispatched work without content logs.
+
+Use simple private usage inspection and a documented operator procedure for CP3;
+a centralized monitoring/admin dashboard is deferred. Verify concurrency,
+unknown-cost reservations, UTC resets, and zero new dispatches when disabled or
+accounting is unavailable. Stopping the scheduler does not block manual entry
+points. Global request/token accounting is not a guaranteed dollar cap; choose
+limits from measured usage and configure provider controls where available.
+Alerts alone do not enforce spending limits. Global allowances remain unselected;
+the 60-second manual cooldown remains a proposal.
+
 ## Error behavior and recovery
 
 | Condition | Current surface | Recovery/check |

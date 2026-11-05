@@ -49,10 +49,10 @@ test('empty allowlist prevents inference', async () => {
   const result = await run(x, async () => { calls++; throw new Error('must not run'); });
   assert.equal(result.reason, 'NO_ALLOWLIST'); assert.equal(calls, 0); assert.equal(result.modelCalls, 0);
 });
-test('allow labels/senders/domains combine with OR; exclusions always win', async () => {
-  for (const field of ['labels', 'senders', 'domains']) {
+test('allow keywords/senders/domains combine with OR; exclusions always win', async () => {
+  for (const field of ['keywords', 'senders', 'domains']) {
     const x = input(); x.rules.allow = { labels: [], senders: [], domains: [] };
-    x.rules.allow[field] = [field === 'labels' ? 'CP2-fixture' : field === 'senders' ? 'lee@example.org' : 'example.org'];
+    x.rules.allow[field] = [field === 'keywords' ? 'reading' : field === 'senders' ? 'lee@example.org' : 'example.org'];
     assert.equal(prepared(x).status, 'prepared');
     x.rules.block.senders = ['lee@example.org'];
     assert.equal((await run(x)).reason, 'EXCLUDED');
@@ -315,4 +315,34 @@ test('responseSchema adapter is applied to provider request only; strict backend
   const v = value(); v.confidence = 101;
   assert.throws(() => validateExtraction(v, prepared().payload), /INVALID_OUTPUT_SCHEMA/);
   assert.throws(() => responseConfig(schema, 'wrong'));
+});
+
+
+test('phrase filters match only subject and parsed sender; exclusions win and tags never grant permission', async () => {
+  for (const [phrase, from, subject] of [
+    ['PROJECT DEADLINE','person@outside.test','Updated project deadline'],
+    ['professor','Professor Name <professor@outside.test>','Unrelated'],
+    ['outside.test','person@outside.test','Unrelated'],
+  ]) {
+    const x=input(); x.rules.allow={senders:[],domains:[],keywords:[phrase]};
+    x.message.from=from; x.message.subject=subject;
+    assert.equal(prepared(x).status,'prepared');
+    x.rules.block.keywords=[phrase]; let calls=0;
+    assert.equal((await run(x,async()=>{calls++;})).reason,'EXCLUDED'); assert.equal(calls,0);
+  }
+  const x=input(); x.rules.allow={senders:[],domains:[],keywords:['secret']};
+  x.message.from='Secret Display <person@outside.test>';x.message.subject='Unrelated';x.message.body='secret';
+  assert.equal(prepared(x).reason,'NOT_ALLOWED');
+  x.rules.allow={labels:['CP2-fixture'],senders:[],domains:[]};
+  assert.equal(prepared(x).reason,'NO_ALLOWLIST');
+  for(const keywords of [null,[''],['x'.repeat(255)],Array(201).fill('x'),[4]]) {
+    x.rules.allow={senders:[],domains:[],keywords};assert.throws(()=>prepared(x),/INVALID_RULES/);
+  }
+});
+
+test('phrase exclusions independently remove earlier context', () => {
+  const x=input('E08');x.rules.block.keywords=['student@example.org'];
+  const p=prepared(x);assert.equal(p.status,'prepared');
+  assert.ok(!JSON.stringify(p.payload).includes('Just uploaded them'));
+  assert.ok(p.payload.contextWarnings.some(w=>w.includes('privacy')));
 });

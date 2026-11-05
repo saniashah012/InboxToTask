@@ -110,6 +110,25 @@ Context configuration also has separate scopes: the canonical fixture/CLI pipeli
 
 Prompts, schema, and settings live in [canonical sources](../app/prompts/). `npm.cmd run supabase:prepare` stages those sources and fixtures into the ignored Edge bundle. Generated bundles are not maintained as an independent implementation. Record effective settings when evaluating; a source default alone does not prove what a running service used.
 
+## Proposed class-project abuse-control boundary
+
+The [safety/privacy plan](safety_privacy.md#proposed-class-project-implementation)
+adds planned private approved-tester access, an inference kill switch, and global
+daily request/token accounting to existing per-user claims. These are not
+implemented components or hosted guarantees. Reserve user/global allowance in
+one transaction, deny browser writes to operator controls, and fail closed when
+authorization/accounting cannot be verified. Check the switch before dispatch
+and preserve accounting for requests already sent.
+
+Manual, scheduled, backlog, and retry work must share this boundary. Add a
+separate per-user scan lease/cooldown and resumable deferred-item state; existing
+extraction leases alone do not coordinate an entire scan. Permission and
+connection generations fence stale work. An inference switch must not disable
+code-only review or Calendar undo; scan suspension must also gate Gmail
+retrieval. Owner status exposes allowance/reset and safe deferral reasons, not
+operator configuration. Token limits do not guarantee a currency cap. A dedicated
+Redis service and security dashboard are deferred for CP3.
+
 ## Remaining end-to-end integration
 
 The planned Gmail path must retrieve metadata first, enforce current consent/rules before every body/context fetch, and recheck permissions before inference and saving. Empty inclusions or absent consent must process nothing. Subject inclusion semantics remain undecided; existing label/sender/domain OR inclusions and overriding exclusions must be preserved.

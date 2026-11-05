@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { filterPresets, uniqueTerms, preferenceScope } from "./filterPresets"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import gmailLogo from "./assets/gmail-logo.svg"
 import googleG from "./assets/google-g.svg"
 import inboxToTaskLogo from "./assets/inbox-to-task-logo.png"
@@ -537,7 +538,7 @@ function App() {
     } catch (error) {
       console.error("Onboarding preference save failed", error)
       setPreferenceError(
-        "Preferences were not saved. Check your connection and try again.",
+        error instanceof Error ? error.message : "Preferences were not saved. Check your connection and try again.",
       )
       throw error
     } finally {
@@ -1899,13 +1900,11 @@ function Onboarding({
             <>
               <h2>Which email categories should we check?</h2>
               <p className="setup-description">
-                Choose categories and optional sender or domain preferences.
+                Choose suggested categories or add words, phrases, senders, and domains. Any inclusion match qualifies an email.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" />
               <p className="setup-helper requirement-helper">
-                Categories are saved as preferences but are not yet used to
-                filter email. Gmail scanning is a separate, unavailable
-                integration.
+                Choose at least one word, phrase, sender, or domain. Nothing is permitted with empty inclusions. Real Gmail scanning is not connected yet.
               </p>
               <FooterActions
                 back={() => setStep(1)}
@@ -1919,18 +1918,17 @@ function Onboarding({
             <>
               <h2>What would you like to keep private?</h2>
               <p className="setup-description">
-                Choose categories, senders, or domains to exclude from your
+                Add words, phrases, senders, or domains to exclude from your
                 preferences.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="excluded" />
               <p className="setup-helper requirement-helper">
-                Category exclusions are saved but are not yet applied by the
-                scanner. Gmail scanning is unavailable.
+                Any matching exclusion blocks an email, even if it matches an inclusion. Real Gmail scanning is not connected yet.
               </p>
               <details className="privacy-disclosure">
                 <summary>How privacy filtering works</summary>
                 <ul>
-                  <li>Email categories are stored as preferences and are not currently used to filter messages.</li>
+                  <li>Words and phrases match subject lines or sender email addresses/domains. Exclusions always win; bodies are not searched for filtering.</li>
                   <li>The extraction pipeline supports metadata rules; real Gmail scanning and authorization are not connected here.</li>
                   <li>Metadata rules cannot guarantee that all health or financial content is excluded.</li>
                   <li>This preview uses fictional data and does not retrieve or send real email.</li>
@@ -1961,10 +1959,10 @@ function Onboarding({
                   ]}
                 />
                 <ReviewPreference
-                  label="Included email categories"
+                  label="Included words and phrases"
                   onEdit={() => setStep(2)}
                   values={preferences.includedTypes}
-                  emptyLabel="No categories selected"
+                  emptyLabel="No words or phrases selected"
                 />
                 <ReviewPreference
                   label="Included senders and domains"
@@ -1976,13 +1974,13 @@ function Onboarding({
                   emptyLabel="No senders or domains selected"
                 />
                 <ReviewPreference
-                  label="Excluded email categories"
+                  label="Excluded words and phrases"
                   onEdit={() => setStep(3)}
                   values={preferences.excludedTypes}
-                  emptyLabel="No categories excluded"
+                  emptyLabel="No words or phrases excluded"
                 />
                 <ReviewPreference
-                  label="Excluded senders, domains, and subjects"
+                  label="Excluded senders and domains"
                   onEdit={() => setStep(3)}
                   values={[
                     ...preferences.excludedSenders.map((value) => `From: ${value}`),
@@ -1993,8 +1991,8 @@ function Onboarding({
                 />
               </div>
               <p className="setup-helper requirement-helper">
-                Email categories are saved preferences; category-based scanner
-                filtering is not implemented.
+                Words and phrases are saved filtering rules. Real Gmail scanning
+                is not connected yet.
               </p>
               <div className="scan-plan">
                 <div>
@@ -2132,7 +2130,7 @@ function FooterActions({
   )
 }
 
-type RuleKey = keyof OnboardingPreferences
+type RuleKey = Exclude<keyof OnboardingPreferences, "scanRevision">
 
 type RuleField = {
   key: RuleKey
@@ -2150,6 +2148,17 @@ type RuleChip = {
 type RetentionRowProps = {
   title: string
   value: string
+}
+
+function FilterHelp() {
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  return <span className="scan-help" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <button type="button" className="text-link" aria-label="About these filters" aria-expanded={open} aria-controls={id}
+      onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(true)}
+      onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false) } }}>About these filters (i)</button>
+    {open && <span id={id} role="tooltip">Words and phrases match literal text in subject lines and sender email addresses/domains, ignoring capitalization. Any inclusion can qualify an email; exclusions always win. Sender and domain controls match exactly. Bodies and sender display names are not searched for filters. Permitted bodies may later be analyzed for tasks. Suggested categories cannot identify every sensitive message.</span>}
+  </span>
 }
 
 function RulesEditor({
@@ -2219,11 +2228,6 @@ function RulesEditor({
       label: "Blocked domain",
       placeholder: "example.com",
     },
-    {
-      key: "excludedSubjects",
-      label: "Subject keyword",
-      placeholder: "e.g. confidential",
-    },
   ]
 
   return (
@@ -2232,7 +2236,7 @@ function RulesEditor({
         <div className="rule-heading">
           <div>
             <strong>Email categories to check</strong>
-            <span>Suggestions are optional; add custom categories as needed.</span>
+            <span>Suggestions add editable words and phrases. Add your own below.</span>
           </div>
         </div>
         <CategorySelector
@@ -2245,7 +2249,7 @@ function RulesEditor({
         <div className="rule-heading">
           <div>
             <strong>Sender and domain preferences</strong>
-            <span>Saved separately from email categories.</span>
+            <span>Exact address or domain matches. Domains do not include subdomains.</span>
           </div>
         </div>
         {fields.slice(0, 2).map((field) => {
@@ -2273,7 +2277,7 @@ function RulesEditor({
         <div className="rule-heading">
           <div>
             <strong>Email categories to skip</strong>
-            <span>Categories are saved preferences, not scanner filters yet.</span>
+            <span>Add a word or phrase that you would like to exclude.</span>
           </div>
         </div>
         <CategorySelector
@@ -2285,11 +2289,12 @@ function RulesEditor({
         />
         <div className="rule-heading">
           <div>
-            <strong>Excluded senders, domains, and subjects</strong>
-            <span>Saved separately from email categories.</span>
+            <strong>Excluded senders and domains</strong>
+            <span>Exact address or domain matches. Domains do not include subdomains.</span>
           </div>
         </div>
-        {fields.slice(2).map((field) => {
+        {rules.excludedSubjects.length > 0 && <div className="notice"><p>Previous subject-only exclusions (kept at their original scope):</p><Chips entries={rules.excludedSubjects.map(value => ({ key: "excludedSubjects" as RuleKey, value, prefix: "Subject only" }))} onRemove={remove} /></div>}
+        {fields.slice(2, 4).map((field) => {
           const entries = rules[field.key].map((value) => ({
             key: field.key,
             value,
@@ -2310,6 +2315,8 @@ function RulesEditor({
           )
         })}
       </div>}
+      <FilterHelp />
+      <div className="scope-summary live" aria-live="polite"><span>Effective scope</span><strong>{preferenceScope(rules)}</strong></div>
       {ruleError && <p className="notice warning" role="alert">{ruleError}</p>}
     </div>
   )
@@ -2334,8 +2341,9 @@ function CategorySelector({
   const add = (rawValue = draft) => {
     const category = rawValue.trim()
     if (!category) return
+    if (category.length > 254 || /[\x00-\x1f\x7f]/.test(category) || value.length >= 200) { setError("Use up to 200 terms, each 1-254 characters without control characters."); return }
     if (value.some((current) => current.toLowerCase() === category.toLowerCase())) {
-      setError("That category is already selected.")
+      setError("That word or phrase is already selected.")
       return
     }
     onChange([...value, category])
@@ -2350,7 +2358,7 @@ function CategorySelector({
         <div>
           <input
             aria-label={label}
-            placeholder="Type an email category…"
+            placeholder="Type a word or phrase"
             value={draft}
             onChange={(event) => {
               setDraft(event.target.value)
@@ -2377,7 +2385,7 @@ function CategorySelector({
         entries={value.map((category) => ({
           key: categoryKey,
           value: category,
-          prefix: "Category",
+          prefix: "Phrase",
         }))}
         onRemove={(_key, category) =>
           onChange(value.filter((current) => current !== category))
@@ -2398,11 +2406,11 @@ function CategorySelector({
               .map((suggestion) => (
                 <button
                   key={suggestion}
-                  onClick={() => add(suggestion)}
+                  onClick={() => { const next = uniqueTerms([...value, ...(filterPresets[suggestion] ?? [suggestion])]); if (next.length > 200) { setError("Use up to 200 terms."); return } onChange(next); setError("") }}
                   type="button"
                 >
                   <span aria-hidden="true" className="chip-plus">+</span>
-                  {suggestion}
+                  {suggestion}: {(filterPresets[suggestion] ?? [suggestion]).join(", ")}
                 </button>
               ))}
           </div>
@@ -2513,7 +2521,7 @@ function ScanStatus({
     paused: ["Auto-check paused", "Preview scans are paused."],
     "missing-sources": [
       "No sources selected",
-      "Add a sender or domain rule in Settings. Email categories are saved preferences, not scan filters.",
+      "Add a sender or domain rule in Settings. Words and phrases are saved rules; scanning is not connected yet.",
     ],
     disconnected: [
       "Scanning unavailable",
@@ -2698,7 +2706,7 @@ function SettingsScreen({
                 <span>
                   {previewMode
                     ? "These sample settings do not screen or retrieve any real messages."
-                    : "Email categories are saved but not yet used by the scanner. Saving choices does not grant Gmail access or start scanning."}
+                    : "Words and phrases match subjects or sender addresses/domains. Saving rules does not grant Gmail access or start scanning."}
                 </span>
               </div>
               <SettingsPreferenceControls
@@ -2715,7 +2723,7 @@ function SettingsScreen({
                       error,
                     )
                     setSaveError(
-                      "Preferences were not saved. Check your connection and try again.",
+                      error instanceof Error ? error.message : "Preferences were not saved. Check your connection and try again.",
                     )
                   } finally {
                     setSaving(false)

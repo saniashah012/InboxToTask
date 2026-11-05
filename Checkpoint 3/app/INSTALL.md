@@ -1,5 +1,24 @@
 # Installation
 
+## Safety gate before enabling real processing
+
+Read the [safety/privacy guidance](../docs/safety_privacy.md) and
+[proposed class-project controls](../IMPLEMENTATION_PLAN.md#class-project-api-abuse-controls-proposed-implementation)
+before enabling real-mail scans. Use dedicated test accounts with fictional mail.
+Approved-tester enforcement, global daily budgets, an inference kill switch, and
+scan coordination are planned; this guide does not provide working configuration
+commands or environment flags for them. Google OAuth test-user restrictions do
+not implement application processing access control.
+
+When implemented, document private tester approval, measured user/global limits,
+UTC reset, the operator switch, and scan cooldown in the backend runbook. Verify
+denial and concurrency checks before enabling scheduled work. The switch stops
+new inference dispatches, not requests already sent; scan suspension must also
+gate retrieval. Exhausted budgets leave work visibly deferred. Keep review and
+explicit Calendar undo usable without inference. Do not enable fixture extraction
+or cleanup merely to test setup. Hosted changes require a separate rollout
+instruction; this documentation update does not authorize deployment.
+
 ## Local Supabase foundation
 
 See [local Supabase setup](supabase/README.md) for the local-only permission migrations,

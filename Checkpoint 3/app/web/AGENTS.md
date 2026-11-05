@@ -16,8 +16,9 @@ Product onboarding must use Google sign-in without a separate password account,
 saved scanning consent/source rules, and optional Calendar connection with Skip
 for now. Add production callback/return routes before enabling hosted OAuth.
 Preserve the [custom sender/domain/subject filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan),
-including the accessible info icon and unresolved subject-inclusion matching
-decision; do not replace custom inputs with presets or silently choose semantics.
+using app-defined editable words/phrases plus exact sender/domain rules. Presets
+expand into visible terms; phrase matching uses subject or parsed sender address/domain
+with OR inclusions and overriding exclusions. Preserve custom inputs and accessible help.
 
 ## Commands
 

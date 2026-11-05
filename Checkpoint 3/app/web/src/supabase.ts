@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 
 export type OnboardingPreferences = {
+  scanRevision?: number
   includedTypes: string[]
   selectedSenders: string[]
   selectedDomains: string[]
@@ -135,45 +136,37 @@ function fromPreferenceRow(row: PreferenceRow): OnboardingPreferences {
   }
 }
 
-export async function loadOnboardingPreferences(
-  userId: string,
-): Promise<OnboardingPreferences | null> {
+// Canonical scanning settings are the source of truth after a reviewed save.
+// Older category titles remain draft phrases until explicitly reviewed and saved.
+export async function loadOnboardingPreferences(userId: string): Promise<OnboardingPreferences | null> {
   if (!supabase) throw new Error("Supabase is not configured.")
-  const { data, error } = await supabase
-    .from("user_onboarding_preferences")
-    .select(preferenceColumns)
-    .eq("user_id", userId)
-    .maybeSingle()
-  if (error) throw error
-  return data ? fromPreferenceRow(data) : null
+  const { data: settings, error: settingsError } = await supabase.rpc("scan_settings_get")
+  if (settingsError) throw new Error("Could not load filter settings. Check the local migration and retry.")
+  if (settings.revision > 0) return {
+    scanRevision: settings.revision,
+    includedTypes: settings.rules.allow.keywords ?? [], selectedSenders: settings.rules.allow.senders,
+    selectedDomains: settings.rules.allow.domains, excludedTypes: settings.rules.block.keywords ?? [],
+    excludedSenders: settings.rules.block.senders, excludedDomains: settings.rules.block.domains,
+    excludedSubjects: settings.rules.block.subjectKeywords,
+  }
+  const { data, error } = await supabase.from("user_onboarding_preferences").select(preferenceColumns).eq("user_id", userId).maybeSingle()
+  if (error) throw new Error("Could not load previous preferences.")
+  return data ? { ...fromPreferenceRow(data), scanRevision: 0 } : null
 }
 
-export async function saveOnboardingPreferences(
-  userId: string,
-  preferences: OnboardingPreferences,
-): Promise<OnboardingPreferences> {
+export async function saveOnboardingPreferences(_userId: string, preferences: OnboardingPreferences): Promise<OnboardingPreferences> {
   if (!supabase) throw new Error("Supabase is not configured.")
-  const { data, error } = await supabase
-    .from("user_onboarding_preferences")
-    .upsert(
-      {
-        user_id: userId,
-        included_types: preferences.includedTypes,
-        selected_sources: [
-          ...preferences.selectedSenders.map((sender) => `sender:${sender}`),
-          ...preferences.selectedDomains.map((domain) => `domain:${domain}`),
-        ],
-        excluded_types: preferences.excludedTypes,
-        excluded_sources: [
-          ...preferences.excludedSenders.map((sender) => `sender:${sender}`),
-          ...preferences.excludedDomains.map((domain) => `domain:${domain}`),
-          ...preferences.excludedSubjects.map((subject) => `subject:${subject}`),
-        ],
-      },
-      { onConflict: "user_id" },
-    )
-    .select(preferenceColumns)
-    .single()
-  if (error) throw error
-  return fromPreferenceRow(data)
+  const { data: current, error: readError } = await supabase.rpc("scan_settings_get")
+  if (readError) throw new Error("Could not load scanning settings. Retry after checking the local migration.")
+  const { data, error } = await supabase.rpc("scan_settings_save", {
+    p_revision: preferences.scanRevision ?? 0,
+    p_rules: {
+      allow: { labels: [], senders: preferences.selectedSenders, domains: preferences.selectedDomains, keywords: preferences.includedTypes, subjectKeywords: [] },
+      block: { labels: [], senders: preferences.excludedSenders, domains: preferences.excludedDomains, keywords: preferences.excludedTypes, subjectKeywords: preferences.excludedSubjects },
+    },
+    p_context: current.context_limits, p_consent: current.consent, p_paused: current.paused,
+    p_disclosure: current.consent ? "gmail-scan-v1" : null,
+  })
+  if (error) throw new Error(error.code === "PT409" ? "Settings changed in another window. Reload before saving again." : "Filters were not saved. Check your entries and retry.")
+  return { ...preferences, scanRevision: data.revision, includedTypes: data.rules.allow.keywords, excludedTypes: data.rules.block.keywords }
 }

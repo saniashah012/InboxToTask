@@ -36,14 +36,19 @@ scanning, and no earlier-message context. Explicit consent records the
 `gmail-scan-v1` disclosure version and timestamp. Source-rule saves alone never
 grant consent. Legacy onboarding preferences remain separate.
 
-Rules are validated/canonicalized server-side; exact label IDs preserve case,
-sender/domain/keyword lists trim and deduplicate without case sensitivity.
+The [phrase-filter migration](migrations/20261105160000_phrase_filters.sql) adds
+explicit inclusion/exclusion keywords. Phrase lists, sender addresses, and domains
+trim and deduplicate without case sensitivity. Words/phrases match the subject or
+parsed sender address/domain; exact sender/domain controls keep their exact scope.
+Obsolete source rules revoke consent, pause affected users, and fence old jobs;
+previous subject-only exclusions retain their original scope. Onboarding now saves
+reviewed terms through the same revision-checked scanning RPCs.
 Context limits are bounded by the canonical pipeline caps, with a conservative
 zero-message default. Saves follow preference-before-child lock order, increment
 storage generation, cancel current jobs, and preserve accepted tasks. This does
 not authorize retrieval: a future Gmail dispatcher must recheck settings and
-Google connection generations at each external boundary and commit. Canonical
-subject inclusion matching still awaits the OR/AND decision. See
+Google connection generations at each external boundary and commit. Deterministic canonical phrase matching is implemented locally; trusted Gmail
+retrieval/inference enforcement remains unconnected. See
 [verification and limitations](../../docs/scan-settings-verification-2026-11-05.md).
 
 ## Trial limits and lifecycle

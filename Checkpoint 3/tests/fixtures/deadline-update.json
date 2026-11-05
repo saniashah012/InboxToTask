@@ -2,8 +2,8 @@
   "user": { "email": "student@example.org", "timeZone": "America/Chicago" },
   "analysisTime": "2026-11-03T09:00:00-06:00",
   "rules": {
-    "allow": { "labels": ["School"], "senders": [], "domains": [] },
-    "block": { "labels": ["Private"], "senders": [], "domains": [], "subjectKeywords": [] }
+    "allow": { "labels": [], "senders": [], "domains": ["example.org"], "keywords": [] },
+    "block": { "labels": [], "senders": [], "domains": [], "subjectKeywords": [] }
   },
   "message": {
     "id": "update-1", "threadId": "project-deadline", "from": "professor@example.org",

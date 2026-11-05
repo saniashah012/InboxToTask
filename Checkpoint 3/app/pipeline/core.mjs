@@ -30,8 +30,9 @@ function validateRules(rules) {
   for (const group of ['allow', 'block']) {
     const r = rules?.[group];
     if (!r || typeof r !== 'object') fail('INVALID_RULES');
-    for (const field of ['senders', 'domains', 'labels', ...(group === 'block' ? ['subjectKeywords'] : [])]) {
-      if (!Array.isArray(r[field]) || r[field].length > 200 || !r[field].every((s) => typeof s === 'string' && s.trim() && s.length <= 254)) fail('INVALID_RULES');
+    for (const field of ['senders', 'domains', 'labels', 'keywords', 'subjectKeywords']) {
+      if (!Object.hasOwn(r, field) && ['labels', 'keywords', 'subjectKeywords'].includes(field)) continue;
+      if (!Array.isArray(r[field]) || r[field].length > 200 || !r[field].every((s) => typeof s === 'string' && s.trim() && s.length <= 254 && !/[\x00-\x1f\x7f]/.test(s))) fail('INVALID_RULES');
     }
     r.senders.forEach(address);
     if (!r.domains.every((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d.trim()))) fail('INVALID_RULES');
@@ -39,11 +40,14 @@ function validateRules(rules) {
 }
 export function filterMessage(message, rules) {
   const sender = address(message.from), domain = sender.split('@')[1];
+  // Legacy mailbox tags never grant permission; legacy subject blocks stay subject-only.
+  const contains = (values, fields) => (values ?? []).some((value) =>
+    fields.some((field) => field.toLowerCase().includes(value.trim().toLowerCase())));
   const matches = (r) => r.senders.some((s) => address(s) === sender)
     || r.domains.some((d) => d.trim().toLowerCase() === domain)
-    || r.labels.some((l) => message.labels.includes(l));
-  if (matches(rules.block) || rules.block.subjectKeywords.some((s) => message.subject.toLowerCase().includes(s.trim().toLowerCase()))) return 'EXCLUDED';
-  if (![...rules.allow.senders, ...rules.allow.domains, ...rules.allow.labels].length) return 'NO_ALLOWLIST';
+    || contains(r.keywords, [message.subject, sender, domain]);
+  if (matches(rules.block) || contains(rules.block.subjectKeywords, [message.subject])) return 'EXCLUDED';
+  if (![...rules.allow.senders, ...rules.allow.domains, ...(rules.allow.keywords ?? [])].length) return 'NO_ALLOWLIST';
   return matches(rules.allow) ? 'PERMITTED' : 'NOT_ALLOWED';
 }
 export function cleanBody(body) {

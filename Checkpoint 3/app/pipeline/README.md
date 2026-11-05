@@ -123,8 +123,8 @@ Use `--input path/to/input.json --live` for one custom case (paths are relative 
   "user": { "email": "student@example.org", "timeZone": "America/Chicago" },
   "analysisTime": "2026-10-05T09:00:00-05:00",
   "rules": {
-    "allow": { "labels": ["School"], "senders": [], "domains": [] },
-    "block": { "labels": [], "senders": [], "domains": [], "subjectKeywords": [] }
+    "allow": { "senders": [], "domains": [], "keywords": ["reading response"] },
+    "block": { "senders": [], "domains": [], "keywords": [], "subjectKeywords": [] }
   },
   "message": {
     "id": "sample-1", "threadId": "sample-thread", "from": "professor@example.org",
@@ -138,7 +138,7 @@ Use `--input path/to/input.json --live` for one custom case (paths are relative 
 
 Context messages use the same message shape, unique IDs, the same threadId, and timestamps no later than the current message. Inputs must be plain text: MIME/HTML decoding belongs in the future Gmail adapter. Each context message is independently checked against the rules. The module is not a retrieval boundary: a future Gmail adapter must filter metadata BEFORE fetching excluded bodies; this local module receives already supplied fixture text.
 
-Inclusions use OR, with exact case-insensitive sender/domain matches (subdomains are not implicitly allowed) and exact label matches. Any exclusion overrides inclusion; subject keywords use case-insensitive substring matching. Empty allowlists produce `NO_ALLOWLIST` and zero inference. Metadata rules are not semantic healthcare/financial classifiers.
+Inclusions use OR: exact case-insensitive sender/domain matches (no implicit subdomains) or `keywords` matching literal substrings in the subject or parsed sender address/domain. Display names and bodies are not searched. Any exclusion overrides inclusion. Legacy `block.subjectKeywords` remain subject-only to preserve their original scope. Mailbox tags do not grant permission or block messages; deprecated rule fields remain compatibility data only. New saved settings reject nonempty obsolete source lists. Empty allowlists produce `NO_ALLOWLIST` and zero inference. Metadata rules are not semantic healthcare/financial classifiers.
 
 Quoted `>` lines, common reply headers, and signature separators are removed conservatively. This is not a guarantee that inline sensitive content is removed. Original messages must be supplied independently as permitted context. Context omission adds deterministic uncertainty; oversized current content goes to review without silently truncating or paying for inference.
 

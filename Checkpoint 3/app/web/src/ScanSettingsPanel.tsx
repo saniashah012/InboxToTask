@@ -3,7 +3,7 @@ import { loadScanSettings, saveScanSettings, type ScanRules, type ScanSettings }
 import "./scan-settings.css"
 
 const fields = [
-  ["senders", "Sender email addresses"], ["domains", "Sender domains"], ["subjectKeywords", "Subject keywords"],
+  ["senders", "Sender email addresses"], ["domains", "Sender domains"], ["keywords", "Words or phrases"],
 ] as const
 const limitFields = [
   ["maxMessages", "Earlier messages", 0, 10], ["maxAgeDays", "Maximum context age (days)", 1, 90],
@@ -39,7 +39,7 @@ export default function ScanSettingsPanel() {
     if (!settings) return
     setBusy(true); setError(""); setNotice("")
     const normalized = structuredClone(settings)
-    for (const group of ["allow", "block"] as const) for (const field of ["labels", "senders", "domains", "subjectKeywords"] as const)
+    for (const group of ["allow", "block"] as const) for (const field of ["labels", "senders", "domains", "subjectKeywords", "keywords"] as const)
       normalized.rules[group][field] = normalized.rules[group][field].map(v => v.trim()).filter(Boolean)
     try {
       const result = await saveScanSettings(normalized)
@@ -56,34 +56,28 @@ export default function ScanSettingsPanel() {
     <button type="button" disabled={busy} onClick={() => setReload(v => v + 1)}>Reload saved settings</button>
     {settings && <form onSubmit={e => { e.preventDefault(); void save() }}>
       <p aria-label="Current form scope">Current form scope: {([
-        ...settings.rules.allow.labels.filter(v => v.trim()).map(v => `label ${v.trim()}`),
+        ...settings.rules.allow.keywords.filter(v => v.trim()).map(v => `subject or sender contains ${v.trim()}`),
         ...settings.rules.allow.senders.filter(v => v.trim()).map(v => `sender ${v.trim()}`),
         ...settings.rules.allow.domains.filter(v => v.trim()).map(v => `domain ${v.trim()}`),
       ].join(" OR ") || "No inclusions configured; nothing is permitted")}. Any matching exclusion blocks processing. Scanning remains unavailable.</p>
-      <fieldset disabled={busy} id={`${helpId}-sources`}>
-        <legend>Labels</legend>
-        <p>Use exact Gmail label IDs. Allowed labels, sender addresses, and domains combine with OR. Exclusions always win.</p>
-        {(["allow", "block"] as const).map(group => <label key={group}>{group === "allow" ? "Include" : "Exclude"} label IDs (one per line)
-          <textarea value={settings.rules[group].labels.join("\n")} onChange={e => list(group, "labels", e.target.value)} />
-        </label>)}
-      </fieldset>
       <fieldset disabled={busy}>
-        <legend>Sender, domain, and subject filters</legend>
+        <legend>Words, phrases, and sender filters</legend>
         <span className="scan-help" onMouseEnter={() => setHelp(true)} onMouseLeave={() => setHelp(false)}>
           <button type="button" aria-label="About sender, domain, and subject filters" aria-expanded={help} aria-controls={helpId}
             onFocus={() => setHelp(true)} onBlur={() => setHelp(false)} onClick={() => setHelp(true)}
             onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setHelp(false) } }}>ⓘ</button>
-          {help && <span id={helpId} role="tooltip">Matches sender email addresses, exact sender domains, and subject lines only. Bodies are not searched for filter matches. Any matching label, sender, or domain inclusion permits processing; exclusions always win. Subject keywords currently support exclusions.</span>}
+          {help && <span id={helpId} role="tooltip">Words and phrases match subject lines or sender addresses/domains. Sender and domain controls match exactly. Bodies are not searched for filtering. Inclusions combine with OR; exclusions always win.</span>}
         </span>
-        <p>One entry per line; up to 200 entries of 254 characters per list. Domains do not include subdomains. Subject exclusions match literal phrases without case sensitivity.</p>
-        <p>Subject inclusions are not available yet. Permitted bodies may still be analyzed for task extraction; metadata filters do not classify sensitive topics.</p>
+        <p>One entry per line; up to 200 entries of 254 characters per list. Domains do not include subdomains. Words and phrases match literal text without case sensitivity.</p>
+        <p>Words and phrases can include or exclude messages. Permitted bodies may still be analyzed for task extraction; metadata filters do not classify sensitive topics.</p>
         {fields.map(([field, label]) => <div className="scan-rule-pair" key={field}>
-          {(["allow", "block"] as const).filter(group => field !== "subjectKeywords" || group === "block").map(group =>
+          {(["allow", "block"] as const).map(group =>
             <label key={group}>{group === "allow" ? "Include" : "Exclude"}: {label}
               <textarea value={settings.rules[group][field].join("\n")} onChange={e => list(group, field, e.target.value)} />
             </label>)}
         </div>)}
       </fieldset>
+      {settings.rules.block.subjectKeywords.length > 0 && <p>Previous subject-only exclusions: {settings.rules.block.subjectKeywords.join(", ")}. These retain their original scope.</p>}
       <fieldset disabled={busy}>
         <legend>Context limits</legend>
         <p>Each earlier message must independently pass current permissions. Zero earlier messages is the starting setting. Quoted-text removal is imperfect.</p>

@@ -13,7 +13,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
     await q("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:user})]);
     try{return await fn();}finally{await db.exec('reset role');}
   };
-  const rules={allow:{labels:['School'],senders:[' Teacher@Example.org ','teacher@example.org'],domains:[]},block:{labels:[],senders:[],domains:[],subjectKeywords:[' Newsletter ','newsletter']}};
+  const rules={allow:{labels:[],keywords:[' Assignment ','assignment'],senders:[' Teacher@Example.org ','teacher@example.org'],domains:[]},block:{labels:[],senders:[],domains:[],subjectKeywords:[' Newsletter ','newsletter']}};
   const context={maxMessages:0,maxAgeDays:30,maxMessageChars:12000,maxTotalChars:24000};
   const get=(user=A)=>as('authenticated',user,()=>scalar('select public.scan_settings_get()'));
   const save=(revision=0,r=rules,c=context,consent=false,paused=true,disclosure=null,user=A)=>as('authenticated',user,()=>scalar('select public.scan_settings_save($1,$2,$3,$4,$5,$6)',[revision,r,c,consent,paused,disclosure]));
@@ -24,10 +24,27 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       create function auth.uid() returns uuid language sql stable as $$select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid$$;`);
     await q('insert into auth.users values($1,$2),($3,$4)',[A,'student@example.org',B,'b@example.org']);
     const path=new URL('../app/supabase/migrations/',import.meta.url);
-    for(const name of (await readdir(path)).filter(n=>n.endsWith('.sql')).sort()) await db.exec(await readFile(new URL(name,path),'utf8'));
+    const legacyUser='33333333-3333-4333-8333-333333333333';
+    for(const name of (await readdir(path)).filter(n=>n.endsWith('.sql')).sort()) {
+      if(name==='20261105160000_phrase_filters.sql') {
+        await q('insert into auth.users values($1,$2)',[legacyUser,'legacy@example.test']);
+        await q('insert into public.storage_preferences(user_id) values($1)',[legacyUser]);
+        await q(`insert into public.scan_settings(user_id,consent,consent_at,disclosure_version,paused,rules)
+          values($1,true,now(),'gmail-scan-v1',false,$2)`,[legacyUser,{allow:{labels:['School'],senders:[],domains:[],subjectKeywords:['assignment']},block:{labels:['Private'],senders:[],domains:[],subjectKeywords:['receipt']}}]);
+      }
+      await db.exec(await readFile(new URL(name,path),'utf8'));
+    }
+    await t.test('obsolete permissions migrate without granting broader scope and require fresh consent',async()=>{
+      const migrated=await get(legacyUser);
+      assert.equal(migrated.paused,true);assert.equal(migrated.consent,false);assert.equal(migrated.revision,1);
+      assert.deepEqual(migrated.rules.allow.labels,[]);assert.deepEqual(migrated.rules.allow.keywords,[]);
+      assert.deepEqual(migrated.rules.allow.subjectKeywords,[]);assert.deepEqual(migrated.rules.block.subjectKeywords,['receipt']);
+      assert.equal(await scalar('select generation from public.storage_preferences where user_id=$1',[legacyUser]),2);
+      await q('delete from auth.users where id=$1',[legacyUser]);
+    });
     await t.test('new users default to no consent, pause, empty rules and no prior context',async()=>{
       const settings=await get();assert.equal(settings.revision,0);assert.equal(settings.consent,false);assert.equal(settings.paused,true);
-      assert.deepEqual(settings.rules.allow,{labels:[],senders:[],domains:[],subjectKeywords:[]});assert.equal(settings.context_limits.maxMessages,0);
+      assert.deepEqual(settings.rules.allow,{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[]});assert.equal(settings.context_limits.maxMessages,0);
       assert.equal(await scalar('select count(*) from public.scan_settings'),0);
     });
     await t.test('anonymous, owner injection and direct writes cannot bypass the RPC',async()=>{
@@ -38,7 +55,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
     });
     await t.test('saving normalizes and deduplicates, without giving consent',async()=>{
       const saved=await save();assert.equal(saved.revision,1);assert.equal(saved.consent,false);assert.equal(saved.consent_at,null);
-      assert.deepEqual(saved.rules.allow.senders,['teacher@example.org']);assert.deepEqual(saved.rules.allow.subjectKeywords,[]);
+      assert.deepEqual(saved.rules.allow.keywords,['assignment']);assert.deepEqual(saved.rules.allow.senders,['teacher@example.org']);assert.deepEqual(saved.rules.allow.subjectKeywords,[]);
       assert.deepEqual(saved.rules.block.subjectKeywords,['newsletter']);
       assert.equal((await get()).revision,1);assert.equal((await get(B)).revision,0);
       assert.deepEqual(await as('authenticated',B,()=>q('select * from public.scan_settings')),[]);
@@ -47,6 +64,9 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       for(const altered of [
         {...rules,allow:{...rules.allow,senders:['Teacher <teacher@example.org>']}},
         {...rules,allow:{...rules.allow,domains:['bad..example.org']}},
+        {...rules,allow:{...rules.allow,labels:['School']}},
+        {...rules,allow:{...rules.allow,keywords:null}},
+        {...rules,allow:{...rules.allow,keywords:Array(201).fill('x')}},
         {...rules,allow:{...rules.allow,subjectKeywords:null}},
         {...rules,allow:{...rules.allow,subjectKeywords:['  ']}},
         {...rules,allow:{...rules.allow,labels:Array(201).fill('x')}},

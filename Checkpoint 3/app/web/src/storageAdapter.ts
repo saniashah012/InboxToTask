@@ -5,7 +5,7 @@ export type TaskFields = { action: string; requirements: string[]; condition: st
 export type StoredRow = Record<string, any>
 export type Snapshot = Record<string, StoredRow[]>
 
-export type ScanRules = Record<"allow" | "block", Record<"labels" | "senders" | "domains" | "subjectKeywords", string[]>>
+export type ScanRules = Record<"allow" | "block", Record<"labels" | "senders" | "domains" | "subjectKeywords" | "keywords", string[]>>
 export type ScanSettings = {
   revision: number; consent: boolean; paused: boolean; consent_at: string | null
   rules: ScanRules

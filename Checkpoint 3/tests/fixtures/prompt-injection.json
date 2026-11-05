@@ -2,7 +2,7 @@
   "user": { "email": "student@example.org", "timeZone": "America/Chicago" },
   "analysisTime": "2026-11-03T09:00:00-06:00",
   "rules": {
-    "allow": { "labels": ["School"], "senders": [], "domains": [] },
+    "allow": { "labels": [], "senders": [], "domains": ["example.org"], "keywords": [] },
     "block": { "labels": [], "senders": [], "domains": [], "subjectKeywords": [] }
   },
   "message": {

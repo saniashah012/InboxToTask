@@ -97,6 +97,20 @@ try {
   await action(a,'task',approved.taskId,'delete',2);
   assert.equal((await service('storage_claim',claimArgs)).state,'suppressed');
   check('processing pause/resume, activity, deletion suppression');
+  const rpc=(user,name,body={})=>userRequest(user,`/rest/v1/rpc/${name}`,{method:'POST',body});
+  const initial=await rpc(a,'scan_settings_get');assert.equal(initial.status,200);
+  const phraseSettings={p_revision:initial.data.revision,p_rules:{
+    allow:{labels:[],senders:[],domains:[],keywords:[' Assignment ','assignment'],subjectKeywords:[]},
+    block:{labels:[],senders:[],domains:[],keywords:['receipt'],subjectKeywords:['old subject']},
+  },p_context:initial.data.context_limits,p_consent:false,p_paused:true,p_disclosure:null};
+  const saved=await rpc(a,'scan_settings_save',phraseSettings);assert.equal(saved.status,200);
+  assert.deepEqual(saved.data.rules.allow.keywords,['assignment']);assert.equal(saved.data.consent,false);
+  assert.deepEqual((await rpc(a,'scan_settings_get')).data.rules.block.keywords,['receipt']);
+  assert.equal((await rpc(a,'scan_settings_save',phraseSettings)).status,409);
+  assert.deepEqual((await rpc(b,'scan_settings_get')).data.rules.allow.keywords,[]);
+  assert.ok((await request('/rest/v1/rpc/scan_settings_get',{method:'POST',body:{}})).status>=400);
+  check('phrase settings persist through HTTP, normalize, isolate owners and reject stale saves without consent');
+
 } finally {
   let failures=0;
   for(const user of users) {

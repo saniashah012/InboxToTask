@@ -15,10 +15,11 @@ select is(public.scan_settings_get()->>'consent','false','new account has no con
 select is(public.scan_settings_get()->>'paused','true','new account paused');
 select is(public.scan_settings_get()->'context_limits'->>'maxMessages','0','earlier context defaults to zero');
 select is(public.scan_settings_save(0,
- '{"allow":{"labels":["School"],"senders":["Teacher@Example.org","teacher@example.org"],"domains":[]},"block":{"labels":[],"senders":[],"domains":[]}}',
+ '{"allow":{"labels":[],"keywords":[" Assignment ","assignment"],"senders":["Teacher@Example.org","teacher@example.org"],"domains":[]},"block":{"labels":[],"senders":[],"domains":[]}}',
  '{"maxMessages":0,"maxAgeDays":30,"maxMessageChars":12000,"maxTotalChars":24000}',false,true)->>'revision','1','owner can save with expected revision');
 select is(public.scan_settings_get()->'rules'->'allow'->'senders','["teacher@example.org"]'::jsonb,'server canonicalizes and deduplicates');
 select is(public.scan_settings_get()->>'consent','false','saving filters does not imply consent');
+select is(public.scan_settings_get()->'rules'->'allow'->'keywords','["assignment"]'::jsonb,'phrases normalize and deduplicate');
 select throws_ok($q$select public.scan_settings_save(0,
  '{"allow":{"labels":[],"senders":[],"domains":[]},"block":{"labels":[],"senders":[],"domains":[]}}',
  '{"maxMessages":0,"maxAgeDays":30,"maxMessageChars":12000,"maxTotalChars":24000}',false,true)$q$,

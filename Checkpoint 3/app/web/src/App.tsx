@@ -385,18 +385,16 @@ function Modal({
 
 type AppScreen = "onboarding" | "dashboard"
 
-type OnboardingPreferences = {
-  includedTypes: string[]
-  selectedSources: string[]
-  excludedTypes: string[]
-  excludedSources: string[]
-}
+type OnboardingPreferences = SourceRules
 
 const emptyOnboardingPreferences: OnboardingPreferences = {
-  includedTypes: [],
-  selectedSources: [],
-  excludedTypes: [],
-  excludedSources: [],
+  allowedLabels: [],
+  allowedSenders: [],
+  allowedDomains: [],
+  excludedLabels: [],
+  excludedSenders: [],
+  excludedDomains: [],
+  excludedSubjects: [],
 }
 
 function App() {
@@ -427,10 +425,10 @@ function App() {
           setPreviewCalendarAccount(null)
           setProcessingEnabled(true)
           setSavedPreferences({
-            includedTypes: ["School"],
-            selectedSources: ["professor@illinois.edu"],
-            excludedTypes: ["Financial"],
-            excludedSources: [],
+            ...emptyOnboardingPreferences,
+            allowedLabels: ["School"],
+            allowedSenders: ["professor@illinois.edu"],
+            excludedLabels: ["Receipts"],
           })
           setScreen("dashboard")
         }}
@@ -723,8 +721,9 @@ function Dashboard({
               ? "disconnected"
               : !processingEnabled
                 ? "paused"
-                : preferences.includedTypes.length +
-                      preferences.selectedSources.length ===
+                : preferences.allowedLabels.length +
+                      preferences.allowedSenders.length +
+                      preferences.allowedDomains.length ===
                     0
                   ? "missing-sources"
                   : scanState
@@ -1438,65 +1437,8 @@ function Onboarding({
   const [preferences, setPreferences] = useState<OnboardingPreferences>(
     emptyOnboardingPreferences,
   )
-  const [sourceDraft, setSourceDraft] = useState("")
-  const [sourceError, setSourceError] = useState("")
-  const [includedTypeDraft, setIncludedTypeDraft] = useState("")
-  const [customIncludedTypes, setCustomIncludedTypes] = useState<string[]>([])
-  const [excludedSourceDraft, setExcludedSourceDraft] = useState("")
-  const [excludedSourceError, setExcludedSourceError] = useState("")
-  const [customTypeDraft, setCustomTypeDraft] = useState("")
-  const [customExcludedTypes, setCustomExcludedTypes] = useState<string[]>([])
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
-
-  const isValidSource = (value: string) => {
-    const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    const domain = /^(?!-)(?:[a-z0-9-]+\.)+[a-z]{2,}$/i
-    return email.test(value) || domain.test(value)
-  }
-
-  const addSource = (
-    key: "selectedSources" | "excludedSources",
-    rawValue: string,
-    setDraft: (value: string) => void,
-    setError: (value: string) => void,
-  ) => {
-    const value = rawValue.trim().toLowerCase().replace(/^@/, "")
-    if (!isValidSource(value)) {
-      setError("Enter a complete email address or domain.")
-      return
-    }
-    if (
-      preferences[key].some(
-        (item) => item.toLowerCase() === value.toLowerCase(),
-      )
-    ) {
-      setError("That source is already included.")
-      return
-    }
-    setPreferences((current) => ({
-      ...current,
-      [key]: [...current[key], value],
-    }))
-    setDraft("")
-    setError("")
-  }
-
-  const toggleValue = (key: "includedTypes" | "excludedTypes", value: string) =>
-    setPreferences((current) => ({
-      ...current,
-      [key]: current[key].includes(value)
-        ? current[key].filter((item) => item !== value)
-        : [...current[key], value],
-    }))
-
-  const removeValue = (key: keyof OnboardingPreferences, value: string) =>
-    setPreferences((current) => ({
-      ...current,
-      [key]: current[key].filter((item) => item !== value),
-    }))
-
-  const hasSources =
-    preferences.includedTypes.length + preferences.selectedSources.length > 0
+  const hasSources = preferences.allowedLabels.length + preferences.allowedSenders.length + preferences.allowedDomains.length > 0
 
   return (
     <div className="onboarding-shell">
@@ -1578,7 +1520,15 @@ function Onboarding({
               <p className="setup-description">
                 Connect Gmail to find tasks and deadlines automatically.
               </p>
-              <div className="setup-connection unavailable">
+              <div
+                className={`setup-connection ${gmailConnected ? "connected" : "unavailable"}`}
+                role="status"
+              >
+                {gmailConnected && (
+                  <span className="connected-check" aria-hidden="true">
+                    <Icon name="check" size={22} />
+                  </span>
+                )}
                 <div>
                   <strong>
                     {gmailConnected
@@ -1596,7 +1546,7 @@ function Onboarding({
               </div>
               {previewMode && !gmailConnected && (
                 <button
-                  className="secondary-button"
+                  className="setup-gmail-cta"
                   disabled={connecting}
                   onClick={async () => {
                     setConnecting(true)
@@ -1635,91 +1585,13 @@ function Onboarding({
             <>
               <h2>Which emails should we check?</h2>
               <p className="setup-description">
-                Choose email types or senders you’d like InboxToTask to check.
+                Choose Gmail labels, sender addresses, or domains. A message only
+                needs to match one allowed source (OR).
               </p>
-              <div className="setup-field-group">
-                <div className="setup-field-heading">
-                  <strong>Email types.</strong>
-                </div>
-                <TagInput
-                  label="Add an email type"
-                  onAdd={() => {
-                    const value = includedTypeDraft.trim()
-                    if (
-                      value &&
-                      ![
-                        "School",
-                        "Job applications",
-                        "Research",
-                        "Meetings",
-                        ...customIncludedTypes,
-                      ].some(
-                        (item) => item.toLowerCase() === value.toLowerCase(),
-                      )
-                    ) {
-                      setPreferences((current) => ({
-                        ...current,
-                        includedTypes: [...current.includedTypes, value],
-                      }))
-                      setCustomIncludedTypes((current) => [...current, value])
-                      setIncludedTypeDraft("")
-                    }
-                  }}
-                  onChange={setIncludedTypeDraft}
-                  placeholder="Type an email category…"
-                  value={includedTypeDraft}
-                  visuallyHiddenLabel
-                />
-                <p className="suggestions-label">
-                  Suggestions — select any that apply.
-                </p>
-                <SelectableTypeChips
-                  custom={customIncludedTypes}
-                  onRemove={(value) => {
-                    removeValue("includedTypes", value)
-                    setCustomIncludedTypes((current) =>
-                      current.filter((item) => item !== value),
-                    )
-                  }}
-                  onToggle={(value) => toggleValue("includedTypes", value)}
-                  selected={preferences.includedTypes}
-                  suggested={[
-                    "School",
-                    "Job applications",
-                    "Research",
-                    "Meetings",
-                  ]}
-                />
-              </div>
-              <TagInput
-                error={sourceError}
-                label="Sender email address or domain"
-                onAdd={() =>
-                  addSource(
-                    "selectedSources",
-                    sourceDraft,
-                    setSourceDraft,
-                    setSourceError,
-                  )
-                }
-                onChange={(value) => {
-                  setSourceDraft(value)
-                  setSourceError("")
-                }}
-                placeholder="professor@illinois.edu or illinois.edu"
-                value={sourceDraft}
-              />
-              <PreferenceTags
-                onRemove={(value) => removeValue("selectedSources", value)}
-                values={preferences.selectedSources}
-              />
-              <p className="setup-helper">
-                We use email subjects and senders to identify the types you
-                choose.
-              </p>
+              <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" />
               <p className="setup-helper requirement-helper">
-                Select at least one email type or add a sender or domain to
-                continue.
+                No allowed sources means scanning is disabled. Select at least
+                one Gmail label, sender, or domain to continue.
               </p>
               <FooterActions
                 back={() => setStep(1)}
@@ -1733,101 +1605,18 @@ function Onboarding({
             <>
               <h2>What would you like to keep private?</h2>
               <p className="setup-description">
-                Choose email types or senders you want us to skip, even when
-                they match your selected sources.
+                Block Gmail labels, senders, domains, or subject keywords.
+                Any matching exclusion overrides all allowed sources.
               </p>
-              <div className="setup-field-group">
-                <div className="setup-field-heading">
-                  <strong>Email types.</strong>
-                </div>
-                <TagInput
-                  label="Add an email type"
-                  onAdd={() => {
-                    const value = customTypeDraft.trim()
-                    if (
-                      value &&
-                      ![
-                        "Financial",
-                        "Promotional",
-                        "Health",
-                        ...customExcludedTypes,
-                      ].some(
-                        (item) => item.toLowerCase() === value.toLowerCase(),
-                      )
-                    ) {
-                      setPreferences((current) => ({
-                        ...current,
-                        excludedTypes: [...current.excludedTypes, value],
-                      }))
-                      setCustomExcludedTypes((current) => [...current, value])
-                      setCustomTypeDraft("")
-                    }
-                  }}
-                  onChange={setCustomTypeDraft}
-                  placeholder="Type an email category…"
-                  value={customTypeDraft}
-                  visuallyHiddenLabel
-                />
-                <p className="suggestions-label">
-                  Suggestions — select any that apply.
-                </p>
-                <SelectableTypeChips
-                  custom={customExcludedTypes}
-                  onRemove={(value) => {
-                    removeValue("excludedTypes", value)
-                    setCustomExcludedTypes((current) =>
-                      current.filter((item) => item !== value),
-                    )
-                  }}
-                  onToggle={(value) => toggleValue("excludedTypes", value)}
-                  selected={preferences.excludedTypes}
-                  suggested={["Financial", "Promotional", "Health"]}
-                />
-              </div>
-              <TagInput
-                error={excludedSourceError}
-                label="Exclude a sender or domain"
-                onAdd={() =>
-                  addSource(
-                    "excludedSources",
-                    excludedSourceDraft,
-                    setExcludedSourceDraft,
-                    setExcludedSourceError,
-                  )
-                }
-                onChange={(value) => {
-                  setExcludedSourceDraft(value)
-                  setExcludedSourceError("")
-                }}
-                placeholder="sender@example.com or example.com"
-                value={excludedSourceDraft}
-              />
-              <PreferenceTags
-                onRemove={(value) => removeValue("excludedSources", value)}
-                values={preferences.excludedSources}
-              />
-              <p className="setup-helper">
-                Exclusions always override included types or senders.
-              </p>
+              <RulesEditor rules={preferences} onChange={setPreferences} section="excluded" />
               <details className="privacy-disclosure">
                 <summary>How privacy filtering works</summary>
                 <ul>
-                  <li>
-                    Subjects and senders may be sent to the AI provider to
-                    screen messages against your choices.
-                  </li>
-                  <li>
-                    Message bodies are retrieved only after screening permits
-                    them.
-                  </li>
-                  <li>Uncertain screening results are skipped.</li>
-                  <li>
-                    Vague subjects can cause missed or misclassified messages.
-                  </li>
-                  <li>
-                    Earlier messages used as thread context follow the same
-                    rules.
-                  </li>
+                  <li>Rules match message metadata before bodies are retrieved. No AI topic screening is used.</li>
+                  <li>Every earlier message used as thread context must independently pass the same rules.</li>
+                  <li>Label, sender, domain, and subject rules cannot guarantee that all health or financial content is excluded.</li>
+                  <li>Quoted history and signatures are removed where practical, but inline copied private content may remain.</li>
+                  <li>This preview uses fictional labels and does not retrieve or send real email.</li>
                 </ul>
               </details>
               <FooterActions back={() => setStep(2)} next={() => setStep(4)} />
@@ -1854,19 +1643,26 @@ function Onboarding({
                   label="Emails to check"
                   onEdit={() => setStep(2)}
                   values={[
-                    ...preferences.includedTypes,
-                    ...preferences.selectedSources,
+                    ...preferences.allowedLabels.map((value) => `Label: ${value}`),
+                    ...preferences.allowedSenders.map((value) => `From: ${value}`),
+                    ...preferences.allowedDomains.map((value) => `Domain: ${value}`),
                   ]}
                 />
                 <ReviewPreference
                   label="Emails to skip"
                   onEdit={() => setStep(3)}
                   values={[
-                    ...preferences.excludedTypes,
-                    ...preferences.excludedSources,
+                    ...preferences.excludedLabels.map((value) => `Label: ${value}`),
+                    ...preferences.excludedSenders.map((value) => `From: ${value}`),
+                    ...preferences.excludedDomains.map((value) => `Domain: ${value}`),
+                    ...preferences.excludedSubjects.map((value) => `Subject contains: ${value}`),
                   ]}
                   emptyLabel="No exclusions selected"
                 />
+              </div>
+              <div className="scope-summary live" aria-live="polite">
+                <span>Effective scope</span>
+                <strong>{scopeSummary(preferences)}</strong>
               </div>
               <div className="scan-plan">
                 <div>
@@ -1916,144 +1712,6 @@ function Onboarding({
           )}
         </section>
       </main>
-    </div>
-  )
-}
-
-function TagInput({
-  label,
-  placeholder,
-  value,
-  error,
-  onChange,
-  onAdd,
-  visuallyHiddenLabel = false,
-}: {
-  label: string
-  placeholder: string
-  value: string
-  error?: string
-  onChange: (value: string) => void
-  onAdd: () => void
-  visuallyHiddenLabel?: boolean
-}) {
-  return (
-    <label className="setup-tag-input">
-      <span className={visuallyHiddenLabel ? "visually-hidden" : ""}>
-        {label}
-      </span>
-      <div>
-        <input
-          aria-invalid={Boolean(error)}
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault()
-              onAdd()
-            }
-          }}
-        />
-        <button
-          className="secondary-button"
-          disabled={!value.trim()}
-          onClick={onAdd}
-          type="button"
-        >
-          Add
-        </button>
-      </div>
-      {error && <small role="alert">{error}</small>}
-    </label>
-  )
-}
-
-function PreferenceTags({
-  values,
-  onRemove,
-}: {
-  values: string[]
-  onRemove: (value: string) => void
-}) {
-  if (!values.length) return null
-  return (
-    <div className="preference-tags">
-      {values.map((value) => (
-        <span key={value}>
-          {value}
-          <button
-            aria-label={`Remove ${value}`}
-            onClick={() => onRemove(value)}
-            type="button"
-          >
-            <Icon name="close" size={12} />
-          </button>
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function SelectableTypeChips({
-  suggested,
-  custom,
-  selected,
-  onToggle,
-  onRemove,
-}: {
-  suggested: string[]
-  custom: string[]
-  selected: string[]
-  onToggle: (value: string) => void
-  onRemove: (value: string) => void
-}) {
-  return (
-    <div
-      className="selection-chips type-selection-chips"
-      role="group"
-      aria-label="Email type preferences"
-    >
-      {[...suggested, ...custom].map((value) => {
-        const isSelected = selected.includes(value)
-        const isCustom = custom.includes(value)
-        return (
-          <span
-            className={isSelected ? "type-chip selected" : "type-chip"}
-            key={value}
-          >
-            <button
-              aria-pressed={isSelected}
-              className="type-chip-toggle"
-              onClick={() => onToggle(value)}
-              type="button"
-            >
-              {isSelected ? (
-                <Icon name="check" size={15} />
-              ) : (
-                <span aria-hidden="true" className="chip-plus">
-                  +
-                </span>
-              )}
-              {value}
-            </button>
-            {isSelected && (
-              <button
-                aria-label={
-                  isCustom
-                    ? `Remove custom email type ${value}`
-                    : `Remove selected email type ${value}`
-                }
-                className="type-chip-remove"
-                onClick={() => (isCustom ? onRemove(value) : onToggle(value))}
-                type="button"
-              >
-                <Icon name="close" size={14} />
-              </button>
-            )}
-          </span>
-        )
-      })}
     </div>
   )
 }
@@ -2137,10 +1795,12 @@ function RulesEditor({
   rules,
   onChange,
   compact = false,
+  section = "all",
 }: {
   rules: SourceRules
   onChange: (rules: SourceRules) => void
   compact?: boolean
+  section?: "allowed" | "excluded" | "all"
 }) {
   const [drafts, setDrafts] = useState<Record<RuleKey, string>>({
     allowedLabels: "",
@@ -2152,11 +1812,26 @@ function RulesEditor({
     excludedSubjects: "",
   })
 
+  const [ruleError, setRuleError] = useState("")
   const add = (key: RuleKey, rawValue?: string) => {
-    const value = (rawValue ?? drafts[key]).trim()
-    if (!value || rules[key].includes(value)) return
+    let value = (rawValue ?? drafts[key]).trim()
+    if (!value) return
+    const isSender = key === "allowedSenders" || key === "excludedSenders"
+    const isDomain = key === "allowedDomains" || key === "excludedDomains"
+    if (isSender || isDomain) value = value.toLowerCase()
+    if (isDomain) value = value.replace(/^@/, "")
+    if ((isSender && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) ||
+        (isDomain && !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(value))) {
+      setRuleError(isSender ? "Enter a complete sender email address." : "Enter a valid domain, such as example.edu.")
+      return
+    }
+    if (rules[key].some((item) => item.toLowerCase() === value.toLowerCase())) {
+      setRuleError("That rule is already included.")
+      return
+    }
     onChange({ ...rules, [key]: [...rules[key], value] })
     setDrafts((current) => ({ ...current, [key]: "" }))
+    setRuleError("")
   }
 
   const remove = (key: RuleKey, value: string) =>
@@ -2192,7 +1867,7 @@ function RulesEditor({
 
   return (
     <div className={`rules-editor ${compact ? "compact" : ""}`}>
-      <div className="rule-group">
+      {section !== "excluded" && <div className="rule-group">
         <div className="rule-heading">
           <div>
             <strong>Allowed sources</strong>
@@ -2252,8 +1927,8 @@ function RulesEditor({
           ]}
           onRemove={remove}
         />
-      </div>
-      <div className="rule-group exclusion">
+      </div>}
+      {section !== "allowed" && <div className="rule-group exclusion">
         <div className="rule-heading">
           <div>
             <strong>Exclusions</strong>
@@ -2318,7 +1993,8 @@ function RulesEditor({
           ]}
           onRemove={remove}
         />
-      </div>
+      </div>}
+      {ruleError && <p className="notice warning" role="alert">{ruleError}</p>}
       <div className="scope-summary live" aria-live="polite">
         <span>Effective scope</span>
         <strong>{scopeSummary(rules)}</strong>
@@ -2378,7 +2054,8 @@ function Chips({
     <div className="rule-chips">
       {entries.map((entry) => (
         <span className="rule-chip" key={`${entry.key}-${entry.value}`}>
-          <small>{entry.prefix}</small> {entry.value}
+          <small>{entry.prefix}</small>
+          <span className="rule-chip-value">{entry.value}</span>
           <button
             aria-label={`Remove ${entry.value}`}
             onClick={() => onRemove(entry.key, entry.raw ?? entry.value)}
@@ -2426,7 +2103,7 @@ function ScanStatus({
     paused: ["Auto-check paused", "Preview scans are paused."],
     "missing-sources": [
       "No sources selected",
-      "Choose an included type or sender in Settings.",
+      "Choose an allowed Gmail label, sender, or domain in Settings.",
     ],
     disconnected: [
       "Scanning unavailable",
@@ -2520,223 +2197,11 @@ function ScanStatus({
   )
 }
 
-function SettingsPreferenceControls({
-  preferences,
-  onChange,
-}: {
+function SettingsPreferenceControls({ preferences, onChange }: {
   preferences: OnboardingPreferences
   onChange: (preferences: OnboardingPreferences) => void
 }) {
-  const includedSuggested = [
-    "School",
-    "Job applications",
-    "Research",
-    "Meetings",
-  ]
-  const excludedSuggested = ["Financial", "Promotional", "Health"]
-  const [includedDraft, setIncludedDraft] = useState("")
-  const [excludedDraft, setExcludedDraft] = useState("")
-  const [includedSourceDraft, setIncludedSourceDraft] = useState("")
-  const [excludedSourceDraft, setExcludedSourceDraft] = useState("")
-  const [sourceError, setSourceError] = useState("")
-  const [customIncluded, setCustomIncluded] = useState(
-    preferences.includedTypes.filter(
-      (value) => !includedSuggested.includes(value),
-    ),
-  )
-  const [customExcluded, setCustomExcluded] = useState(
-    preferences.excludedTypes.filter(
-      (value) => !excludedSuggested.includes(value),
-    ),
-  )
-
-  const toggle = (key: "includedTypes" | "excludedTypes", value: string) =>
-    onChange({
-      ...preferences,
-      [key]: preferences[key].includes(value)
-        ? preferences[key].filter((item) => item !== value)
-        : [...preferences[key], value],
-    })
-
-  const addType = (
-    key: "includedTypes" | "excludedTypes",
-    draft: string,
-    suggested: string[],
-    custom: string[],
-    setCustom: (value: string[]) => void,
-    setDraft: (value: string) => void,
-  ) => {
-    const value = draft.trim()
-    if (
-      !value ||
-      [...suggested, ...custom].some(
-        (item) => item.toLowerCase() === value.toLowerCase(),
-      )
-    )
-      return
-    setCustom([...custom, value])
-    onChange({ ...preferences, [key]: [...preferences[key], value] })
-    setDraft("")
-  }
-
-  const addSource = (
-    key: "selectedSources" | "excludedSources",
-    draft: string,
-    setDraft: (value: string) => void,
-  ) => {
-    const value = draft.trim().toLowerCase().replace(/^@/, "")
-    const valid =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ||
-      /^(?!-)(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(value)
-    if (!valid) {
-      setSourceError("Enter a complete email address or domain.")
-      return
-    }
-    if (
-      preferences[key].some(
-        (item) => item.toLowerCase() === value.toLowerCase(),
-      )
-    ) {
-      setSourceError("That source is already included.")
-      return
-    }
-    onChange({ ...preferences, [key]: [...preferences[key], value] })
-    setDraft("")
-    setSourceError("")
-  }
-
-  const remove = (key: keyof OnboardingPreferences, value: string) =>
-    onChange({
-      ...preferences,
-      [key]: preferences[key].filter((item) => item !== value),
-    })
-
-  return (
-    <div className="settings-preferences">
-      <section className="settings-card">
-        <div className="card-heading">
-          <div>
-            <strong>Emails to check</strong>
-            <span>Email types</span>
-          </div>
-        </div>
-        <TagInput
-          label="Add an included email type"
-          onAdd={() =>
-            addType(
-              "includedTypes",
-              includedDraft,
-              includedSuggested,
-              customIncluded,
-              setCustomIncluded,
-              setIncludedDraft,
-            )
-          }
-          onChange={setIncludedDraft}
-          placeholder="Type an email category…"
-          value={includedDraft}
-          visuallyHiddenLabel
-        />
-        <p className="suggestions-label">
-          Suggestions — select any that apply.
-        </p>
-        <SelectableTypeChips
-          custom={customIncluded}
-          onRemove={(value) => {
-            remove("includedTypes", value)
-            setCustomIncluded((current) =>
-              current.filter((item) => item !== value),
-            )
-          }}
-          onToggle={(value) => toggle("includedTypes", value)}
-          selected={preferences.includedTypes}
-          suggested={includedSuggested}
-        />
-        <TagInput
-          error={sourceError}
-          label="Optional sender or domain"
-          onAdd={() =>
-            addSource(
-              "selectedSources",
-              includedSourceDraft,
-              setIncludedSourceDraft,
-            )
-          }
-          onChange={(value) => {
-            setIncludedSourceDraft(value)
-            setSourceError("")
-          }}
-          placeholder="professor@illinois.edu or illinois.edu"
-          value={includedSourceDraft}
-        />
-        <PreferenceTags
-          onRemove={(value) => remove("selectedSources", value)}
-          values={preferences.selectedSources}
-        />
-      </section>
-      <section className="settings-card">
-        <div className="card-heading">
-          <div>
-            <strong>Emails to skip</strong>
-            <span>Email types</span>
-          </div>
-        </div>
-        <TagInput
-          label="Add an excluded email type"
-          onAdd={() =>
-            addType(
-              "excludedTypes",
-              excludedDraft,
-              excludedSuggested,
-              customExcluded,
-              setCustomExcluded,
-              setExcludedDraft,
-            )
-          }
-          onChange={setExcludedDraft}
-          placeholder="Type an email category…"
-          value={excludedDraft}
-          visuallyHiddenLabel
-        />
-        <p className="suggestions-label">
-          Suggestions — select any that apply.
-        </p>
-        <SelectableTypeChips
-          custom={customExcluded}
-          onRemove={(value) => {
-            remove("excludedTypes", value)
-            setCustomExcluded((current) =>
-              current.filter((item) => item !== value),
-            )
-          }}
-          onToggle={(value) => toggle("excludedTypes", value)}
-          selected={preferences.excludedTypes}
-          suggested={excludedSuggested}
-        />
-        <TagInput
-          error={sourceError}
-          label="Optional excluded sender or domain"
-          onAdd={() =>
-            addSource(
-              "excludedSources",
-              excludedSourceDraft,
-              setExcludedSourceDraft,
-            )
-          }
-          onChange={(value) => {
-            setExcludedSourceDraft(value)
-            setSourceError("")
-          }}
-          placeholder="sender@example.com or example.com"
-          value={excludedSourceDraft}
-        />
-        <PreferenceTags
-          onRemove={(value) => remove("excludedSources", value)}
-          values={preferences.excludedSources}
-        />
-      </section>
-    </div>
-  )
+  return <RulesEditor rules={preferences} onChange={onChange} />
 }
 
 function SettingsScreen({

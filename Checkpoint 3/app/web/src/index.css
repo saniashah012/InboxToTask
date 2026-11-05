@@ -1957,8 +1957,14 @@ textarea:focus-visible {
 }
 
 .setup-connection.connected {
-  border-color: #bfd9cd;
-  background: #f5faf7;
+  flex-direction: row;
+  align-items: center;
+  border-color: #81b59d;
+  background: var(--green-soft);
+}
+
+.setup-connection.connected strong {
+  color: var(--green-dark);
 }
 
 .setup-connection > div {
@@ -1976,13 +1982,14 @@ textarea:focus-visible {
 }
 
 .connected-check {
-  width: 30px;
-  height: 30px;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--green-soft);
-  color: var(--green) !important;
+  background: var(--green);
+  color: white !important;
 }
 
 .gmail-connect-button {
@@ -2012,6 +2019,44 @@ textarea:focus-visible {
 .gmail-connect-button img {
   width: 20px;
   height: 20px;
+}
+
+.setup-gmail-cta {
+  width: min(100%, 360px);
+  min-height: 60px;
+  margin: 28px auto 0;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid var(--green);
+  border-radius: 12px;
+  background: var(--green);
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+  box-shadow: 0 6px 16px rgba(23, 107, 83, 0.18);
+  cursor: pointer;
+}
+
+.setup-gmail-cta:hover:not(:disabled) {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+}
+
+.setup-gmail-cta:disabled {
+  opacity: 0.7;
+}
+
+.setup-gmail-cta img {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 7px;
+  border-radius: 8px;
+  background: white;
 }
 
 .connection-demo-control {
@@ -2557,12 +2602,13 @@ textarea:focus-visible {
 
 .rules-editor {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
 .rule-group {
-  padding: 17px;
+  min-width: 0;
+  padding: clamp(16px, 3vw, 24px);
   display: grid;
   align-content: start;
   gap: 12px;
@@ -2585,12 +2631,12 @@ textarea:focus-visible {
 }
 
 .rule-heading strong {
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .rule-heading span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .rule-input {
@@ -2600,12 +2646,13 @@ textarea:focus-visible {
 
 .rule-input > span {
   color: #4f5c57;
-  font-size: 9px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .rule-input > div {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
 }
 
@@ -2613,17 +2660,21 @@ textarea:focus-visible {
 .rule-input select {
   width: 100%;
   min-width: 0;
-  height: 35px;
+  min-height: 44px;
+  height: auto;
   border: 1px solid #d4ddd9;
   border-radius: 8px;
-  padding: 0 9px;
+  padding: 10px 12px;
   background: white;
   color: var(--ink);
-  font-size: 10px;
+  font-size: 16px;
 }
 
 .rule-input .secondary-button {
-  height: 35px;
+  padding: 10px 16px;
+  font-size: 14px;
+  min-height: 44px;
+  height: auto;
 }
 
 .rule-chips {
@@ -2633,26 +2684,29 @@ textarea:focus-visible {
 }
 
 .rule-chip {
-  min-height: 25px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
   padding: 3px 4px 3px 8px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   border: 1px solid #d8e2dd;
-  border-radius: 999px;
+  border-radius: 16px;
   background: white;
   color: #4f5d57;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .rule-chip small {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .rule-chip button {
-  width: 19px;
-  height: 19px;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -2663,6 +2717,8 @@ textarea:focus-visible {
 }
 
 .scope-summary {
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 15px 17px;
   display: grid;
   gap: 5px;
@@ -2677,15 +2733,45 @@ textarea:focus-visible {
 
 .scope-summary span {
   color: var(--green);
-  font-size: 9px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .scope-summary strong {
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.5;
+}
+
+/* Keep the single-group setup steps aligned with the surrounding content. */
+.setup-card > .rules-editor,
+.setup-card > .scope-summary {
+  width: 100%;
+  max-width: 590px;
+  margin-inline: auto;
+}
+
+.rule-chip-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rule-input select:focus-visible {
+  outline: 3px solid rgba(23, 107, 83, 0.2);
+  outline-offset: 2px;
+}
+
+@media (max-width: 380px) {
+  .rule-input > div:has(input) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rule-chip button {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .privacy-copy {

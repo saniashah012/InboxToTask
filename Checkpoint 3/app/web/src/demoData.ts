@@ -33,13 +33,13 @@ export function scopeSummary(rules: SourceRules) {
     ...rules.allowedDomains.map((value) => `from @${value}`),
   ]
   if (!allowed.length) return "No permitted sources selected."
-  const exclusions =
-    rules.excludedLabels.length +
-      rules.excludedSenders.length +
-      rules.excludedDomains.length +
-      rules.excludedSubjects.length >
-    0
+  const excluded = [
+    ...rules.excludedLabels.map((value) => `labeled ${value}`),
+    ...rules.excludedSenders.map((value) => `from ${value}`),
+    ...rules.excludedDomains.map((value) => `from @${value}`),
+    ...rules.excludedSubjects.map((value) => `subject contains "${value}"`),
+  ]
   return `Process messages ${allowed.join(" OR ")}${
-    exclusions ? ", except blocked sources and subject keywords" : ""
-  }.`
+    excluded.length ? `, except any message ${excluded.join(" OR ")}` : ""
+  }. Exclusions always win.`
 }

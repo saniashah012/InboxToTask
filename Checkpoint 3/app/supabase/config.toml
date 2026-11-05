@@ -425,3 +425,9 @@ enabled = true
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/analysis_email/index.ts"
+
+[functions.storage_cleanup]
+enabled = true
+# The handler requires its own scheduler secret, not a user JWT/public key.
+verify_jwt = false
+entrypoint = "./functions/storage_cleanup/index.ts"

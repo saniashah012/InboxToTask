@@ -24,7 +24,8 @@ async function readBoundedJson(request) {
 }
 
 // Local integration scaffold, intentionally limited to bundled fictional cases.
-// Does not accept arbitrary email, call Gmail, save tasks, or deploy itself.
+// Does not accept arbitrary email or call Gmail. Persistence is supplied by the
+// trusted extraction coordinator; caller input never supplies storage identity.
 export function createFixtureHandler({ verifyUser, runExtraction, fixture,
   enabled = false, allowedOrigins = /** @type {string[]} */ ([]) }) {
   return async (request) => {
@@ -71,11 +72,20 @@ export function createFixtureHandler({ verifyUser, runExtraction, fixture,
       message: adaptMessage(selected.message),
       threadContext: selected.threadContext.map(adaptMessage) };
     try {
-      const output = await runExtraction(input);
-      return respond(200, { mode: 'FICTIONAL_FIXTURE_ONLY', saved: false, output });
+      const output = await runExtraction(input, user);
+      return respond(200, { mode: 'FICTIONAL_FIXTURE_ONLY', saved: output.saved === true, output });
     } catch (error) {
       // Never return/log raw model errors, submitted data, tokens or headers.
       if (error?.code === 'PROVIDER_HTTP_429') return respond(429, { error: 'PROVIDER_RATE_LIMITED' });
+      if (['STORAGE_BUDGET', 'STORAGE_PROVIDER_LIMIT', 'STORAGE_RETRY_LATER', 'STORAGE_ATTEMPT_LIMIT'].includes(error?.code)) {
+        return respond(429, { error: error.code });
+      }
+      if (['STORAGE_BUSY','STORAGE_PAUSED','STORAGE_SUPPRESSED','STORAGE_STALE'].includes(error?.code)) {
+        return respond(409, { error: error.code });
+      }
+      if (['STORAGE_NOT_CONFIGURED','STORAGE_UNAVAILABLE'].includes(error?.code)) {
+        return respond(503, { error: error.code });
+      }
       if (['MISSING_API_KEY', 'INVALID_MODEL_SETTINGS'].includes(error?.code)) {
         return respond(503, { error: 'EXTRACTION_NOT_CONFIGURED' });
       }

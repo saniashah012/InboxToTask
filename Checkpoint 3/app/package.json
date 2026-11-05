@@ -6,7 +6,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test ../tests/pipeline.test.mjs ../tests/supabase-endpoint.test.mjs",
+    "test": "node --test ../tests/pipeline.test.mjs ../tests/supabase-endpoint.test.mjs ../tests/storage-database.test.mjs ../tests/storage.test.mjs",
+    "test:storage": "node --test ../tests/storage-database.test.mjs ../tests/storage.test.mjs",
+    "test:local": "node ../tests/storage-local.mjs",
     "supabase:prepare": "node pipeline/prepare-edge.mjs",
     "fixtures:cp2": "node pipeline/import-cp2.mjs",
     "extract:plan": "node pipeline/cli.mjs --all",
@@ -14,6 +16,7 @@
     "diagnose": "node pipeline/diagnose.mjs"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
     "supabase": "^3.0.0"
   }
 }

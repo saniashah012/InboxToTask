@@ -1,18 +1,18 @@
-# Local Supabase foundation
+# Local Supabase storage
 
-This prepares the first backend integration locally. It does not change the linked hosted project, replace its deployed Groq function, configure hosted secrets, or persist extraction results. Do not run a remote push/deploy as part of the commands below.
+This implements local fixture extraction, persistent suggestions, and user review. It does not change the linked hosted project, replace its deployed Groq function, or configure hosted secrets. Do not run a remote push/deploy as part of the commands below. See [the storage contract](STORAGE.md) for the schema, limits, and integration boundaries.
 
 ## What is implemented
 
 - A baseline migration recreates the inspected task table for a fresh local database. `CREATE TABLE IF NOT EXISTS` preserves any existing table and rows; it is not a substitute for reconciling hosted migration history/schema drift.
-- The permission migration restores owner-scoped reads, task creation, editing, approval, and deletion. Anonymous users get no task access. Unnecessary privileges, including TRUNCATE, are removed from browser and service roles.
-- Browser writes are limited to user-editable fields. Ownership, source-email association, confidence, IDs, and timestamps cannot be overwritten by a browser client. Backend service access remains privileged and must stay server-side.
+- Owner-scoped RLS permits browser reads; authenticated review RPCs control edits, approval, completion, undo, and deletion. Direct browser writes are denied. Anonymous users get no task access. Unnecessary privileges, including TRUNCATE, are removed.
+- Ownership, source-email associations, model proposals, confidence, IDs, and timestamps cannot be overwritten by a browser client. Backend service access remains privileged and must stay server-side.
 - A local `analysis_email` replacement requires a bearer session verified through Supabase Auth. Platform JWT verification is also enabled. A publishable key by itself is insufficient.
 - The endpoint accepts **only** `{"caseId":"E01"}` through `E20`. It rejects arbitrary email, identity, rules, model settings, and context supplied by callers. It uses bundled fictional CP2 input and the verified user's email as the inbox owner; it does not read Gmail.
-- The canonical Gemini pipeline performs filtering and strict schema/evidence/ownership validation. Output explicitly says `FICTIONAL_FIXTURE_ONLY` and `saved: false`.
+- The canonical Gemini pipeline performs filtering and strict schema/evidence/ownership validation. Successful transactional persistence returns `saved: true` and a receipt. Duplicate requests reuse saved output without inference.
 - Inference is disabled by default. No real keys were copied or printed. Error responses are fixed codes, with no raw provider logging.
 
-This scaffold is not production-ready: persistent budgets/rate limits, Gmail preferences and OAuth, suggestion persistence, task-update matching, frontend sign-in, calendar operations, and retention remain implementation work. Keep the fixture endpoint disabled outside controlled local testing. The known E12 optional-invitation error is not fixed here.
+Persistent budgets, shared rate limits, leases, normalized storage, review transactions, cleanup, and an opt-in React sign-in/review route are implemented. Gmail preferences/OAuth/retrieval, automatic scan dispatch, semantic task-update matching, and real Calendar execution remain. Keep the fixture endpoint disabled outside controlled local testing. The known E12 optional-invitation error is not fixed here.
 
 ## Prerequisites
 
@@ -43,6 +43,10 @@ Run the rolled-back database isolation tests once the local stack is available:
 
 ```powershell
 npx.cmd supabase --agent no test db
+
+# Real local Auth, PostgREST, and Edge gate trial; temporary users removed.
+# Expects fixture inference disabled. No model calls.
+npm.cmd run test:local
 ```
 
 These pgTAP tests check actual role privileges, anonymous denial, two-user read/write isolation, ownership protection, protected model fields, approval, update timestamps, and deletion. They create fictional users/tasks inside a transaction and roll back afterward. Do not run them against production.
@@ -87,7 +91,11 @@ Invoke-RestMethod -Method Post `
 Remove-Variable localSession,localTestCredentials
 ```
 
-Verify missing/invalid bearer tokens are rejected before inference. Repeating a successful request currently calls Gemini again: there is no persisted deduplication or budget accounting in this scaffold.
+Verify missing/invalid bearer tokens are rejected before inference. Repeating an identical successful request should reuse the persisted extraction without another model call. Changed effective inputs/settings have a different cache identity. Deleted sources are suppressed.
+
+## React review interface
+
+From `web`, run `corepack pnpm install --frozen-lockfile`. Copy [the public environment template](../web/.env.example) to a local environment file, enable `VITE_STORAGE_ENABLED`, and fill the local Supabase URL and public key. Never place server credentials in browser configuration. Run `corepack pnpm dev` and open `/storage` on the displayed origin. Sign in with a confirmed local test account. The original prototype remains available at `/`.
 
 ## Packaging and validation
 
@@ -102,6 +110,6 @@ The first Deno command may download its runner. Node tests exercise the handler 
 
 ## Verification status
 
-Prepared November 3, 2026. All 43 offline Node tests pass, and Deno type-checking of the Edge Function passes. Database tests could not execute: no local Postgres was listening on port 54322 and Docker Desktop was not found. The migrations and pgTAP suite remain unverified against a running database. No hosted migration, function deployment, write test, or live Gemini call was performed.
+Updated November 4, 2026. All 75 offline tests pass, including PostgreSQL semantics through PGlite with simulated Auth roles. Frontend TypeScript/build pass. Actual Docker integration results are recorded in [the local verification report](../../docs/local-storage-verification-2026-11-04.md). PGlite and mocked tests alone do not establish Supabase Auth/PostgREST/Edge behavior or live model accuracy. No hosted migration or deployment was performed.
 
-Before any hosted deployment, reconcile existing migrations, review permission changes, implement persistent budgets and the real request/preferences boundary, validate deployment configuration and user isolation, and separately authorize the rollout. The new request contract differs from the currently deployed Groq endpoint.
+Before hosted deployment, reconcile existing migrations, review permissions, implement the real request/preferences boundary, validate deployment configuration and user isolation, and separately authorize the rollout. The new request contract differs from the currently deployed Groq endpoint.

@@ -2172,7 +2172,10 @@ type RuleChip = {
   key: RuleKey
   value: string
   raw?: string
-  prefix: string
+  prefix?: string
+  selected?: boolean
+  id?: string
+  removeIndex?: number
 }
 
 type RetentionRowProps = {
@@ -2380,13 +2383,14 @@ function CategorySelector({
     const category = rawValue.trim()
     if (!category) return
     const effectiveKeywords = effectiveFilterKeywords(customKeywords, groups)
-    if (category.length > 254 || /[\x00-\x1f\x7f]/.test(category) || effectiveKeywords.length >= 200) { setError("Use up to 200 terms, each 1-254 characters without control characters."); return }
     if (
-      customKeywords.some((current) => current.toLowerCase() === category.toLowerCase()) ||
-      effectiveKeywords.some((current) => current === category.toLowerCase()) ||
-      groups.some((group) => group.category.toLowerCase() === category.toLowerCase())
+      category.length > 254 ||
+      /[\x00-\x1f\x7f]/.test(category) ||
+      customKeywords.length >= 200 ||
+      (!effectiveKeywords.includes(category.toLowerCase()) &&
+        effectiveKeywords.length >= 200)
     ) {
-      setError("That word or phrase is already selected.")
+      setError("Use up to 200 terms, each 1-254 characters without control characters.")
       return
     }
     onChange([...customKeywords, category], groups)
@@ -2427,14 +2431,16 @@ function CategorySelector({
     setError("")
   }
 
-  const visibleCustomKeywords = customKeywords.filter((keyword) => {
-    const suggestion = suggestions.find(
-      (item) => item.toLowerCase() === keyword.toLowerCase(),
-    )
-    return !suggestion || groups.some(
-      (group) => group.category.toLowerCase() === suggestion.toLowerCase(),
-    )
-  })
+  const visibleCustomKeywords = customKeywords
+    .map((keyword, index) => ({ keyword, index }))
+    .filter(({ keyword }) => {
+      const suggestion = suggestions.find(
+        (item) => item.toLowerCase() === keyword.toLowerCase(),
+      )
+      return !suggestion || groups.some(
+        (group) => group.category.toLowerCase() === suggestion.toLowerCase(),
+      )
+    })
 
   return (
     <div className="category-preferences">
@@ -2467,14 +2473,16 @@ function CategorySelector({
         </div>
       </div>
       <Chips
-        entries={visibleCustomKeywords.map((category) => ({
+        entries={visibleCustomKeywords.map(({ keyword, index }) => ({
           key: categoryKey,
-          value: category,
-          prefix: "Phrase",
+          value: keyword,
+          selected: true,
+          id: `${categoryKey}-${index}`,
+          removeIndex: index,
         }))}
-        onRemove={(_key, category) =>
+        onRemove={(_key, _category, index) =>
           onChange(
-            customKeywords.filter((current) => current !== category),
+            customKeywords.filter((_current, currentIndex) => currentIndex !== index),
             groups,
           )
         }
@@ -2605,18 +2613,23 @@ function Chips({
   onRemove,
 }: {
   entries: RuleChip[]
-  onRemove: (key: RuleKey, value: string) => void
+  onRemove: (key: RuleKey, value: string, index: number) => void
 }) {
   if (!entries.length) return null
   return (
     <div className="rule-chips">
-      {entries.map((entry) => (
-        <span className="rule-chip" key={`${entry.key}-${entry.value}`}>
-          <small>{entry.prefix}</small>
+      {entries.map((entry, index) => (
+        <span
+          className={`rule-chip ${entry.selected ? "selected" : ""}`}
+          key={entry.id ?? `${entry.key}-${entry.value}-${index}`}
+        >
+          {entry.prefix && <small>{entry.prefix}</small>}
           <span className="rule-chip-value">{entry.value}</span>
           <button
             aria-label={`Remove ${entry.value}`}
-            onClick={() => onRemove(entry.key, entry.raw ?? entry.value)}
+            onClick={() =>
+              onRemove(entry.key, entry.raw ?? entry.value, entry.removeIndex ?? index)
+            }
             type="button"
           >
             <Icon name="close" size={12} />

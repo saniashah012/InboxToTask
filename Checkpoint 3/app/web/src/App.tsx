@@ -2371,6 +2371,16 @@ function CategorySelector({
           </button>
         </div>
       </div>
+      <Chips
+        entries={value.map((category) => ({
+          key: categoryKey,
+          value: category,
+          prefix: "Category",
+        }))}
+        onRemove={(_key, category) =>
+          onChange(value.filter((current) => current !== category))
+        }
+      />
       {suggestions.some(
         (suggestion) =>
           !value.some((selected) => selected.toLowerCase() === suggestion.toLowerCase()),
@@ -2396,16 +2406,6 @@ function CategorySelector({
           </div>
         </div>
       )}
-      <Chips
-        entries={value.map((category) => ({
-          key: categoryKey,
-          value: category,
-          prefix: "Category",
-        }))}
-        onRemove={(_key, category) =>
-          onChange(value.filter((current) => current !== category))
-        }
-      />
       {error && <p className="notice warning" role="alert">{error}</p>}
     </div>
   )

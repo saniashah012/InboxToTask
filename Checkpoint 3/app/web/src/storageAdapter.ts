@@ -8,6 +8,43 @@ export type Snapshot = Record<string, StoredRow[]>
 export const storageClient =
   import.meta.env.VITE_STORAGE_ENABLED === "true" ? supabase : null
 
+export const googleSignInEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED === "true"
+export async function signInWithGoogle() {
+  if (!storageClient || !googleSignInEnabled) throw new Error("Google sign-in is not configured.")
+  const { error } = await storageClient.auth.signInWithOAuth({ provider: "google", options: {
+    redirectTo: `${window.location.origin}/storage/auth/callback`,
+    // App identity only. Gmail offline access uses the backend connection flow.
+    scopes: "openid email profile", queryParams: { prompt: "select_account" },
+  } })
+  if (error) throw new Error("Google sign-in could not start. Check the provider configuration.")
+}
+
+export type GoogleStatus = { state: "disconnected" | "connected" | "reconnect_required" | "disconnecting"; email?: string; scopes?: string[]; expiresAt?: string; scanningEnabled: false }
+export async function googleConnectionStatus(): Promise<GoogleStatus> {
+  if (!storageClient) throw new Error("Storage connection is not configured.")
+  const { data, error } = await storageClient.rpc("google_connection_status")
+  if (error) throw new Error("Could not load Google connection status. Check the backend setup.")
+  return data
+}
+export async function googleConnectionAction(action: "connect" | "check" | "disconnect") {
+  if (!storageClient) throw new Error("Storage connection is not configured.")
+  const { data, error } = await storageClient.functions.invoke("google_connection", { body: { action } })
+  if (error) {
+    let code = ""
+    try { code = (await error.context?.json())?.error ?? "" } catch { /* fixed messages */ }
+    const messages: Record<string, string> = {
+      GOOGLE_NOT_CONFIGURED: "Google connection is not configured in the backend.",
+      GOOGLE_CONNECTION_BUSY: "A connection operation is running. Wait briefly and reload the status.",
+      GOOGLE_RECONNECT_REQUIRED: "Google authorization expired or was revoked. Reconnect your account.",
+      GOOGLE_REVOCATION_PENDING: "Access is blocked in this app, but Google revocation is pending. Retry disconnect.",
+      GOOGLE_PROVIDER_UNAVAILABLE: "Google could not be reached. Try again shortly.",
+      GOOGLE_CONNECTION_STALE: "The connection changed. Reload its status before trying again.",
+    }
+    throw new Error(messages[code] ?? "The Google connection could not be updated. Reload its status and try again.")
+  }
+  return data as { authorizationUrl?: string; state?: string }
+}
+
 const tables = {
   tasks: "tasks", suggestions: "storage_suggestions", extractions: "storage_extractions",
   evidence: "storage_evidence", sources: "storage_sources", waiting: "storage_waiting_for",

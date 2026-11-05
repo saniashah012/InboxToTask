@@ -182,6 +182,11 @@ The current frontend does not yet accommodate the complete CP3 product. Preserve
 
 ### CP3.3 Accounts, privacy, and Google connections
 
+November 5 implementation: [Google Auth setup](app/supabase/GOOGLE_AUTH.md)
+documents the sign-in/connection scaffold, private credentials, single-use state,
+refresh/disconnect lifecycle, and hosted schema inspection. Features are disabled
+by default; Google Cloud/provider setup and live OAuth verification remain.
+
 - [x] Implement app authentication and verify sessions in backend endpoints; derive ownership from verified identity. Local email/password sign-in and fixture endpoint Auth are verified; Google onboarding and future endpoints still require integration.
 - [ ] Enable and test Row Level Security on user-facing tables; isolate credential storage from browser access and keep privileged keys server-side. Storage-table RLS/grants and two-user isolation are verified; protected Google credential storage remains to implement and test.
 - [ ] Implement Google OAuth with account-bound, single-use state validation, approved callback URLs, refresh handling, and least necessary Gmail/calendar scopes.

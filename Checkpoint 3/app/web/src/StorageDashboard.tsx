@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { Session } from "@supabase/supabase-js"
-import { loadStorageSnapshot, processStoredFixture, reviewStoredRecord, storageClient,
+import { googleSignInEnabled, signInWithGoogle, loadStorageSnapshot, processStoredFixture, reviewStoredRecord, storageClient,
   type Deadline, type Snapshot, type StoredRow, type TaskFields } from "./storageAdapter"
 import "./storage.css"
 import CalendarExport from "./CalendarExportPanel"
 import ExtractionReview from "./ExtractionReview"
+import GoogleConnectionPanel from "./GoogleConnectionPanel"
 
 const empty: Snapshot = { tasks: [], suggestions: [], extractions: [], evidence: [], sources: [], waiting: [], followups: [], preferences: [] }
 const fieldsFor = (row: StoredRow): TaskFields => row.accepted_fields ?? row.review_fields ?? row.fields ?? {
@@ -79,7 +80,13 @@ export default function StorageDashboard() {
       activeUser.current = next?.user.id ?? null; setSession(next); setLoading(false)
     }
     const { data } = storageClient.auth.onAuthStateChange((_event, next) => apply(next))
-    storageClient.auth.getSession().then(({ data }) => apply(data.session))
+    storageClient.auth.getSession().then(({ data, error: authError }) => {
+      apply(data.session)
+      if (live && window.location.pathname === "/storage/auth/callback") {
+        if (authError || !data.session) setError("Google sign-in did not complete. Try again from the sign-in page.")
+        window.history.replaceState(null, "", "/storage")
+      }
+    }).catch(() => { if (live) { setLoading(false); setError("Could not restore your sign-in session.") } })
     return () => { live = false; data.subscription.unsubscribe() }
   }, [])
   useEffect(() => { if (session) void reload() }, [session?.user.id, reload])
@@ -99,8 +106,13 @@ export default function StorageDashboard() {
 
   if (!storageClient) return <main className="storage-page"><h1>InboxToTask</h1><p>The storage connection is not configured.</p><a href="/">Open preview</a></main>
   const client = storageClient
-  if (!session) return <main className="storage-page"><h1>Sign in to InboxToTask</h1><p>Use your local test account to review stored results.</p>
+  if (!session) return <main className="storage-page"><h1>Sign in to InboxToTask</h1><p>Sign in to review your stored results. Signing in does not authorize Gmail scanning.</p>
     {error && <p role="alert">{error}</p>}
+    {googleSignInEnabled && <button disabled={busy || loading} onClick={async () => {
+      setBusy(true); setError("")
+      try { await signInWithGoogle() } catch { setError("Google sign-in could not start. Check the provider configuration.") }
+      finally { setBusy(false) }
+    }}>Sign in with Google</button>}
     <form className="storage-editor" onSubmit={async (event) => {
       event.preventDefault(); setBusy(true); setError("")
       try {
@@ -128,6 +140,7 @@ export default function StorageDashboard() {
         } catch { setError("Sign-out failed. Check your connection and try again.") }
         finally { setBusy(false) }
       }}>Sign out</button></header>
+    {import.meta.env.VITE_GOOGLE_CONNECTION_ENABLED === "true" && <GoogleConnectionPanel key={session.user.id} />}
     <section className="storage-panel"><h2>Test inbox</h2><p>Process a fictional email to test extraction and saved review decisions. Each new request may use model quota.</p>
       <div className="storage-actions"><label>Email<select value={caseId} disabled={busy} onChange={(e) => setCaseId(e.target.value)}>
         {Array.from({ length: 20 }, (_, i) => `E${String(i + 1).padStart(2, "0")}`).map((id) => <option key={id}>{id}</option>)}

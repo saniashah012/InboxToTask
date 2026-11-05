@@ -161,7 +161,7 @@ site_url = "http://localhost:5173"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["http://localhost:5173", "http://127.0.0.1:5173"]
+additional_redirect_urls = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5173/storage/auth/callback", "http://127.0.0.1:5173/storage/auth/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -431,3 +431,21 @@ enabled = true
 # The handler requires its own scheduler secret, not a user JWT/public key.
 verify_jwt = false
 entrypoint = "./functions/storage_cleanup/index.ts"
+
+[auth.external.google]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false
+
+[functions.google_connection]
+enabled = true
+# Handler verifies the bearer with Supabase Auth (also supports signing-key JWTs).
+verify_jwt = false
+entrypoint = "./functions/google_connection/index.ts"
+
+[functions.google_callback]
+enabled = true
+# Google redirects without a Supabase bearer. Single-use state authorizes callback.
+verify_jwt = false
+entrypoint = "./functions/google_callback/index.ts"

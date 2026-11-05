@@ -50,6 +50,11 @@ fixture function as part of this milestone.
 
 ## Prerequisites
 
+Google sign-in and the backend connection scaffold are documented in
+[Google Auth setup](GOOGLE_AUTH.md), including hosted inspection findings,
+private configuration, tests, and remaining live verification. They are disabled
+by default and do not enable Gmail retrieval or scanning.
+
 - Node.js 22+ and the project-local Supabase CLI (`npm.cmd install` from the app directory).
 - Docker Desktop installed, configured for Linux containers, and running for the local database/Edge runtime.
 - Optional Deno runner for type-checking without Docker.

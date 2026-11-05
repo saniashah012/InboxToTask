@@ -33,6 +33,10 @@ type Database = {
     }
     Views: Record<string, never>
     Functions: {
+      google_connection_status: {
+        Args: Record<string, never>
+        Returns: any
+      }
       storage_action: {
         Args: Record<string, any>
         Returns: any

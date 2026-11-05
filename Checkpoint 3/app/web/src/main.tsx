@@ -7,7 +7,7 @@ const StorageDashboard = React.lazy(() => import('./StorageDashboard'))
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {import.meta.env.VITE_STORAGE_ENABLED === 'true' && window.location.pathname === '/storage'
+    {import.meta.env.VITE_STORAGE_ENABLED === 'true' && ['/storage', '/storage/auth/callback'].includes(window.location.pathname)
       ? <React.Suspense fallback={<p role="status">Loading your tasks…</p>}><StorageDashboard /></React.Suspense> : <App />}
   </React.StrictMode>,
 )

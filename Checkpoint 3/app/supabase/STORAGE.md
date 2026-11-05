@@ -40,6 +40,11 @@ These defaults support controlled fixture trials. They do not authorize real-ema
 
 ## Cleanup and remaining integration
 
+The [Google connection implementation](GOOGLE_AUTH.md) adds a separate private
+credential/state boundary and safe authenticated status RPC. Configuration and
+live OAuth verification remain; no scanning consent or real Gmail processing is
+implied by a connection. Existing fixture processing controls remain independent.
+
 [Cleanup](functions/storage_cleanup/index.ts) is disabled by default. Enable it only with a separately configured scheduler secret of at least 32 characters. The optional [schedule installer](operations/install_cleanup_schedule.sql) references Vault secrets and is not applied by migrations. Confirm schedule/time-zone behavior and configure secrets privately before installing it. Cleanup currently locks preference rows across users; batch it before public-scale use.
 
 Remaining integration: OAuth/revocation, protected tokens, permitted Gmail retrieval, incremental/manual/scheduled scan dispatch, semantic task matching, Calendar writes/reconciliation/undo, final retention policies, and deployment. Dashboard reminder dates do not send email or notifications.

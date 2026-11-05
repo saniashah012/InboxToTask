@@ -53,7 +53,7 @@ export default function GoogleConnectionPanel() {
     <div className="storage-actions">
       <button disabled={busy || !status || status.state === "disconnecting"} onClick={() => void run("connect")}>{status?.state === "connected" || status?.state === "reconnect_required" ? "Reconnect Google" : "Connect Google"}</button>
       <button disabled={busy || status?.state !== "connected"} onClick={() => void run("check")}>Check token availability</button>
-      <button disabled={busy || !status || status.state === "disconnected"} onClick={() => void run("disconnect")}>{status?.state === "disconnecting" ? "Retry disconnect" : "Disconnect Google"}</button>
+      <button disabled={busy || !status || status.state === "disconnected"} onClick={() => void run("disconnect")}>{status?.state === "disconnecting" ? "Retry disconnect" : "Disconnect Gmail"}</button>
       <button disabled={busy} onClick={() => void run("reload")}>Reload connection status</button>
     </div>
     <p>Scanning is disabled. Google Calendar is not connected. Signing out of the app does not disconnect Google.</p>

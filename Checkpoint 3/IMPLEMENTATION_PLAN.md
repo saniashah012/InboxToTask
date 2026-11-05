@@ -4,6 +4,16 @@ Updated: November 5, 2026. Checked items have implementation evidence within the
 
 ## Current progress and next work
 
+November 5 design revision following user discussion: use explicit sender/domain
+permissions and optional literal subject exclusions before retrieval/inference.
+Do not use Gmail labels or a secret-pattern detector. Categories describe semantic
+relevance within permitted content; they must not expand into keywords that grant
+access. Include bounded thread history and relevant existing task values to propose
+updates without overwriting accepted values. Agreed target context defaults are
+five earlier messages within 90 days, configurable to 0–10 messages and 1–365 days.
+These are implementation requirements, not changes to the running application.
+The detailed filtering and context sections below supersede the earlier design.
+
 Local phrase-filter implementation, November 5: PR #19's suggested categories now
 expand into visible editable terms. Custom words/phrases match the subject or
 parsed sender address/domain, using OR inclusions and overriding exclusions.
@@ -11,7 +21,8 @@ Exact sender/domain controls remain. The separate subject input is removed; old
 subject-only exclusions retain their scope. Onboarding saves to revision-checked
 scan settings; obsolete source permissions require renewed consent. The new
 [migration](app/supabase/migrations/20261105160000_phrase_filters.sql) is applied
-locally. This supersedes pending matching proposals below for this local build.
+locally. This describes the existing code; the design revision above supersedes
+its category-to-phrase permission behavior for the next implementation.
 Gmail retrieval, inference permission gates, and hosted rollout remain unfinished.
 
 
@@ -93,7 +104,7 @@ execution remain milestone 5 work.
 |---|---|---|
 | 1 | Complete designed onboarding/dashboard integration around existing Google sign-in and the shared Supabase session; preserve the root-origin callback unless a change is needed. Move persistent review controls into the product UI; keep `/storage` for development. | Normal users never create an InboxToTask password or visit `/storage`; real Gmail status, actual saved records, loading/errors, reload, and account switching work. |
 | 2 | Local credentials/services are configured and initial connection is user-reported successful. Finish the remaining live OAuth checklist in [the setup guide](app/supabase/GOOGLE_AUTH.md); record evidence and fix failures. | A dedicated account signs in with Google, connects Gmail, reloads, refreshes authorization, and disconnects/reconnects. Wrong account, denied consent, replayed state, and revoked access are handled; zero scans/model calls occur on connection. |
-| 3 | Persist scanning consent, source rules, context limits, and settings revisions; enforce pause/deletion/settings changes. Preserve the [custom sender/domain/subject filter plan](#custom-sender-domain-and-subject-filters-implementation-plan), including its proposed category/phrase matching decision and accessible info icon. | Empty allowlists or absent consent block retrieval; saved settings isolate users; queued work cannot bypass changed permissions; custom matching/validation/UI acceptance checks pass after the open decision is confirmed. |
+| 3 | Adapt saved consent/settings to the [revised filter contract](#custom-sender-domain-and-subject-filters-implementation-plan): sender/domain access, optional subject exclusions, separate semantic preferences, and agreed context limits. Preserve accessible controls and revision/pause/deletion fencing. | Empty source allowlists or absent consent block retrieval; topics never grant access; obsolete phrase permissions require review; settings isolate users and fence stale work. |
 | 4 | Implement one bounded manual Gmail-to-extraction-to-review flow, then incremental scheduled scans, cooldown, retries, and visible progress. | Permitted fictional test mail produces saved reviewable results; exclusions apply before body/context retrieval; unchanged/empty scans use zero inference; automatic scans work with the dashboard closed. |
 | 5 | Implement optional Calendar connection in onboarding, with Skip for now and later connection from Add to Calendar/settings. Choose destination/scopes, then build approved create/update/undo execution. | Skipping/denying Calendar leaves Gmail/task features usable. Connected status reflects real authorization; no event is written until its preview is approved; retries and undo avoid duplicate/unintended writes. |
 | 6 | Prepare hosted Supabase and Vercel integration, verify configuration and compatibility, then perform a separately authorized rollout and live demo trial. | Vercel build/routing/redirect settings and hosted migration/function/secret plan are reviewable; after rollout, the complete test-account workflow works on the hosted origin. |
@@ -102,8 +113,8 @@ Milestones 1 and 2 can proceed together. The optional Calendar onboarding UI can
 
 Immediate resumption order: inspect Git/runtime state and preserve private keys;
 finish available OAuth checks without repeating project creation or exposing
-credentials. In parallel with independent implementation preparation, obtain the
-category/phrase matching decision before changing matching behavior. Next build
+credentials. Implement the confirmed separation of access rules and semantic
+preferences, with safe conversion of existing phrase settings. Next complete
 milestone 3 (validated saved consent/rules, revisions, and accessible product
 controls), then one bounded manual scan from milestone 4 with saved review in the
 product dashboard. Add incremental scheduling after the manual path works;
@@ -134,7 +145,7 @@ InboxToTask is a hosted AI application that automatically scans permitted Gmail 
 | Google Calendar API | User-approved creation and updates, tracked operation status, and undo of app-created entries |
 | ICS download | Export for manual import into other calendar providers; no equivalent connected synchronization or remote undo |
 
-Flow: scheduled/manual trigger -> verify account and preferences -> filter message metadata -> fetch permitted bodies/context -> recheck permissions -> Gemini extraction -> validate -> save suggestions -> progressive dashboard results -> user review -> approved task -> separate calendar approval.
+Flow: scheduled/manual trigger -> verify account, consent, and saved source permissions -> filter metadata -> fetch permitted bodies and bounded same-thread context -> load relevant permitted existing task state -> recheck permissions/budgets -> combined Gemini semantic relevance and extraction/update proposal -> validate -> save suggestions -> progressive dashboard results -> user review -> approved task/update -> separate calendar approval.
 
 ## Confirmed decisions
 
@@ -152,10 +163,10 @@ Flow: scheduled/manual trigger -> verify account and preferences -> filter messa
 
 - Automatic scans operate on a 15-minute default interval, with manual refresh available. This adopts the proposed default accepted in discussion; scheduling is not an exact arrival-time guarantee.
 - Manual refresh processes newly available permitted messages and uses a cooldown, shared scan coordination, and deduplication.
-- Planned permission uses included words/phrases, sender addresses, and domains. Suggested categories expand into visible editable terms; they are app preferences rather than mailbox tags. OR matching is proposed below and must be confirmed before runtime changes.
-- Any matching exclusion overrides permission. Planned exclusions include words/phrases, sender addresses, and domains.
+- Source permissions use explicit sender addresses and domains, combining inclusions with OR. Categories and custom topic descriptions are semantic preferences evaluated only after access is permitted; they never grant retrieval or inference permission.
+- Any matching sender/domain or optional literal subject exclusion overrides permission. Do not use Gmail labels or add a secret-pattern detector.
 - No allowlist means scanning is disabled. Notify the user and provide a direct action to configure permitted sources; connecting Gmail alone does not enable scanning.
-- Display the effective scope in plain language, for example: "Process messages containing assignment in the subject or sender address/domain OR from professor@illinois.edu, except excluded phrases and blocked senders/domains."
+- Display access scope separately from semantic interests, for example: "Permit professor@illinois.edu OR the exact domain illinois.edu, except blocked senders/domains and subject phrases. Within permitted mail, surface School and Research results."
 - Initial scanning covers the past seven days, up to 100 permitted messages, using the same inclusion/exclusion rules as subsequent scans.
 - Show any remaining initial backlog and require "Scan more" approval. Process new arrivals separately so backlog limits do not block them.
 - Changes to rules affect queued and future processing. Offer separate deletion of previous results; already transmitted content cannot be retracted.
@@ -163,47 +174,62 @@ Flow: scheduled/manual trigger -> verify account and preferences -> filter messa
 
 #### Custom sender, domain, and subject filters: implementation plan
 
-Requested direction after merged PR #19 (`c74f4da`, Restore email category preference controls): retain its suggested-category chips, custom category entry, separate sender/domain controls, and shared-session preference persistence. The current category selections are saved preferences only; they do not yet filter messages. Replace the earlier mailbox-tag filtering direction with app-defined words/phrases and sender/domain rules. No runtime change or hosted rollout is established by this plan.
+Confirmed direction from the November 5 discussion: separate deterministic access permissions from semantic relevance. The current committed phrase-filter code is an implementation baseline to revise, not the target contract. No Gmail labels and no secret-pattern detector are part of this workflow.
 
-**Proposed matching behavior, pending confirmation:** each included word/phrase matches the subject line OR parsed sender email address/domain using case-insensitive literal substring matching. A complete address entered in the sender control matches exactly; a domain entered in the domain control matches exactly, without implicitly including subdomains. Sender display names and bodies are not searched. Any inclusion match permits processing unless any exclusion matches; an entirely empty inclusion group processes nothing. A phrase alone could therefore permit mail from any sender. Confirm this scope before implementation rather than silently treating phrases as AND constraints.
-
-| Control | Planned behavior |
+| Control | Target behavior |
 |---|---|
-| Suggested category | Expand into a documented, visible, editable list of words/phrases; do not require the category title itself to appear in the message |
-| Custom word or phrase | Literal case-insensitive substring in subject or parsed sender address/domain; no regex, stemming, semantic classification, or body search |
-| Sender address | Exact case-insensitive parsed email address match |
-| Sender domain | Exact case-insensitive domain match; no implicit subdomains |
+| Included sender | Exact case-insensitive parsed email address match |
+| Included domain | Exact case-insensitive domain match; no implicit subdomains |
+| Excluded sender/domain | Same exact matching; overrides any inclusion |
+| Optional excluded subject phrase | Literal case-insensitive substring of the subject only; enforced before body retrieval and inference |
+| Suggested category or custom topic | Semantic relevance preference in the combined extraction call; never a source permission or an automatic keyword expansion |
+| Semantic topic exclusion, if offered | Controls surfaced results after inference; cannot promise the content was never sent to Gemini |
 
-Preserve PR #19's inclusion suggestions (School, Job applications, Research, Meetings) and exclusion suggestions (Financial, Health, Promotions, Family & friends). Define and review their term lists before enabling them. For example, School could suggest `homework`, `assignment`, and `syllabus`; these are proposed terms, not implemented mappings. Show the resulting terms before save and allow removal/addition. Do not imply that Financial or Health detects all content on those topics. Store the selected terms explicitly so later preset changes cannot silently broaden previously saved permission.
+A nonempty sender/domain allowlist and explicit scanning consent are required. A category alone permits nothing. The backend checks rules before fetching the current body and independently before fetching each context body, and rechecks current consent, pause, connection, revisions, and deletion state before inference and commit. Already dispatched requests cannot be retracted.
+
+Keep suggested interests such as School, Job applications, Research, and Meetings as meaningful topics rather than lists of literal terms. A school-related message can be relevant without containing homework or assignment. Explain that permitted content reaches Gemini before semantic relevance can be determined. Do not present Financial or Health as guaranteed pre-LLM privacy exclusions; topic preferences cannot reliably prevent disclosure of those topics.
 
 Frontend copy and controls:
 
-- On "Which email categories should we check?", preserve suggested categories and custom entry. Describe them as shortcuts for editable words/phrases; keep explicit sender/domain inputs.
-- On "What would you like to keep private?", remove the separate "Subject keyword" input. Keep the "Add an excluded email category" control and change its description to: "Add a word or phrase that you would like to exclude." Use a word/phrase placeholder rather than asking for an abstract category.
-- Merge existing subject exclusions into the unified exclusion-term editor during migration, preserving at least their existing blocking behavior. Disclose that expanding an old subject-only exclusion to sender fields may block additional messages; keep previous scope until the user reviews and saves the new rule.
-- Update review, settings, preview, empty states, validation, and effective-scope summaries consistently. Do not claim categories are effective scan filters until the backend uses the same saved rules.
-- Keep an accessible info icon beside the filter heading, usable on hover, focus, and tap, with dismissal and visible focus. Proposed copy: "Words and phrases match subject lines and sender email addresses/domains. Sender and domain rules match exactly. Email bodies are not searched for filtering. Any matching exclusion blocks processing." Explain separately that permitted bodies may be sent for task extraction.
+- Separate permitted sources, Never send to AI exclusions, and semantic topics of interest. Preserve custom entry, exact sender/domain controls, shared-session persistence, and accessible hover/focus/tap help with dismissal and visible focus.
+- Explain that source rules are checked in backend code before retrieval/inference, while topic interpretation happens within Gemini. Do not use a semantic category selector to imply guaranteed sensitive-topic blocking.
+- Show effective access scope and semantic preferences separately in onboarding, review, settings, preview, and empty states. Saving settings never grants consent implicitly.
+- Preserve prior subject-only exclusions at their original scope. Existing general phrase exclusions cannot silently become subject-only rules: removing sender matching would weaken blocking. Require review and keep processing blocked for incompatible settings until resolved.
 
 Implementation order and completion requirements:
 
-1. [ ] Confirm phrase matching fields, literal substring behavior, OR inclusion semantics, suggested term mappings, and explanatory copy. Keep these proposals distinct from the user's confirmed direction to use app categories/phrases and remove the duplicate subject input.
-2. [ ] Update [pipeline rules](app/pipeline/core.mjs) to use explicit inclusion/exclusion terms plus sender/domain rules. Remove mailbox-tag matching from the active contract, including empty-allowlist checks and context filtering. Validate and canonicalize rules server-side: trim, deduplicate case-insensitively, reject malformed values, and retain the existing 200-entry/254-character limits unless documented otherwise. Update [pipeline documentation](app/pipeline/README.md), fixtures, and callers; rebuild the ignored Edge bundle from canonical sources.
-3. [ ] Evolve the locally implemented [settings schema](app/supabase/migrations/20261105070000_scan_settings.sql) through a new ordered migration rather than editing applied history. Preserve owner isolation, verified-session RPCs, revisions, consent, pause, and generation fencing. Map PR #19's `includedTypes`/`excludedTypes` to explicit terms only after review; keep category titles separate from expanded terms. Require replacement/reconfirmation of obsolete source selections rather than reinterpreting them as words or silently broadening scope. Block processing while conversion is incomplete; preserve accepted tasks and unrelated account data. Saving filters alone never grants scanning consent.
-4. [ ] Adapt PR #19's [onboarding controls](app/web/src/App.tsx) and [preference persistence](app/web/src/supabase.ts) to the validated contract through the shared-session [storage adapter](app/web/src/storageAdapter.ts). Update the shared [scan settings form](app/web/src/ScanSettingsPanel.tsx), preview summaries, and settings together. Keep loading, validation, saving, confirmed save, failure, stale revision, reload, and account-switch states explicit. Remove obsolete source controls and summaries from active flows.
-5. [ ] Integrate trusted saved rules into backend processing. Check consent, pause, connection, and current rules before body retrieval, independently for each context message, and again before inference/commit. Fence queued/in-flight work and cache reuse with current settings revisions/generations. Keep the default-disabled E01-E20 fixture endpoint intact; real Gmail scanning remains separate work. Filtering uses deterministic code before the LLM; the LLM extracts tasks only from permitted content.
-6. [ ] Verify preset expansion/editing, custom phrases, mixed case, literal substring boundaries, subject/sender phrase matches, exact address/domain rules, subdomains, OR combinations, exclusion precedence, empty inclusions, independently excluded context, malformed rules, and migration/reconfirmation. Verify save/reload, two-user isolation, anonymous denial, stale saves, permission changes during work, accepted-task preservation, and accessible browser interactions. Check that no obsolete source controls remain in active UI.
+1. [ ] Replace category-to-keyword access permission in the canonical [pipeline](app/pipeline/core.mjs) with the contract above. Keep trim/deduplication, validation, exclusion precedence, empty-source denial, and existing 200-entry/254-character list limits unless explicitly revised. Update fixtures, callers, and [pipeline documentation](app/pipeline/README.md); rebuild the ignored Edge bundle from canonical sources.
+2. [ ] Add an ordered migration after the [phrase-filter migration](app/supabase/migrations/20261105160000_phrase_filters.sql), separating source access and semantic preferences. Do not edit applied migration history. Do not infer original category choices from expanded terms. Require review/reconfirmation for obsolete phrase permissions and incompatible exclusions; pause/revoke consent as needed to avoid broadening access. Preserve accepted tasks, user isolation, revisions, and generation fencing. Do not silently expand existing users' context windows.
+3. [ ] Adapt [onboarding](app/web/src/App.tsx), [preference persistence](app/web/src/supabase.ts), the shared [storage adapter](app/web/src/storageAdapter.ts), and [scan settings form](app/web/src/ScanSettingsPanel.tsx) together. Preserve explicit loading, validation, saving, failure, stale-save, reload, account-switch, and confirmed-save states.
+4. [ ] Extend canonical [prompts and schema](app/prompts/) and output validation to support semantic relevance and reviewable task-update matching in the existing combined call. Keep Actionable/Passive classification distinct from topic relevance. Include only relevant existing tasks, accepted values, and revisions; validate proposed target IDs/ownership server-side. A thread can contain several tasks, so thread identity alone must not select an update target. Ambiguous matches require review.
+5. [ ] Build a separate, default-disabled authenticated bounded manual Gmail scan endpoint. Load trusted saved settings, coordinate concurrent scans, enforce budgets, filter metadata before bodies, decode MIME/HTML into bounded text, and apply permissions independently to context. Preserve the fixture-only E01-E20 endpoint. Adapt [storage coordination](app/supabase/functions/_shared/storage.mjs) from fixture namespace to stable Gmail source IDs, deduplication, permission-aware cache reuse, and settings/task revision fencing.
+6. [ ] Wire real Gmail status, scan progress/counts/errors/backlog, and saved review records into the product dashboard. Preserve accepted values and user edits until a proposed change is approved; cancellation proposals also require review. Task approval never authorizes Calendar writes.
+7. [ ] Verify exact sender/domain rules, subdomains, OR inclusion, exclusion precedence, empty source scope, optional literal subject exclusions, per-context permissions, and zero retrieval/inference on denied scans. Verify migration/reconfirmation, save/reload, isolation, anonymous denial, stale saves, changed permissions during work, cache invalidation, and accepted-task preservation. Evaluate semantic topics and update matching on fictional cases, including several tasks in one thread and ambiguous references.
+8. [ ] Complete the remaining live OAuth lifecycle checks and then a real local manual Gmail-to-Gemini-to-storage-to-review trial using fictional emails in a dedicated account. Cover repeats with zero unnecessary inference, excluded bodies/context, changed settings, revoked access, rate limits, partial failures, and task changes. Offline mocks do not establish live behavior.
+9. [ ] After the manual path passes, implement incremental checkpoints/recovery, shared manual/scheduled coordination, manual cooldown, bounded retry dispatch, backlog continuation, and the 15-minute backend schedule. Verify a scan with the dashboard closed. Calendar and separately authorized hosted rollout follow.
 
-Validation for implementation: follow [backend instructions](app/supabase/AGENTS.md) for migrations, RPCs, Edge checks, and local integration; run `npm.cmd test` from `Checkpoint 3/app`. Follow [web instructions](app/web/AGENTS.md) for pinned pnpm type checking/build and browser checks. No live model calls are needed for deterministic filtering. Offline and simulated checks do not establish real Gmail retrieval or hosted enforcement. Documentation-only changes require link/path/command verification and `git diff --check`.
+Validation for implementation: follow [backend instructions](app/supabase/AGENTS.md) for migrations, RPCs, Edge checks, and local integration; run `npm.cmd test` from `Checkpoint 3/app`. Follow [web instructions](app/web/AGENTS.md) for pinned pnpm type checking/build and browser checks. Deterministic permission tests require no model calls; semantic quality requires separately identified live evaluation. Documentation-only changes require link/path/command verification and `git diff --check`.
 
 ### Thread context and privacy
 
-- Every earlier message must independently pass current rules before its body is retrieved for context.
-- Provide customizable message-count, age, and text-size limits, within enforced server limits.
-- Proposed starting context defaults: allow up to five earlier permitted messages from the past 30 days, but include only context needed to interpret the current message. Five is a ceiling, not an amount to attach to every request. The text/token cap remains to be selected; these numerical context defaults need confirmation.
-- Remove quoted history and signatures where practical; retrieve original earlier messages individually through filtering. Recognize that quoted-text removal is imperfect and inline copied private content may remain.
-- If necessary context is excluded, unavailable, or truncated, flag the suggestion as Needs Review and explain the limitation.
-- Sender/domain/phrase rules do not guarantee exclusion of all healthcare or financial topics. Semantic sensitive-topic classification is outside the current scope.
-- Do not persist full email bodies by default or put email content, prompts, credentials, or model output in technical logs. Supporting excerpts and task fields remain sensitive data.
+The agreed target is bounded history for task changes, not current-message-only interpretation. These limits are planned; the current pipeline defaults remain five messages/30 days, saved new-user settings start at zero messages/30 days, and the current supported age range is 1-90 days. Gmail retrieval and loading existing tasks into inference remain unimplemented.
+
+| Boundary | Agreed target default | Configurable range / behavior |
+|---|---|---|
+| Earlier thread messages | 5 | 0-10; zero disables earlier email context |
+| Context age | 90 days | 1-365 days; no unlimited option |
+| Body characters per message | Retain 12,000 | Existing 100-30,000 range |
+| Total body characters, including current message | Retain 24,000 | Existing 100-60,000 range; budget existing task state and prompt separately too |
+
+- Age is measured backward from the timestamp of the email being analyzed, not the scan date and not recursively from each context message. If the current email was received 28 days ago and another 57 days ago, their gap is 29 days. This context window is separate from the seven-day initial scan backlog and from storage retention; it does not delete Gmail messages.
+- Only the same thread and messages no later than the current email qualify. Each must independently pass current permissions before body retrieval. Thread membership never grants permission and exclusions always win.
+- Select up to five most recent eligible earlier messages by default, subject to size limits, then present selected context chronologically. Do not automatically attach all available history or expand into unrelated threads.
+- Include relevant existing accepted task values and revisions separately to recognize changes to longstanding tasks even when their source email is outside the context age window. Recheck current access before supplying associated source excerpts; stored task state cannot bypass an exclusion. Preserve user edits and propose rather than apply changes. Ambiguous targets or insufficient evidence require review.
+- Retain whole-message omission for context that exceeds size limits; do not silently truncate evidence. An empty/oversized current body stops extraction for review. Surface missing or omitted context explicitly.
+- Update canonical validation, database validation/defaults, settings controls, callers, and tests together for the agreed 90-day default and 1-365-day range. Use a new migration and reviewed settings changes; do not silently widen existing consent/context settings.
+- Remove quoted history and signatures where practical and retrieve permitted originals individually. Cleanup is imperfect: copied sensitive content can remain within an otherwise permitted body.
+- Sender/domain and literal subject rules do not guarantee exclusion of all healthcare or financial content. No semantic sensitive-content detector or secret-pattern scanner is required. Disclose that permitted bodies/context are sent to Gemini; semantic exclusions only affect results afterward.
+- Keep full email bodies transient by default. Do not put email content, prompts, credentials, or model output in technical logs. Supporting excerpts and task values remain sensitive and follow retention/deletion controls; provider-side retention is separate.
 
 ### Task and calendar control
 
@@ -329,7 +355,7 @@ Sources checked October 30, 2026: [Gemini caching](https://ai.google.dev/gemini-
 
 ### CP3.1 Scope, configuration, and repository setup
 
-- [ ] Confirm proposed defaults above, context caps, remaining retention periods, and resource budgets.
+- [ ] Implement the agreed context defaults/ranges above; confirm remaining retention periods and resource budgets.
 - [ ] Confirm the instructor's actual due date/forum deadline; repository dates and the general assignment schedule should not be assumed interchangeable.
 - [ ] Establish root `app/`, `docs/`, and `tests/` deliverables as required by the assignment; keep this planning file under Checkpoint 3.
 - [x] Scaffold the React app, Supabase configuration, migrations, backend functions, scripts, and environment templates without secrets. Local implementation exists; hosted rollout is separate.
@@ -351,7 +377,7 @@ The current frontend does not yet accommodate the complete CP3 product. Preserve
 - [ ] Integrate the existing persistent review, edit, dismiss/restore, complete/undo, waiting-for resolution/reminders, and ICS controls into the product design using the shared Auth client/session.
 - [ ] Implement Google-only sign-in in the designed onboarding; automatically reuse the Supabase session and handle callback/reload/cancel/reconnect without asking users for a separate password account.
 - [ ] Implement Gmail connection and consent onboarding: actual Google status, data-flow/retention disclosures, explicit scanning consent, allowlists/exclusions, context limits, and readable effective scope.
-- [ ] Implement the [custom filter frontend](#custom-sender-domain-and-subject-filters-implementation-plan): suggested categories, editable words/phrases, sender/domain controls, accessible hover/focus/tap info icon, saved-settings states, and accurate effective-scope copy.
+- [ ] Implement the [custom filter frontend](#custom-sender-domain-and-subject-filters-implementation-plan): semantic category/custom-topic preferences, exact sender/domain permissions, optional literal subject exclusions, accessible hover/focus/tap info icon, saved-settings states, and accurate effective-scope copy.
 - [ ] Add optional Calendar onboarding with Connect / Skip for now, later connection from Add to Calendar/settings, and independent permission/error states. Wire connected status only after Calendar authorization exists.
 - [ ] Add real scan controls/status: manual refresh and cooldown, running scan, processed/excluded/failed/pending counts, backlog/Scan more, retry/deferred work, and budget/reset feedback.
 - [ ] Complete task filters/sorting, deadline/condition labels, source links and evidence inspection, uncertainty/missing-context/expired-excerpt states, and separate proposed updates from accepted edits.
@@ -379,7 +405,7 @@ successful by the user; the remaining live checklist and hosted setup remain.
 - [ ] Add optional Calendar authorization using the same app identity and protected backend lifecycle; validate actual granted scopes, partial consent, independent service status, and the chosen destination. Existing Gmail-only scope checks are not a Calendar integration.
 - [ ] Explain data flow, model-provider processing, filtering limits, and retention before automation consent.
 - [ ] Implement OR allowlists, overriding exclusions, no-allowlist notification, readable scope descriptions, and privacy settings. Canonical fixture filtering exists; persisted user configuration and enforcement before Gmail body/context retrieval remain.
-- [ ] Complete the [custom filter backend plan](#custom-sender-domain-and-subject-filters-implementation-plan), including confirmation of category/phrase matching, canonical rules and safe preference conversion, authenticated persistence/revisions, and stale-work fencing.
+- [ ] Complete the [custom filter backend plan](#custom-sender-domain-and-subject-filters-implementation-plan), including separate source permissions and semantic preferences, canonical rules and safe preference conversion, authenticated persistence/revisions, and stale-work fencing.
 - [ ] Integrate pause/resume, reconnect, disconnect/revocation, deletion controls, and stale-job protection into real scans and the product frontend. Storage fencing and the local Google lifecycle exist; live provider behavior and future Gmail/Calendar work still need end-to-end coverage.
 - [x] Document Google implementation/testing status and private setup requirements in [the setup guide](app/supabase/GOOGLE_AUTH.md) and [verification report](docs/google-auth-verification-2026-11-05.md).
 - [ ] Complete live Google test-account/demo evidence using fictional content, including provider-side permission removal and confirmed server-side sign-out behavior.
@@ -415,7 +441,7 @@ successful by the user; the remaining live checklist and hosted setup remain.
 
 - [ ] Build a labeled realistic fictional-email set: direct assignments, external commitments, multi-action threads, information-only messages, missing/relative dates, exclusions, quoted text, and deadline updates.
 - [ ] Test user isolation, OR/exclusion precedence, empty allowlists, excluded context, and changed settings during queued work.
-- [ ] Complete the [custom filter acceptance checks](#custom-sender-domain-and-subject-filters-implementation-plan), covering deterministic matching, persistence/API boundaries, permission changes, and accessible info-icon interactions without model calls.
+- [ ] Complete the [custom filter acceptance checks](#custom-sender-domain-and-subject-filters-implementation-plan), covering deterministic access rules, persistence/API boundaries, permission changes, and accessible info-icon interactions without model calls; evaluate semantic relevance and task-update matching separately.
 - [ ] Test pause/disconnect/deletion, duplicate processing, preserved edits, retries, approval enforcement, calendar undo, and completion/retention boundaries using a controlled clock.
 - [ ] Exercise revoked consent, Gmail/model rate limits, timeouts, invalid/truncated output, and partial scan recovery.
 - [ ] Record request/scan IDs, latency, token use, estimated cost, prompt/model versions, and sanitized errors; omit sensitive payloads.

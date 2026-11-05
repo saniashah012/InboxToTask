@@ -1,0 +1,17 @@
+.scan-settings { padding: 1.5rem; background: #fff; color: #161616; border: 1px solid #d6d6d6; }
+.scan-settings h2 { font-size: 1.4rem; margin-bottom: 1rem; }
+.scan-settings p { margin: .75rem 0; max-width: 75ch; }
+.scan-settings fieldset { margin: 1.5rem 0; padding: 1rem; border: 1px solid #a8a8a8; }
+.scan-settings legend { font-weight: 600; padding: 0 .5rem; }
+.scan-settings label { display: flex; flex-direction: column; gap: .5rem; margin: 1rem 0; flex: 1; }
+.scan-settings textarea, .scan-settings input[type=number] { border: 1px solid #8d8d8d; background: #f4f4f4; padding: .65rem; width: 100%; }
+.scan-settings textarea { min-height: 6rem; resize: vertical; }
+.scan-settings input[type=number] { max-width: 16rem; }
+.scan-settings button { border: 1px solid #0f62fe; padding: .6rem 1rem; color: #0043ce; background: white; cursor: pointer; }
+.scan-settings button:disabled { opacity: .5; cursor: default; }
+.scan-settings :focus-visible { outline: 2px solid #0f62fe; outline-offset: 3px; }
+.scan-settings .scan-checkbox { flex-direction: row; align-items: flex-start; }
+.scan-checkbox input { margin-top: .35rem; }
+.scan-rule-pair { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.scan-help { position: relative; display: inline-block; }
+.scan-help [role=tooltip] { display: block; position: absolute; z-index: 5; background: #262626; color: white; padding: 1rem; width: min(22rem, 75vw); box-shadow: 0 2px 8px #0004; }

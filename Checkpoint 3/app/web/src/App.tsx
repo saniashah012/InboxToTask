@@ -17,6 +17,7 @@ import {
   type OnboardingPreferences,
 } from "./supabase"
 import type { Session } from "@supabase/supabase-js"
+import ScanSettingsPanel from "./ScanSettingsPanel"
 
 type Email = {
   sender: string
@@ -623,6 +624,7 @@ function App() {
 
   return (
     <Dashboard
+      key={previewMode ? "preview" : session?.user.id ?? "signed-out"}
       calendarAccount={previewCalendarAccount}
       gmailAccount={previewGmailAccount}
       onCalendarAccountChange={setPreviewCalendarAccount}
@@ -2615,7 +2617,8 @@ function SettingsScreen({
           </nav>
         </aside>
         <section className="settings-content">
-          {section === "sources" && (
+          {!previewMode && (section === "sources" || section === "processing") && <ScanSettingsPanel />}
+          {section === "sources" && previewMode && (
             <>
               <SettingsHeading
                 title="Email preferences"
@@ -2676,7 +2679,7 @@ function SettingsScreen({
               )}
             </>
           )}
-          {section === "processing" && (
+          {section === "processing" && previewMode && (
             <>
               <SettingsHeading
                 title="Processing and thread context"

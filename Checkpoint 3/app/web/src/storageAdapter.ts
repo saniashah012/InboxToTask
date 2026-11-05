@@ -5,6 +5,31 @@ export type TaskFields = { action: string; requirements: string[]; condition: st
 export type StoredRow = Record<string, any>
 export type Snapshot = Record<string, StoredRow[]>
 
+export type ScanRules = Record<"allow" | "block", Record<"labels" | "senders" | "domains" | "subjectKeywords", string[]>>
+export type ScanSettings = {
+  revision: number; consent: boolean; paused: boolean; consent_at: string | null
+  rules: ScanRules
+  context_limits: { maxMessages: number; maxAgeDays: number; maxMessageChars: number; maxTotalChars: number }
+}
+export async function loadScanSettings(): Promise<ScanSettings> {
+  if (!supabase) throw new Error("Account connection is not configured.")
+  const { data, error } = await supabase.rpc("scan_settings_get")
+  if (error) throw new Error("Could not load scanning settings. Retry after checking the local backend migration.")
+  return data
+}
+export async function saveScanSettings(settings: ScanSettings): Promise<ScanSettings> {
+  if (!supabase) throw new Error("Account connection is not configured.")
+  const { data, error } = await supabase.rpc("scan_settings_save", {
+    p_revision: settings.revision, p_rules: settings.rules, p_context: settings.context_limits,
+    p_consent: settings.consent, p_paused: settings.paused,
+    p_disclosure: settings.consent ? "gmail-scan-v1" : null,
+  })
+  if (error) throw new Error(error.code === "PT409"
+    ? "Settings changed in another window. Reload saved settings before saving again."
+    : "Settings were not saved. Check addresses, domains, list sizes, and context limits, then retry.")
+  return data
+}
+
 export const storageClient =
   import.meta.env.VITE_STORAGE_ENABLED === "true" ? supabase : null
 

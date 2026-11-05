@@ -4,41 +4,100 @@ Updated: November 5, 2026. Checked items have implementation evidence within the
 
 ## Current progress and next work
 
+November 5 continuation: saved scanning consent/rules/context/revisions and a
+shared product/development settings form are implemented and migrated locally.
+New users default to no consent, paused, empty inclusions, and zero earlier
+context. Settings saves fence existing storage jobs without altering accepted
+tasks. This is partial milestone 3: canonical subject inclusion matching awaits
+the requested OR/AND decision, and Gmail retrieval/inference permission gates
+are not wired. Legacy onboarding selections remain separate from these settings.
+See [the settings verification report](docs/scan-settings-verification-2026-11-05.md)
+for 107 offline tests, 67 local database checks, frontend type/build and actual
+local Auth/PostgREST/browser evidence. Vite was restarted; the shared browser was
+signed out, so live Google lifecycle verification remains pending. No scanning,
+model calls, cleanup scheduling, or hosted changes were enabled.
+
 Upstream synchronization: the main frontend now includes Google sign-in and
 basic onboarding preference persistence through the shared client in
 [supabase.ts](app/web/src/supabase.ts). Preserve the existing root-origin callback
 and preference implementation when integrating this branch. A dedicated product
 callback can be added if needed; `/storage` callbacks remain development-only.
 Basic preference persistence does not implement the validated custom-filter or
-explicit scanning-consent contract below, and live Google verification remains pending.
+explicit scanning-consent contract below. The user reports successful initial
+local Google sign-in/Gmail connection; the remaining live lifecycle checks are pending.
 
-The local extraction/storage foundation and Google sign-in/backend connection implementation are committed and locally verified within the limits below. Google Auth work is saved in local commit `bf5a5fb`; it has not been pushed or deployed. Google Cloud credentials, provider configuration, and successful live OAuth remain pending. CP3 is not complete: the unified product frontend, permitted Gmail retrieval/scanning, and connected Calendar operations remain unfinished. See [Google Auth verification](docs/google-auth-verification-2026-11-05.md), [Google setup](app/supabase/GOOGLE_AUTH.md), [local storage verification](docs/local-storage-verification-2026-11-04.md), and [the storage contract](app/supabase/STORAGE.md).
+The local extraction/storage foundation and Google sign-in/backend connection implementation are committed and locally verified within the limits below. Google Auth implementation is recorded in commit `bf5a5fb`; that historical local verification does not establish deployment. Separate sign-in and Gmail Cloud projects are created, private local credentials/encryption are provisioned, and local Google services are enabled. The user reports a successful initial connection; reload, refresh, denial, revocation, and disconnect/reconnect still need live verification. Local Google setup and handoff are committed; the saved-scanning-settings foundation is recorded separately. CP3 is not complete: the unified product frontend, permitted Gmail retrieval/scanning, and connected Calendar operations remain unfinished. See [Google Auth verification](docs/google-auth-verification-2026-11-05.md), [Google setup](app/supabase/GOOGLE_AUTH.md), [local storage verification](docs/local-storage-verification-2026-11-04.md), and [the storage contract](app/supabase/STORAGE.md).
 
 | Workstream | Current state | Remaining CP3 work |
 |---|---|---|
 | Repository/setup | React, pipeline/prompts, migrations/functions, templates, and tests exist; hosted-only onboarding migration recovered locally; pending SQL rehearsed against inspected hosted schema with fictional rows | Confirm deliverable locations; rehearse fresh setup; recheck hosted state and coordinate legacy task-write contract before rollout |
 | Extraction | Original Gemini evaluation: 19/20 fictional cases passed; uncertainty/wording candidate passes 8/8 targeted and 20/20 full live checks under corrected E09 scoring | Address remaining detail/review-burden findings, freeze validated settings, and verify live Edge-to-storage-to-UI path; see [review verification](docs/extraction-review-verification-2026-11-04.md) |
 | Storage/review | Persistent proposals and accepted values, RLS, revision checks, budgets/leases/cache, review, completion/undo, deletion fencing, cleanup code | Integrate real permissions/scans; finalize retention and enable/test scheduled cleanup |
-| Frontend | `/` remains a simulated Figma prototype; `/storage` is a localhost development interface for persistence/review and Google connection controls, excluded from production builds regardless of flags | Put Google-only sign-in and service consent into designed onboarding with separate product callback routes; integrate saved records into the product dashboard; verify accessibility/Carbon conventions |
-| OAuth/privacy | Shared-session Google sign-in wiring, backend Gmail connection/callback, encrypted credentials, single-use state/PKCE, refresh leases, safe status, and disconnect fencing implemented locally; disabled by default | Configure and live-test Google/Supabase; integrate product onboarding; add optional Calendar authorization, explicit scanning consent, persisted rules, and pre-retrieval enforcement |
+| Frontend | Main frontend has Google sign-in/basic preference persistence, with remaining product behavior simulated; `/storage` provides localhost development persistence/review and Google controls, excluded from production builds | Preserve shared session/root-origin callback; integrate real Gmail consent/status and saved review records into the product dashboard; verify accessibility/Carbon conventions |
+| OAuth/privacy | Backend connection lifecycle implemented; private local credentials/encryption configured and services enabled; initial local connection reported successful by user | Finish live lifecycle checks; integrate product onboarding; add optional Calendar authorization, explicit scanning consent, persisted rules, and pre-retrieval enforcement; hosted configuration remains separate |
 | Scans | Fixture-only endpoint and bounded extraction coordination | Gmail retrieval, incremental state, initial backlog, manual cooldown, scheduler, retry dispatch, progressive counts |
 | Calendar | Separate approval storage and local ICS preview/serializer exist; no connected Calendar authorization or execution | Optional onboarding connection with Skip for now; least necessary scopes, destination selection, approved creation/update/reconciliation/undo; verify ICS saving/import |
 | Delivery | Local verification evidence and synthetic live extraction baseline exist | Finish docs/evaluation, hosted integration, closed-dashboard scan, demo rehearsal, and submission |
 
-The Google backend foundation is ready for configuration and further integration; it is not a completed user-facing onboarding flow. Do not treat connecting Google as permission to scan or connecting Calendar as approval to create events.
+The Google backend is configured for local connection testing; product integration and full lifecycle verification remain. Do not treat connecting Google as permission to scan or connecting Calendar as approval to create events.
 
 ### Next implementation milestones
 
+Google configuration handoff, November 5:
+
+- [x] User reports creating `inboxtotask-sign-in` and `inboxtotask-gmail` Cloud projects. Keep the existing Gemini project; a Cloud organization is not required for the class scope.
+- [x] Create a [step-by-step local setup guide](app/supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup), an [Auth environment template](app/supabase/.env.example), and private ignored local configuration files. Preserve entered credentials; never print or commit them.
+- [ ] Independently verify both Web OAuth clients, consent configuration, test-user lists, and Gmail API enablement. User reports completing Google Console setup and subsequently connecting successfully in the local UI; provider Console settings have not been independently inspected.
+- [x] Confirm both private credential sets are populated without displaying them; generate the missing backend encryption key and verify an encrypt/decrypt round trip; configure frontend public local values. Local Supabase restarted without resetting data; migrations are current, Google Auth settings report enabled, and the sign-in endpoint redirects to Google with the correct local callback. Credential validity is not established until live exchange. Fixture extraction and cleanup remain disabled.
+- [ ] Complete remaining live local OAuth checks with a dedicated same-email test account: reload, actual token refresh, denied/partial consent, wrong mailbox, expired/replayed state, provider-side revocation, disconnect/reconnect, and server-side sign-out behavior. Inspect browser/network/log handling without exposing credentials. Verify zero retrieval/model calls on connection. Existing offline simulations are not substitutes for these live checks.
+- [x] User reports successful local Google sign-in/Gmail connection after private configuration. This is user-observed initial connection evidence, not completion of the full OAuth checklist. The agent-shared browser remains signed out, so persistence across reload, refresh, revocation, and reconnect have not been independently verified.
+
+Local runtime handoff: Vite at `http://127.0.0.1:5173/storage` and all Edge
+functions were started with private Google configuration. The Google endpoint
+rejects anonymous requests with `AUTH_REQUIRED`; cleanup returns
+`CLEANUP_DISABLED`. Initial setup checks displayed Sign in with Google and made
+no Google token exchange, Gmail retrieval, Calendar write, or model call. The user
+subsequently reports a successful connection in their browser. Finish OAuth
+lifecycle verification, then implement persisted consent/rules before retrieval;
+scanning is not connected yet. Runtime processes may stop;
+recheck them on resumption. The checked-in local Auth configuration now enables
+Google and requires private credentials; fresh checkouts must follow the setup
+guide before starting Auth with that provider enabled.
+
+Register local sign-in redirect `http://127.0.0.1:54321/auth/v1/callback`
+and local Gmail redirect `http://127.0.0.1:54321/functions/v1/google_callback`
+on their respective clients. Hosted callbacks can be registered in advance using
+the confirmed target Supabase project's URL; registration does not deploy or
+configure that environment. Preserve the existing product root-origin callback
+when integrating upstream; `/storage` returns remain local-development-only.
+
+Calendar can later share the Gmail Cloud project; an additional project is not a
+prerequisite. Sharing means Gmail and Calendar Google grants share project-wide
+revocation. Independent Calendar revocation would require a separate project.
+This is an available design option, not a confirmed Calendar topology or a
+completed integration. Destination, scopes, optional consent, and approved
+execution remain milestone 5 work.
+
 | Order | Work | Completion check |
 |---|---|---|
-| 1 | Integrate Google-only sign-in into the designed onboarding and authenticated dashboard, using the existing shared Supabase session. Move persistent review controls into the product UI; keep `/storage` for development. | Normal users never create an InboxToTask password or visit `/storage`; actual saved records, loading/errors, reload, and account switching work. |
-| 2 | Configure Google Cloud test clients, Supabase Google provider, exact callbacks/redirects, and private connection/encryption secrets. Follow [the setup guide](app/supabase/GOOGLE_AUTH.md). | A dedicated account signs in with Google, connects Gmail, reloads, refreshes authorization, and disconnects/reconnects. Wrong account, denied consent, replayed state, and revoked access are handled; zero scans/model calls occur on connection. |
+| 1 | Complete designed onboarding/dashboard integration around existing Google sign-in and the shared Supabase session; preserve the root-origin callback unless a change is needed. Move persistent review controls into the product UI; keep `/storage` for development. | Normal users never create an InboxToTask password or visit `/storage`; real Gmail status, actual saved records, loading/errors, reload, and account switching work. |
+| 2 | Local credentials/services are configured and initial connection is user-reported successful. Finish the remaining live OAuth checklist in [the setup guide](app/supabase/GOOGLE_AUTH.md); record evidence and fix failures. | A dedicated account signs in with Google, connects Gmail, reloads, refreshes authorization, and disconnects/reconnects. Wrong account, denied consent, replayed state, and revoked access are handled; zero scans/model calls occur on connection. |
 | 3 | Persist scanning consent, source rules, context limits, and settings revisions; enforce pause/deletion/settings changes. Preserve the [custom sender/domain/subject filter plan](#custom-sender-domain-and-subject-filters-implementation-plan), including its unconfirmed subject-inclusion matching decision and accessible info icon. | Empty allowlists or absent consent block retrieval; saved settings isolate users; queued work cannot bypass changed permissions; custom matching/validation/UI acceptance checks pass after the open decision is confirmed. |
 | 4 | Implement one bounded manual Gmail-to-extraction-to-review flow, then incremental scheduled scans, cooldown, retries, and visible progress. | Permitted fictional test mail produces saved reviewable results; exclusions apply before body/context retrieval; unchanged/empty scans use zero inference; automatic scans work with the dashboard closed. |
 | 5 | Implement optional Calendar connection in onboarding, with Skip for now and later connection from Add to Calendar/settings. Choose destination/scopes, then build approved create/update/undo execution. | Skipping/denying Calendar leaves Gmail/task features usable. Connected status reflects real authorization; no event is written until its preview is approved; retries and undo avoid duplicate/unintended writes. |
 | 6 | Prepare hosted Supabase and Vercel integration, verify configuration and compatibility, then perform a separately authorized rollout and live demo trial. | Vercel build/routing/redirect settings and hosted migration/function/secret plan are reviewable; after rollout, the complete test-account workflow works on the hosted origin. |
 
 Milestones 1 and 2 can proceed together. The optional Calendar onboarding UI can be designed with milestone 1, but its live connection action must ship with working authorization in milestone 5. Do not show simulated success while that backend is missing.
+
+Immediate resumption order: inspect Git/runtime state and preserve private keys;
+finish available OAuth checks without repeating project creation or exposing
+credentials. In parallel with independent implementation preparation, obtain the
+subject-inclusion OR/AND decision before changing matching behavior. Next build
+milestone 3 (validated saved consent/rules, revisions, and accessible product
+controls), then one bounded manual scan from milestone 4 with saved review in the
+product dashboard. Add incremental scheduling after the manual path works;
+Calendar and hosted rollout follow. A missing shared authenticated browser only
+limits live browser verification; it need not block independent offline work.
 
 Delivery constraint: keep work local and do not push until setup is ready for Vercel testing and the user explicitly authorizes the push. Hosted Supabase migrations/functions and Vercel deployment also require a separate rollout instruction; this plan update does not authorize them.
 
@@ -110,7 +169,7 @@ Implementation order and completion requirements:
 
 1. [ ] Confirm OR versus AND behavior for the new subject inclusions before runtime implementation. Finalize the matching examples and tooltip copy together.
 2. [ ] Extend canonical [pipeline rules](app/pipeline/core.mjs) with `allow.subjectKeywords`, retaining `block.subjectKeywords`. Treat an absent new inclusion field as an empty list for existing fixtures/callers; reject malformed supplied values. Trim entries, remove case-insensitive duplicates for addresses/domains/keywords, and validate nonempty values, addresses/domains, list sizes, and keyword lengths server-side. Use the existing 200-entry/254-character rule limits unless a documented contract change is needed. Apply identical rules to each context message; update the [pipeline guide](app/pipeline/README.md) and fictional fixtures/examples. Rebuild the ignored Edge bundle from canonical sources when implementing.
-3. [ ] Add an ordered [migration](app/supabase/migrations/) for owner-scoped saved inclusion/exclusion rules and a settings revision, preserving existing data/history. Provide authenticated reads and controlled update RPCs using verified session ownership, RLS, fixed search paths, scoped grants, and stale-revision conflicts consistent with the [storage contract](app/supabase/STORAGE.md). New users default to empty inclusions and no scanning consent. Saving filters alone must not enable scanning.
+3. [x] Add an ordered [migration](app/supabase/migrations/20261105070000_scan_settings.sql) for owner-scoped saved inclusion/exclusion rules and a settings revision, preserving existing data/history. Authenticated reads and controlled update RPCs use verified session ownership, RLS, fixed search paths, scoped grants, and PT409 stale-revision conflicts. New users default to empty inclusions and no scanning consent. Saving filters alone does not enable scanning. Applied and verified locally only; subject inclusion matching and Gmail enforcement remain separate incomplete steps.
 4. [ ] Integrate saved rules into trusted backend processing, rather than accepting caller-selected scope in the fixture endpoint. Check current consent/rules before Gmail body retrieval, independently for context, and again before inference. Fence queued/in-flight work with settings revisions and the existing lifecycle lock order/generation protections so outdated permissions cannot commit results. Include effective rules/revision in extraction/cache identity; cached results cannot bypass current permissions. Keep the E01-E20 fixture-only endpoint and default-disabled behavior intact; real Gmail scanning remains separate integration work.
 5. [ ] Extend onboarding/settings in [App.tsx](app/web/src/App.tsx) and persistence in the shared-session [storage adapter](app/web/src/storageAdapter.ts). Use one filter section with explicit field labels, editable inclusion/exclusion lists, the accessible info icon, and a readable effective-scope summary. Show loading, validation, saving, confirmed saved, failed-save, and stale-settings states; verify save/reload and clear user-specific state on account changes. Keep [preview behavior](app/web/src/previewAdapter.ts) visibly simulated until persistence is connected.
 6. [ ] Verify pipeline cases for sender-only/domain-only/subject-only inclusion, OR combinations, phrases, mixed case, substring boundaries, exact-domain/subdomain behavior, exclusion precedence, empty inclusions, absent-new-field compatibility, malformed/oversized lists, and independently excluded context. Verify database/API isolation for two users and anonymous access, stale saves, settings changes during queued/in-flight work, and preservation of accepted tasks. Verify tooltip hover/focus/tap/dismissal, keyboard access, effective scope, save/reload/failure, and account switching in the browser.
@@ -252,16 +311,19 @@ The current frontend does not yet accommodate the complete CP3 product. Preserve
 
 November 5 implementation: [Google Auth setup](app/supabase/GOOGLE_AUTH.md)
 documents the sign-in/connection scaffold, private credentials, single-use state,
-refresh/disconnect lifecycle, and hosted schema inspection. Features are disabled
-by default; Google Cloud/provider setup and live OAuth verification remain.
+refresh/disconnect lifecycle, and hosted schema inspection. Google is now enabled
+in the current local Auth/private Functions configuration; templates retain
+disabled frontend/backend flags until configured. Initial connection is reported
+successful by the user; the remaining live checklist and hosted setup remain.
 
-- [x] Implement app authentication and verify sessions in backend endpoints; derive ownership from verified identity. Local Auth verification exists; Google sign-in reuses the shared session/client. Product onboarding and live Google sign-in still require integration/configuration.
+- [x] Implement app authentication and verify sessions in backend endpoints; derive ownership from verified identity. Google sign-in reuses the shared session/client and exists in the main frontend. Local provider configuration is enabled; the user reports successful sign-in. Full product integration and live lifecycle verification remain.
 - [x] Implement and locally test storage RLS/grants, two-user isolation, private Google credential/state tables, safe status reads, and service-only credential operations. No browser credential access; hosted deployment/isolation verification remains below.
-- [x] Implement backend Gmail OAuth state/callback, PKCE, same-account checks, refresh leases, and disconnect/revocation handling. Offline/provider simulations and local database/API gates pass; successful live Google exchange is not established.
-- [x] Implement encrypted backend Google credentials with an independently configured AES-GCM keyring; keep Gmail access/refresh tokens out of browser responses and app logs. Live secret provisioning, operational key rotation, and browser/network inspection remain to verify.
+- [x] Implement backend Gmail OAuth state/callback, PKCE, same-account checks, refresh leases, and disconnect/revocation handling. Offline/provider simulations and local database/API gates pass; initial live connection is now user-reported successful. Independent lifecycle verification remains.
+- [x] Implement encrypted backend Google credentials with an independently configured AES-GCM keyring; keep Gmail access/refresh tokens out of browser responses and app logs. The private local keyring is provisioned and passes an encrypt/decrypt round trip. Operational key rotation, hosted secret provisioning, and live browser/network inspection remain to verify.
 - [x] Wire Google sign-in and callback into the shared Supabase client on the development interface. The normal product must move this into designed onboarding without requiring email/password.
 - [x] Inspect hosted migration history/schema and recover its missing onboarding migration locally. Rehearse pending SQL against the inspected hosted schema with fictional rows preserved. Hosted compatibility/runtime checks and rollout remain.
-- [ ] Configure Google Cloud clients/test users, Supabase Google provider, exact callbacks/redirects, and private Edge secrets; successfully live-test sign-in, Gmail connection, refresh, denied consent, wrong account, revocation, and disconnect/reconnect.
+- [x] Provision private local sign-in/Gmail credentials and encryption key, enable local Supabase Google provider and Google connection, and configure public frontend settings. User reports completing Console setup and connecting successfully; secrets are ignored by Git.
+- [ ] Finish live refresh, denied/partial consent, wrong account, state expiry/replay, revocation, disconnect/reconnect, reload, and sign-out verification; record sanitized evidence. Independently check Console settings as needed to resolve failures; hosted setup is not complete.
 - [ ] Add optional Calendar authorization using the same app identity and protected backend lifecycle; validate actual granted scopes, partial consent, independent service status, and the chosen destination. Existing Gmail-only scope checks are not a Calendar integration.
 - [ ] Explain data flow, model-provider processing, filtering limits, and retention before automation consent.
 - [ ] Implement OR allowlists, overriding exclusions, no-allowlist notification, readable scope descriptions, and privacy settings. Canonical fixture filtering exists; persisted user configuration and enforcement before Gmail body/context retrieval remain.
@@ -315,7 +377,7 @@ by default; Google Cloud/provider setup and live OAuth verification remain.
 - [ ] Rehearse a 5-8 minute presentation with at least half devoted to live use: allowed/blocked email, extraction, uncertainty correction, calendar approval/undo, and recovery. Use manual refresh to demonstrate the same pipeline without waiting 15 minutes; explain the schedule honestly.
 - [ ] Submit required forum materials and document actual limitations rather than simulating unfinished core features.
 
-Latest Google Auth verification: 99 offline tests, 40 real local database checks, four Google local Auth/PostgREST/Edge groups, frontend type/build, new Edge type checks, and browser checks are recorded in [the November 5 report](docs/google-auth-verification-2026-11-05.md). Provider exchange/refresh/revocation tests use fictional injected responses; actual Google OAuth success, Gmail retrieval, Calendar writes, and hosted runtime remain unverified. These results do not establish the designed product onboarding or Google global sign-out/revocation behavior.
+Historical Google Auth verification: 99 offline tests, 40 real local database checks, four Google local Auth/PostgREST/Edge groups, frontend type/build, new Edge type checks, and browser checks are recorded in [the November 5 report](docs/google-auth-verification-2026-11-05.md). Provider exchange/refresh/revocation tests in that report use fictional injected responses. Subsequent setup verified private credential presence, a real encryption round trip, current local migrations, enabled local Google Auth and its redirect, anonymous Google endpoint rejection, and disabled cleanup; the user then reported successful initial local sign-in/Gmail connection. This is not a rerun of those suites. Full live OAuth lifecycle, Gmail retrieval, Calendar writes, hosted runtime, and designed product integration remain unverified.
 
 Earlier evidence: the [storage report](docs/local-storage-verification-2026-11-04.md) records 75 offline tests, 28 database checks, seven local API groups, and browser persistence checks. ICS passed five separate export tests and isolated preview checks; [extraction review verification](docs/extraction-review-verification-2026-11-04.md) records the later fictional-case model evaluation. Do not add counts across dated reports or interpret them as one new end-to-end suite. Architecture, use-case, observability, and safety/privacy documents still need completion.
 

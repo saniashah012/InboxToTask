@@ -6,6 +6,7 @@ import "./storage.css"
 import CalendarExport from "./CalendarExportPanel"
 import ExtractionReview from "./ExtractionReview"
 import GoogleConnectionPanel from "./GoogleConnectionPanel"
+import ScanSettingsPanel from "./ScanSettingsPanel"
 
 const empty: Snapshot = { tasks: [], suggestions: [], extractions: [], evidence: [], sources: [], waiting: [], followups: [], preferences: [] }
 const fieldsFor = (row: StoredRow): TaskFields => row.accepted_fields ?? row.review_fields ?? row.fields ?? {
@@ -141,6 +142,7 @@ export default function StorageDashboard() {
         finally { setBusy(false) }
       }}>Sign out</button></header>
     {import.meta.env.VITE_GOOGLE_CONNECTION_ENABLED === "true" && <GoogleConnectionPanel key={session.user.id} />}
+    <ScanSettingsPanel key={`scan-${session.user.id}`} />
     <section className="storage-panel"><h2>Test inbox</h2><p>Process a fictional email to test extraction and saved review decisions. Each new request may use model quota.</p>
       <div className="storage-actions"><label>Email<select value={caseId} disabled={busy} onChange={(e) => setCaseId(e.target.value)}>
         {Array.from({ length: 20 }, (_, i) => `E${String(i + 1).padStart(2, "0")}`).map((id) => <option key={id}>{id}</option>)}

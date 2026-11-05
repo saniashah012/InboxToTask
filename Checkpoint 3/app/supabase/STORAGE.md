@@ -26,6 +26,26 @@ Service-only public RPCs: `storage_claim`, `storage_finish`, `storage_fail`, `st
 
 Review mutations require a nonnegative revision; stale revisions fail. Approval is idempotent. Accepted edits do not overwrite original model proposals. Proposed updates require an explicitly selected target and expected revision; semantic matching is not implemented. Calendar approval also checks the task revision.
 
+## Saved scanning permission (local foundation)
+
+The [settings migration](migrations/20261105070000_scan_settings.sql) adds owner-read
+`scan_settings` and controlled authenticated `scan_settings_get` / `scan_settings_save`
+RPCs. Writes derive the owner from `auth.uid()` and require the expected revision;
+stale saves return `PT409`. New users have no consent, empty inclusions, paused
+scanning, and no earlier-message context. Explicit consent records the
+`gmail-scan-v1` disclosure version and timestamp. Source-rule saves alone never
+grant consent. Legacy onboarding preferences remain separate.
+
+Rules are validated/canonicalized server-side; exact label IDs preserve case,
+sender/domain/keyword lists trim and deduplicate without case sensitivity.
+Context limits are bounded by the canonical pipeline caps, with a conservative
+zero-message default. Saves follow preference-before-child lock order, increment
+storage generation, cancel current jobs, and preserve accepted tasks. This does
+not authorize retrieval: a future Gmail dispatcher must recheck settings and
+Google connection generations at each external boundary and commit. Canonical
+subject inclusion matching still awaits the OR/AND decision. See
+[verification and limitations](../../docs/scan-settings-verification-2026-11-05.md).
+
 ## Trial limits and lifecycle
 
 - Per-user defaults: 20 requests and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.

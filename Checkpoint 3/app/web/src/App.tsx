@@ -10,6 +10,13 @@ import {
   type SourceRules,
 } from "./demoData"
 import { previewAdapter } from "./previewAdapter"
+import {
+  loadOnboardingPreferences,
+  saveOnboardingPreferences,
+  supabase,
+  type OnboardingPreferences,
+} from "./supabase"
+import type { Session } from "@supabase/supabase-js"
 
 type Email = {
   sender: string
@@ -385,8 +392,6 @@ function Modal({
 
 type AppScreen = "onboarding" | "dashboard"
 
-type OnboardingPreferences = SourceRules
-
 const emptyOnboardingPreferences: OnboardingPreferences = {
   allowedLabels: [],
   allowedSenders: [],
@@ -399,6 +404,15 @@ const emptyOnboardingPreferences: OnboardingPreferences = {
 
 function App() {
   const [screen, setScreen] = useState<AppScreen>("onboarding")
+  const [authInitialized, setAuthInitialized] = useState(false)
+  const [session, setSession] = useState<Session | null>(null)
+  const [authError, setAuthError] = useState("")
+  const [authPending, setAuthPending] = useState(false)
+  const [preferenceStatus, setPreferenceStatus] =
+    useState<"idle" | "loading" | "missing" | "saved" | "error">("idle")
+  const [preferenceError, setPreferenceError] = useState("")
+  const [preferenceReloadCount, setPreferenceReloadCount] = useState(0)
+  const [savingPreferences, setSavingPreferences] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [previewGmailAccount, setPreviewGmailAccount] = useState<string | null>(
     null,
@@ -409,16 +423,186 @@ function App() {
   const [savedPreferences, setSavedPreferences] =
     useState<OnboardingPreferences>(emptyOnboardingPreferences)
 
-  if (screen === "onboarding") {
+  useEffect(() => {
+    if (!supabase) {
+      setAuthInitialized(true)
+      return
+    }
+
+    let active = true
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!active) return
+      setSession(nextSession)
+      setAuthError("")
+      if (!nextSession) {
+        setPreferenceStatus("idle")
+        setSavedPreferences(emptyOnboardingPreferences)
+        setScreen("onboarding")
+      }
+    })
+
+    void supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          setAuthError("Could not restore your sign-in session.")
+          console.error("Supabase session restoration failed", error)
+          setSession(null)
+        } else {
+          setSession(data.session)
+        }
+        setAuthInitialized(true)
+      })
+      .catch((error: unknown) => {
+        if (!active) return
+        setAuthError("Could not restore your sign-in session.")
+        console.error("Supabase session restoration failed", error)
+        setAuthInitialized(true)
+      })
+
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!session) return
+    let active = true
+    setPreferenceStatus("loading")
+    setPreferenceError("")
+    void loadOnboardingPreferences(session.user.id)
+      .then((preferences) => {
+        if (!active) return
+        if (preferences) {
+          setSavedPreferences(preferences)
+          setPreferenceStatus("saved")
+          setScreen("dashboard")
+        } else {
+          setSavedPreferences(emptyOnboardingPreferences)
+          setPreferenceStatus("missing")
+          setScreen("onboarding")
+        }
+      })
+      .catch((error: unknown) => {
+        if (!active) return
+        console.error("Onboarding preference load failed", error)
+        setPreferenceError(
+          "Could not load your preferences. Check that the database migration has been applied, then retry.",
+        )
+        setPreferenceStatus("error")
+      })
+
+    return () => {
+      active = false
+    }
+  }, [session?.user.id, preferenceReloadCount])
+
+  const signInWithGoogle = async () => {
+    if (!supabase) return
+    setAuthPending(true)
+    setAuthError("")
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          scopes: "openid email profile",
+          redirectTo: window.location.origin,
+        },
+      })
+      if (error) throw error
+    } catch (error) {
+      console.error("Google sign-in failed", error)
+      setAuthError("Google sign-in could not be started. Please try again.")
+      setAuthPending(false)
+    }
+  }
+
+  const persistOnboardingPreferences = async (
+    preferences: OnboardingPreferences,
+  ) => {
+    if (!session) throw new Error("A signed-in session is required.")
+    setSavingPreferences(true)
+    setPreferenceError("")
+    try {
+      const saved = await saveOnboardingPreferences(
+        session.user.id,
+        preferences,
+      )
+      setSavedPreferences(saved)
+      setPreferenceStatus("saved")
+      setProcessingEnabled(false)
+      setScreen("dashboard")
+    } catch (error) {
+      console.error("Onboarding preference save failed", error)
+      setPreferenceError(
+        "Preferences were not saved. Check your connection and try again.",
+      )
+      throw error
+    } finally {
+      setSavingPreferences(false)
+    }
+  }
+
+  const signOut = async () => {
+    if (previewMode) {
+      setScreen("onboarding")
+      setPreviewMode(false)
+      setPreviewGmailAccount(null)
+      setPreviewCalendarAccount(null)
+      setProcessingEnabled(false)
+      setSavedPreferences(emptyOnboardingPreferences)
+      return
+    }
+    if (!supabase) return
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error("Supabase sign-out failed", error)
+      setAuthError("Could not sign out. Please try again.")
+    }
+  }
+
+  if (
+    !authInitialized ||
+    (session && !["missing", "saved", "error"].includes(preferenceStatus))
+  ) {
+    return <AppStatus message="Restoring your InboxToTask session…" />
+  }
+
+  if (session && preferenceStatus === "error") {
+    return (
+      <AppStatus
+        actionLabel="Retry"
+        message={preferenceError}
+        onAction={() => setPreferenceReloadCount((count) => count + 1)}
+        secondaryActionLabel="Sign out"
+        onSecondaryAction={() => void signOut()}
+      />
+    )
+  }
+
+  if (screen === "onboarding" || (!previewMode && !session)) {
     return (
       <Onboarding
+        authConfigured={Boolean(supabase)}
+        authEmail={session?.user.email ?? null}
+        authError={authError}
+        authPending={authPending}
+        isAuthenticated={Boolean(session)}
         onConnectGmail={setPreviewGmailAccount}
-        previewMode={previewMode}
+        onSavePreferences={persistOnboardingPreferences}
+        onSignIn={() => void signInWithGoogle()}
+        onSignOut={() => void signOut()}
         onFinish={(preferences) => {
           setSavedPreferences(preferences)
           setProcessingEnabled(true)
           setScreen("dashboard")
         }}
+        previewMode={previewMode}
+        savingPreferences={savingPreferences}
         onExplore={() => {
           setPreviewMode(true)
           setPreviewGmailAccount(null)
@@ -445,20 +629,59 @@ function App() {
       onGmailAccountChange={setPreviewGmailAccount}
       onProcessingChange={setProcessingEnabled}
       onPreferencesChange={(preferences) => {
-        setSavedPreferences(preferences)
+        if (previewMode || !session) {
+          setSavedPreferences(preferences)
+          return Promise.resolve()
+        }
+        return saveOnboardingPreferences(session.user.id, preferences)
+          .then((saved) => {
+            setSavedPreferences(saved)
+            setPreferenceError("")
+          })
+          .catch((error: unknown) => {
+            console.error("Settings preference save failed", error)
+            throw error
+          })
       }}
       previewMode={previewMode}
       processingEnabled={processingEnabled}
       preferences={savedPreferences}
-      onSignOut={() => {
-        setScreen("onboarding")
-        setPreviewMode(false)
-        setPreviewGmailAccount(null)
-        setPreviewCalendarAccount(null)
-        setProcessingEnabled(false)
-        setSavedPreferences(emptyOnboardingPreferences)
-      }}
+      userEmail={session?.user.email ?? null}
+      onSignOut={() => void signOut()}
     />
+  )
+}
+
+function AppStatus({
+  message,
+  actionLabel,
+  onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
+}: {
+  message: string
+  actionLabel?: string
+  onAction?: () => void
+  secondaryActionLabel?: string
+  onSecondaryAction?: () => void
+}) {
+  return (
+    <main className="onboarding-shell">
+      <section className="onboarding-card sign-in-card" role="status">
+        <Brand />
+        <p>{message}</p>
+        {actionLabel && onAction && (
+          <button className="secondary-button" onClick={onAction}>
+            {actionLabel}
+          </button>
+        )}
+        {secondaryActionLabel && onSecondaryAction && (
+          <button className="text-link" onClick={onSecondaryAction}>
+            {secondaryActionLabel}
+          </button>
+        )}
+      </section>
+    </main>
   )
 }
 
@@ -473,6 +696,7 @@ function Dashboard({
   preferences,
   onPreferencesChange,
   onSignOut,
+  userEmail,
 }: {
   previewMode: boolean
   gmailAccount: string | null
@@ -482,13 +706,14 @@ function Dashboard({
   onCalendarAccountChange: (email: string | null) => void
   onProcessingChange: (enabled: boolean) => void
   preferences: OnboardingPreferences
-  onPreferencesChange: (preferences: OnboardingPreferences) => void
+  onPreferencesChange: (preferences: OnboardingPreferences) => Promise<void>
   onSignOut: () => void
+  userEmail: string | null
 }) {
   const [activeTab, setActiveTab] = useState<"tasks" | "passive">("tasks")
   const [taskView, setTaskView] =
     useState<"suggestions" | "active" | "completed">("suggestions")
-  const [tasks, setTasks] = useState(tasksSeed)
+  const [tasks, setTasks] = useState(previewMode ? tasksSeed : [])
   const [completed, setCompleted] = useState<string[]>([])
   const [completionPending, setCompletionPending] = useState<string[]>([])
   const [completionToast, setCompletionToast] = useState<string | null>(null)
@@ -545,7 +770,8 @@ function Dashboard({
     [approved, categoryFilter, completed, taskView, tasks],
   )
   const waitingMatches =
-    categoryFilter === "All tasks" || categoryFilter === "Meetings & projects"
+    previewMode &&
+    (categoryFilter === "All tasks" || categoryFilter === "Meetings & projects")
   const hasFilteredResults =
     filteredTasks.length > 0 || (waitingMatches && taskView === "active")
   const pendingUpdateCount = tasks.filter(
@@ -631,9 +857,18 @@ function Dashboard({
         <div className="topbar-actions">
           <div className="date-context">
             <span className="date-dot" />
-            Thursday, October 8, 2026
+            {previewMode
+              ? "Thursday, October 8, 2026"
+              : new Intl.DateTimeFormat("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                }).format(new Date())}
           </div>
-          <span className="demo-mode-badge">Preview mode · sample data</span>
+          <span className="demo-mode-badge">
+            {previewMode ? "Preview mode · sample data" : "Signed in"}
+          </span>
           <div className="account-menu-wrap">
             <button
               aria-expanded={accountMenuOpen}
@@ -641,13 +876,21 @@ function Dashboard({
               className="account-avatar"
               onClick={() => setAccountMenuOpen((current) => !current)}
             >
-              MP
+              {previewMode
+                ? "MP"
+                : (userEmail?.split("@")[0].slice(0, 2).toUpperCase() ?? "U")}
             </button>
             {accountMenuOpen && (
               <div className="account-menu">
                 <div>
-                  <strong>Maya Patel</strong>
-                  <span>maya.patel@example.com</span>
+                  <strong>
+                    {previewMode
+                      ? "Maya Patel"
+                      : (userEmail ?? "Signed-in user")}
+                  </strong>
+                  {previewMode && (
+                    <span>maya.patel@example.com · fictional preview</span>
+                  )}
                 </div>
                 <button
                   onClick={() => {
@@ -657,7 +900,9 @@ function Dashboard({
                 >
                   Settings
                 </button>
-                <button onClick={onSignOut}>Exit preview</button>
+                <button onClick={onSignOut}>
+                  {previewMode ? "Exit preview" : "Sign out"}
+                </button>
               </div>
             )}
           </div>
@@ -677,7 +922,7 @@ function Dashboard({
           </div>
           {activeTab === "tasks" && (
             <div className="task-count">
-              <strong>{tasks.length + 1}</strong>
+              <strong>{tasks.length + (previewMode ? 1 : 0)}</strong>
               <span>Open items</span>
             </div>
           )}
@@ -700,7 +945,7 @@ function Dashboard({
             role="tab"
           >
             Passive communication
-            <span className="tab-count">4</span>
+            <span className="tab-count">{previewMode ? 4 : 0}</span>
           </button>
         </nav>
 
@@ -909,7 +1154,10 @@ function Dashboard({
             </section>
           </div>
         ) : (
-          <PassiveCommunication onViewEmail={setEmail} />
+          <PassiveCommunication
+            onViewEmail={setEmail}
+            previewMode={previewMode}
+          />
         )}
       </main>
 
@@ -1367,9 +1615,26 @@ function WaitingModal({
 
 function PassiveCommunication({
   onViewEmail,
+  previewMode,
 }: {
   onViewEmail: (email: Email) => void
+  previewMode: boolean
 }) {
+  if (!previewMode) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-mark">
+          <Icon name="check" />
+        </div>
+        <h3>No analyzed messages</h3>
+        <p>
+          Gmail access has not been separately authorized. No messages have been
+          read.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="passive-grid">
       {Object.entries(passiveGroups).map(([group, items]) => (
@@ -1417,19 +1682,37 @@ function Brand() {
 }
 
 function Onboarding({
+  authConfigured,
+  authEmail,
+  authError,
+  authPending,
+  isAuthenticated,
   previewMode,
   onExplore,
   onPreviewOnboarding,
   onConnectGmail,
+  onSignIn,
+  onSignOut,
+  onSavePreferences,
   onFinish,
+  savingPreferences,
 }: {
+  authConfigured: boolean
+  authEmail: string | null
+  authError: string
+  authPending: boolean
+  isAuthenticated: boolean
   previewMode: boolean
   onExplore: () => void
   onPreviewOnboarding: () => void
   onConnectGmail: (email: string | null) => void
+  onSignIn: () => void
+  onSignOut: () => void
+  onSavePreferences: (preferences: OnboardingPreferences) => Promise<void>
   onFinish: (preferences: OnboardingPreferences) => void
+  savingPreferences: boolean
 }) {
-  const [step, setStep] = useState(0)
+  const [step, setStep] = useState(isAuthenticated ? 1 : 0)
   const [gmailConnected, setGmailConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [starting, setStarting] = useState(false)
@@ -1444,6 +1727,16 @@ function Onboarding({
     <div className="onboarding-shell">
       <header className="onboarding-header">
         <Brand />
+        {isAuthenticated && (
+          <div className="topbar-actions">
+            <span className="demo-mode-badge">
+              Signed in{authEmail ? ` · ${authEmail}` : ""}
+            </span>
+            <button className="text-link" onClick={onSignOut}>
+              Sign out
+            </button>
+          </div>
+        )}
       </header>
       <main
         className={`onboarding-main ${
@@ -1463,17 +1756,32 @@ function Onboarding({
                 Turn email into clear next steps.
               </p>
               <div className="sign-in-actions">
-                <button className="google-button" disabled>
+                <button
+                  className="google-button"
+                  disabled={!authConfigured || authPending}
+                  onClick={onSignIn}
+                >
                   <img alt="" src={googleG} />
-                  <span>Continue with Google</span>
-                </button>
-                <div className="sign-in-unavailable" role="status">
-                  <strong>Google sign-in is unavailable</strong>
                   <span>
-                    Authentication is not configured in this deployment. No
-                    account has been connected.
+                    {authPending
+                      ? "Redirecting to Google…"
+                      : "Continue with Google"}
                   </span>
-                </div>
+                </button>
+                {!authConfigured && (
+                  <div className="sign-in-unavailable" role="status">
+                    <strong>Google sign-in is unavailable</strong>
+                    <span>
+                      Supabase Auth is not configured in this deployment. No
+                      account has been connected.
+                    </span>
+                  </div>
+                )}
+                {authError && (
+                  <div className="notice warning" role="alert">
+                    {authError}
+                  </div>
+                )}
                 <button
                   className="text-link sign-in-demo-link"
                   onClick={() => {
@@ -1540,7 +1848,7 @@ function Onboarding({
                       ? "Fictional account only. No real mailbox was accessed."
                       : previewMode
                         ? "Use the fictional preview inbox to continue this walkthrough."
-                        : "Gmail integration is not configured. No mailbox has been accessed."}
+                        : "Gmail authorization is separate from Google sign-in and is not configured. No mailbox has been accessed."}
                   </span>
                 </div>
               </div>
@@ -1571,12 +1879,16 @@ function Onboarding({
               <p className="setup-helper">
                 {gmailConnected
                   ? "This fictional connection is isolated from real Gmail."
-                  : "Nothing is scanned until you finish setup and start."}
+                  : isAuthenticated
+                    ? "You can save preferences now. Scanning stays off until Gmail is separately authorized."
+                    : "Nothing is scanned until you finish setup and start."}
               </p>
               <FooterActions
                 back={() => setStep(0)}
                 next={() => setStep(2)}
-                nextDisabled={!previewMode || !gmailConnected}
+                nextDisabled={
+                  !isAuthenticated && !(previewMode && gmailConnected)
+                }
               />
             </>
           )}
@@ -1627,16 +1939,20 @@ function Onboarding({
             <>
               <h2>Ready to organize your inbox?</h2>
               <p className="setup-description">
-                Review your choices before automatic checks begin.
+                {previewMode
+                  ? "Review your choices before the simulated preview checks begin."
+                  : "Review your choices. Saving preferences does not authorize Gmail or start scanning."}
               </p>
               <div className="review-preferences">
                 <ReviewPreference
                   label="Gmail status"
                   onEdit={() => setStep(1)}
                   values={[
-                    gmailConnected
-                      ? "Fictional preview account · no real mailbox accessed"
-                      : "Unavailable in this deployment",
+                    isAuthenticated
+                      ? "Not authorized · Gmail access requires separate consent"
+                      : gmailConnected
+                        ? "Fictional preview account · no real mailbox accessed"
+                        : "Unavailable in this deployment",
                   ]}
                 />
                 <ReviewPreference
@@ -1667,11 +1983,19 @@ function Onboarding({
               <div className="scan-plan">
                 <div>
                   <span>Initial scan</span>
-                  <strong>Past 7 days, up to 100 eligible messages</strong>
+                  <strong>
+                    {previewMode
+                      ? "Past 7 days · simulated preview only"
+                      : "Not started · Gmail authorization required"}
+                  </strong>
                 </div>
                 <div>
                   <span>Automatic checks</span>
-                  <strong>Approximately every 15 minutes</strong>
+                  <strong>
+                    {previewMode
+                      ? "Simulated preview checks"
+                      : "Off until Gmail is separately authorized"}
+                  </strong>
                 </div>
               </div>
               <p className="approval-reminder">
@@ -1679,29 +2003,50 @@ function Onboarding({
                 entries require separate approval.
               </p>
               <p className="setup-helper">
-                Preview only. No account is accessed and these preferences are
-                not saved to Supabase.
+                {previewMode
+                  ? "Preview only. No account is accessed and these preferences are not saved to Supabase."
+                  : "Google sign-in does not grant Gmail access. Scanning remains disabled until Gmail is separately authorized."}
               </p>
               <FooterActions
                 back={() => setStep(3)}
                 next={async () => {
-                  if (!previewMode || starting) return
-                  setStarting(true)
+                  if (starting || savingPreferences) return
                   setSetupError("")
-                  try {
-                    await previewAdapter.startProcessing()
-                    onFinish(preferences)
-                  } catch (error) {
-                    console.error("Preview onboarding could not start", error)
-                    setSetupError(
-                      "Could not start the preview flow. Please try again.",
-                    )
-                  } finally {
-                    setStarting(false)
+                  if (isAuthenticated) {
+                    try {
+                      await onSavePreferences(preferences)
+                    } catch {
+                      setSetupError(
+                        "Could not save your preferences. Please try again.",
+                      )
+                    }
+                    return
+                  }
+                  if (previewMode) {
+                    setStarting(true)
+                    try {
+                      await previewAdapter.startProcessing()
+                      onFinish(preferences)
+                    } catch (error) {
+                      console.error("Preview onboarding could not start", error)
+                      setSetupError(
+                        "Could not start the preview flow. Please try again.",
+                      )
+                    } finally {
+                      setStarting(false)
+                    }
                   }
                 }}
-                nextDisabled={!previewMode || starting}
-                nextLabel={starting ? "Starting preview…" : "Review and start"}
+                nextDisabled={!hasSources || starting || savingPreferences}
+                nextLabel={
+                  savingPreferences
+                    ? "Saving preferences…"
+                    : starting
+                      ? "Starting preview…"
+                      : isAuthenticated
+                        ? "Save preferences"
+                        : "Review and start"
+                }
               />
             </>
           )}
@@ -2218,7 +2563,7 @@ function SettingsScreen({
 }: {
   onBack: () => void
   preferences: OnboardingPreferences
-  onPreferencesChange: (preferences: OnboardingPreferences) => void
+  onPreferencesChange: (preferences: OnboardingPreferences) => Promise<void>
   previewMode: boolean
   gmailAccount: string | null
   calendarAccount: string | null
@@ -2229,6 +2574,8 @@ function SettingsScreen({
 }) {
   const [section, setSection] = useState("sources")
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState("")
   const [connectionError, setConnectionError] = useState("")
 
   const sections = [
@@ -2272,26 +2619,59 @@ function SettingsScreen({
             <>
               <SettingsHeading
                 title="Email preferences"
-                description="Preview preference controls. Changes are kept in this preview session only."
+                description={
+                  previewMode
+                    ? "Changes are kept in this preview session only."
+                    : "Preferences are saved to your signed-in account. Gmail remains unauthorized."
+                }
               />
               <div className="notice neutral">
-                <strong>Preview only</strong>
+                <strong>
+                  {previewMode ? "Preview only" : "Preferences only"}
+                </strong>
                 <span>
-                  These sample settings do not screen or retrieve any real
-                  messages.
+                  {previewMode
+                    ? "These sample settings do not screen or retrieve any real messages."
+                    : "Saving choices does not grant Gmail access or start scanning."}
                 </span>
               </div>
               <SettingsPreferenceControls
-                onChange={(next) => {
-                  onPreferencesChange(next)
-                  setSaved(true)
+                onChange={async (next) => {
+                  setSaving(true)
+                  setSaved(false)
+                  setSaveError("")
+                  try {
+                    await onPreferencesChange(next)
+                    setSaved(true)
+                  } catch (error) {
+                    console.error(
+                      "Settings preferences could not be saved",
+                      error,
+                    )
+                    setSaveError(
+                      "Preferences were not saved. Check your connection and try again.",
+                    )
+                  } finally {
+                    setSaving(false)
+                  }
                 }}
                 preferences={preferences}
               />
+              {saving && (
+                <div className="save-confirmation" role="status">
+                  Saving preferences…
+                </div>
+              )}
               {saved && (
                 <div className="save-confirmation" role="status">
-                  Updated for this preview session only. No messages were read
-                  or saved to Supabase.
+                  {previewMode
+                    ? "Updated for this preview session only. No messages were read or saved to Supabase."
+                    : "Preferences saved. No messages were read and scanning remains off."}
+                </div>
+              )}
+              {saveError && (
+                <div className="notice warning" role="alert">
+                  {saveError}
                 </div>
               )}
             </>

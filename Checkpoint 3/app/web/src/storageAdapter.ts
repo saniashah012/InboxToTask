@@ -1,19 +1,12 @@
-import { createClient } from "@supabase/supabase-js"
+import { supabase } from "./supabase"
 
 export type Deadline = { date: string; time: string | null; timeZone: string; wording: string; boundary: "by" | "before" | "on" | "unspecified" }
 export type TaskFields = { action: string; requirements: string[]; condition: string | null; deadline: Deadline | null }
 export type StoredRow = Record<string, any>
 export type Snapshot = Record<string, StoredRow[]>
 
-// One shared Auth client: the OAuth implementation can reuse this session.
-// Public browser configuration only; never accept a privileged key here.
-const url = import.meta.env.VITE_SUPABASE_URL
-const publicKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-function configuredClient() {
-  if (import.meta.env.VITE_STORAGE_ENABLED !== "true" || !url || !publicKey || publicKey.startsWith("sb_secret_")) return null
-  try { return createClient(url, publicKey) } catch { return null }
-}
-export const storageClient = configuredClient()
+export const storageClient =
+  import.meta.env.VITE_STORAGE_ENABLED === "true" ? supabase : null
 
 const tables = {
   tasks: "tasks", suggestions: "storage_suggestions", extractions: "storage_extractions",

@@ -39,7 +39,8 @@ corepack pnpm build
 ```
 
 The production files are written to `Checkpoint 3/app/web/dist`. No environment
-variables are required for this demo.
+variables are required for the preview demo. Authenticated use requires the
+frontend variables listed in `Checkpoint 3/app/web/.env.example`.
 
 ## Vercel deployment
 
@@ -47,12 +48,23 @@ variables are required for this demo.
 2. Set the **Root Directory** to `Checkpoint 3/app/web`.
 3. Use the Vite framework preset, install command `pnpm install --frozen-lockfile`,
    build command `pnpm build`, and output directory `dist`.
-4. Do not add environment variables for the current prototype.
+4. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for the
+   Production, Preview, and Development environments that should support sign-in.
+   These are browser configuration values; never add a service-role key or
+   `GEMINI_API_KEY` to Vite variables.
+5. In Supabase Auth, enable Google and configure its OAuth client. Set the
+   Supabase Auth site URL to the production app origin and add the exact Vercel
+   preview and local origins to the redirect allow list. Register the Supabase
+   Google callback URL in the Google OAuth client. Use profile/email scopes
+   only; Gmail access requires separate future authorization.
+6. Apply the version-controlled migrations only after reviewing/reconciling the
+   hosted migration history. This frontend change does not apply or deploy them.
 
-The app opens with an honest unavailable state because authentication, Gmail,
-Google Calendar, and background processing are not configured. Select
-**Preview onboarding** to walk through setup with a fictional Gmail account, or
-select **Explore demo** to skip directly to the sample dashboard. Preview scans,
-connection actions, calendar-event previews, and preference edits only update
-local in-memory state; they do not access external accounts, process real
-messages, or save preferences to Supabase.
+Without the Supabase frontend variables, Google sign-in remains unavailable.
+Select **Preview onboarding** to walk through setup with a fictional Gmail
+account, or select **Explore demo** to skip directly to the sample dashboard.
+Preview scans, connection actions, calendar-event previews, and preference
+edits only update local in-memory state; they do not access external accounts,
+process real messages, or save preferences to Supabase. In authenticated mode,
+onboarding preferences are saved to the signed-in user’s row. Gmail remains
+unauthorized and scanning stays disabled.

@@ -12,7 +12,8 @@ select ok(not has_table_privilege('authenticated','public.user_onboarding_prefer
 
 insert into auth.users(id,email) values
  ('11111111-1111-4111-8111-111111111111','a@example.org'),
- ('22222222-2222-4222-8222-222222222222','b@example.org');
+ ('22222222-2222-4222-8222-222222222222','b@example.org'),
+ ('33333333-3333-4333-8333-333333333333','new-preferences@example.org');
 insert into public.user_onboarding_preferences(user_id,included_types) values
  ('11111111-1111-4111-8111-111111111111',array['School']),
  ('22222222-2222-4222-8222-222222222222',array['Finance']);
@@ -24,11 +25,14 @@ select results_eq(
   array['School']::text[],
   'user A reads only their own preferences'
 );
+-- The creation check needs an owner without an already-seeded preference row.
+select set_config('request.jwt.claims','{"sub":"33333333-3333-4333-8333-333333333333","role":"authenticated"}',true);
 select lives_ok(
   $$insert into public.user_onboarding_preferences(user_id,selected_sources)
-    values ('11111111-1111-4111-8111-111111111111',array['professor@example.org'])$$,
+    values ('33333333-3333-4333-8333-333333333333',array['professor@example.org'])$$,
   'owner can create preferences'
 );
+select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}',true);
 select throws_ok(
   $$insert into public.user_onboarding_preferences(user_id,included_types)
     values ('22222222-2222-4222-8222-222222222222',array['Forged'])$$,

@@ -49,8 +49,8 @@ test('empty allowlist prevents inference', async () => {
   const result = await run(x, async () => { calls++; throw new Error('must not run'); });
   assert.equal(result.reason, 'NO_ALLOWLIST'); assert.equal(calls, 0); assert.equal(result.modelCalls, 0);
 });
-test('allow keywords/senders/domains combine with OR; exclusions always win', async () => {
-  for (const field of ['keywords', 'senders', 'domains']) {
+test('allow senders/domains combine with OR; exclusions always win', async () => {
+  for (const field of ['senders', 'domains']) {
     const x = input(); x.rules.allow = { labels: [], senders: [], domains: [] };
     x.rules.allow[field] = [field === 'keywords' ? 'reading' : field === 'senders' ? 'lee@example.org' : 'example.org'];
     assert.equal(prepared(x).status, 'prepared');
@@ -318,31 +318,25 @@ test('responseSchema adapter is applied to provider request only; strict backend
 });
 
 
-test('phrase filters match only subject and parsed sender; exclusions win and tags never grant permission', async () => {
-  for (const [phrase, from, subject] of [
-    ['PROJECT DEADLINE','person@outside.test','Updated project deadline'],
-    ['professor','Professor Name <professor@outside.test>','Unrelated'],
-    ['outside.test','person@outside.test','Unrelated'],
-  ]) {
-    const x=input(); x.rules.allow={senders:[],domains:[],keywords:[phrase]};
-    x.message.from=from; x.message.subject=subject;
-    assert.equal(prepared(x).status,'prepared');
-    x.rules.block.keywords=[phrase]; let calls=0;
-    assert.equal((await run(x,async()=>{calls++;})).reason,'EXCLUDED'); assert.equal(calls,0);
+test('obsolete phrase permissions fail closed, even with exact sources', async () => {
+  for (const group of ['allow','block']) {
+    const x=input(); x.rules[group].keywords=['reading'];
+    let calls=0;
+    assert.equal((await run(x,async()=>{calls++;})).reason,'RULE_REVIEW_REQUIRED');
+    assert.equal(calls,0);
   }
-  const x=input(); x.rules.allow={senders:[],domains:[],keywords:['secret']};
-  x.message.from='Secret Display <person@outside.test>';x.message.subject='Unrelated';x.message.body='secret';
-  assert.equal(prepared(x).reason,'NOT_ALLOWED');
-  x.rules.allow={labels:['CP2-fixture'],senders:[],domains:[]};
+  const x=input(); x.rules.allow={senders:[],domains:[]}; x.semanticPreferences={include:['School'],exclude:[]};
   assert.equal(prepared(x).reason,'NO_ALLOWLIST');
-  for(const keywords of [null,[''],['x'.repeat(255)],Array(201).fill('x'),[4]]) {
-    x.rules.allow={senders:[],domains:[],keywords};assert.throws(()=>prepared(x),/INVALID_RULES/);
-  }
 });
 
-test('phrase exclusions independently remove earlier context', () => {
-  const x=input('E08');x.rules.block.keywords=['student@example.org'];
-  const p=prepared(x);assert.equal(p.status,'prepared');
-  assert.ok(!JSON.stringify(p.payload).includes('Just uploaded them'));
-  assert.ok(p.payload.contextWarnings.some(w=>w.includes('privacy')));
+test('context accepts 365 days and measures age from analyzed message', () => {
+ const x=input('E07'); x.contextLimits={maxMessages:10,maxAgeDays:365};
+ assert.equal(prepared(x).status,'prepared');
+ x.contextLimits.maxAgeDays=366; assert.throws(()=>prepared(x),/INVALID_LIMITS/);
+});
+
+test('semantic preferences are a separate bounded payload and cannot alter source permission',()=>{
+ const x=input();x.semanticPreferences={include:[' School ','school'],exclude:['Financial']};
+ assert.deepEqual(prepared(x).payload.semanticPreferences,{include:['school'],exclude:['financial']});
+ x.semanticPreferences.include=['a'.repeat(255)];assert.throws(()=>prepared(x),/INVALID_SEMANTIC_PREFERENCES/);
 });

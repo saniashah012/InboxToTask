@@ -100,16 +100,34 @@ try {
   const rpc=(user,name,body={})=>userRequest(user,`/rest/v1/rpc/${name}`,{method:'POST',body});
   const initial=await rpc(a,'scan_settings_get');assert.equal(initial.status,200);
   const phraseSettings={p_revision:initial.data.revision,p_rules:{
-    allow:{labels:[],senders:[],domains:[],keywords:[' Assignment ','assignment'],subjectKeywords:[]},
-    block:{labels:[],senders:[],domains:[],keywords:['receipt'],subjectKeywords:['old subject']},
-  },p_context:initial.data.context_limits,p_consent:false,p_paused:true,p_disclosure:null};
+    allow:{labels:[],domains:[],keywords:[],senders:['teacher@example.org'],subjectKeywords:[]},
+    block:{labels:[],senders:[],domains:[],keywords:[],subjectKeywords:['old subject']},
+  },p_semantic:{include:[' School ','school'],exclude:['Financial']},p_context:initial.data.context_limits,p_consent:false,p_paused:true,p_disclosure:null};
   const saved=await rpc(a,'scan_settings_save',phraseSettings);assert.equal(saved.status,200);
-  assert.deepEqual(saved.data.rules.allow.keywords,['assignment']);assert.equal(saved.data.consent,false);
-  assert.deepEqual((await rpc(a,'scan_settings_get')).data.rules.block.keywords,['receipt']);
+  assert.deepEqual(saved.data.semantic_preferences.include,['school']);assert.equal(saved.data.consent,false);
+  assert.deepEqual((await rpc(a,'scan_settings_get')).data.rules.block.subjectKeywords,['old subject']);
   assert.equal((await rpc(a,'scan_settings_save',phraseSettings)).status,409);
   assert.deepEqual((await rpc(b,'scan_settings_get')).data.rules.allow.keywords,[]);
   assert.ok((await request('/rest/v1/rpc/scan_settings_get',{method:'POST',body:{}})).status>=400);
-  check('phrase settings persist through HTTP, normalize, isolate owners and reject stale saves without consent');
+  const scanAnonymous=await request('/functions/v1/gmail_scan',{method:'POST',body:{mode:'initial'}});assert.equal(scanAnonymous.status,401);
+  const scanDisabled=await userRequest(a,'/functions/v1/gmail_scan',{method:'POST',body:{mode:'initial'}});assert.equal(scanDisabled.status,503);assert.equal(scanDisabled.data.error,'GMAIL_SCAN_DISABLED');
+  check('source and semantic settings persist through HTTP, normalize, isolate owners and reject stale saves without consent');
+  const scanBody={p_user:a.id,p_action:'claim',p_data:{mode:'initial'}};
+  assert.equal((await userRequest(a,'/rest/v1/rpc/gmail_scan_service',{method:'POST',body:scanBody})).status,403);
+  assert.equal((await request('/rest/v1/rpc/gmail_scan_service',{method:'POST',body:scanBody,key:status.SERVICE_ROLE_KEY})).status,409);
+  const stateHash='c'.repeat(64);
+  await service('google_connection_service',{p_user:a.id,p_action:'start',p_data:{hash:stateHash,email:a.email,verifier:'fictional-ciphertext'}});
+  const pending=await service('google_connection_service',{p_user:null,p_action:'consume',p_data:{hash:stateHash}});
+  await service('google_connection_service',{p_user:a.id,p_action:'finish',p_data:{generation:pending.generation,email:a.email,subject:'12345',credentials:'fictional-ciphertext',scopes:['https://www.googleapis.com/auth/gmail.readonly'],expiresAt:'2099-01-01T00:00:00Z'}});
+  const consentSettings={...phraseSettings,p_revision:saved.data.revision,p_consent:true,p_paused:false,p_disclosure:'gmail-scan-v1'};
+  const consentSaved=await rpc(a,'scan_settings_save',consentSettings);assert.equal(consentSaved.status,200);
+  const scanClaim=await service('gmail_scan_service',scanBody);assert.equal(scanClaim.state,'claimed');
+  assert.equal((await service('gmail_scan_service',scanBody)).state,'busy');
+  assert.equal((await service('gmail_scan_service',{p_user:a.id,p_action:'assert',p_data:{lease:scanClaim.lease}})).state,'current');
+  const paused=await rpc(a,'scan_settings_save',{...consentSettings,p_revision:consentSaved.data.revision,p_paused:true});assert.equal(paused.status,200);
+  assert.equal((await request('/rest/v1/rpc/gmail_scan_service',{method:'POST',body:{p_user:a.id,p_action:'assert',p_data:{lease:scanClaim.lease}},key:status.SERVICE_ROLE_KEY})).status,409);
+  check('manual scan HTTP coordination denies browser roles, requires consent, serializes claims and fences changed settings (fictional connection, no Gmail calls)');
+
 
 } finally {
   let failures=0;

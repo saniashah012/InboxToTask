@@ -2,23 +2,23 @@
 
 This is a local React + TypeScript + Vite application imported from Figma. It does not require Figma Make to run. Check running processes/ports before starting a server; do not assume one exists or that `$PORT` is configured.
 
+See [current implementation state](../../CURRENT_STATE.md) before interpreting dated UI reports.
+
 ## Entry points and integration boundaries
 
-- [src/main.tsx](src/main.tsx) mounts React and chooses the route. `/` uses the prototype. `/storage` and its Auth callback require a local-host Vite development server plus `VITE_STORAGE_ENABLED=true`. Production builds omit the dashboard entirely and show Page not found for `/storage` paths, regardless of flags. Product OAuth must use a separate production callback when onboarding is integrated.
-- [src/App.tsx](src/App.tsx), [src/previewAdapter.ts](src/previewAdapter.ts), and [src/demoData.ts](src/demoData.ts) implement the simulated prototype/onboarding. Preview actions do not establish real backend behavior.
-- [src/StorageDashboard.tsx](src/StorageDashboard.tsx) implements authenticated storage review; [src/storageAdapter.ts](src/storageAdapter.ts) owns the shared Supabase client, reads, RPC calls, and fixed user-facing errors. Reuse the shared client/session when integrating OAuth; avoid adding another Auth client per component.
+- [src/main.tsx](src/main.tsx) mounts React and chooses the route. `/` presents sign-in/fictional preview and routes normal signed-in users to the persistent workspace. `/storage` and its Auth callback require a local-host Vite development server plus `VITE_STORAGE_ENABLED=true`. Production builds omit the development StorageDashboard and show Page not found for `/storage` paths, regardless of flags. Product sign-in preserves the root-origin return; verify the backend Google return destination before live product acceptance.
+- [src/App.tsx](src/App.tsx) owns shared Auth and selects real versus preview UI. [src/ManualWorkspace.tsx](src/ManualWorkspace.tsx) and [src/manualScanAdapter.ts](src/manualScanAdapter.ts) implement persistent product scan/review wiring; authenticated browser acceptance is pending. [src/previewAdapter.ts](src/previewAdapter.ts) and [src/demoData.ts](src/demoData.ts) remain fictional preview only.
+- [src/StorageDashboard.tsx](src/StorageDashboard.tsx) implements authenticated storage review; [src/storageAdapter.ts](src/storageAdapter.ts) provides reads/RPCs and fixed errors using the singleton client in [src/supabase.ts](src/supabase.ts). Reuse the shared client/session when integrating OAuth; avoid adding another Auth client per component.
 - [src/index.css](src/index.css) supplies global Tailwind v4 styling; [src/storage.css](src/storage.css) scopes storage UI styles. Follow the surrounding component's conventions and avoid broad restyling during integration work.
 - [vite.config.ts](vite.config.ts) configures React, Tailwind, and the `@` alias. Runtime/tool versions and scripts come from [package.json](package.json).
 
-Preserve both routes unless the task explicitly replaces the prototype. Do not silently wire simulated connection/calendar controls to real services. The storage route currently supports fixture trials, not Gmail retrieval or Calendar execution.
+Preserve real, preview and development routes unless the task explicitly changes them. Do not silently wire simulated connection/calendar controls to real services. The storage route currently supports fixture trials, not Gmail retrieval or Calendar execution.
 
 Product onboarding must use Google sign-in without a separate password account,
 saved scanning consent/source rules, and optional Calendar connection with Skip
 for now. Add production callback/return routes before enabling hosted OAuth.
 Preserve the [custom sender/domain/subject filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan),
-using app-defined editable words/phrases plus exact sender/domain rules. Presets
-expand into visible terms; phrase matching uses subject or parsed sender address/domain
-with OR inclusions and overriding exclusions. Preserve custom inputs and accessible help.
+using exact sender/domain access rules, optional literal subject exclusions, and separate semantic topics. Topics never grant access and are evaluated only after permitted content reaches Gemini. Preserve custom inputs and accessible help. Previous phrase rules require explicit review; never infer categories from expanded terms.
 
 ## Commands
 

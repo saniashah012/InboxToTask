@@ -1,11 +1,13 @@
 // Runtime-independent logic: no env/file access, credentials, database, or SDK.
-import schema from '../prompts/extraction.schema.mjs';
+import schema, { gmailSchema } from '../prompts/extraction.schema.mjs';
 
 export class PipelineError extends Error {
   constructor(code) { super(code); this.name = 'PipelineError'; this.code = code; }
 }
 const fail = (code) => { throw new PipelineError(code); };
 const norm = (value) => value.replace(/\s+/g, ' ').trim();
+const canonical = v => Array.isArray(v) ? v.map(canonical) : v && typeof v==='object' ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])) : v;
+const same = (a,b) => JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 const bounded = (n, min, max) => Number.isInteger(n) && n >= min && n <= max;
 export function address(value) {
   if (typeof value !== 'string') fail('INVALID_ADDRESS');
@@ -39,15 +41,15 @@ function validateRules(rules) {
   }
 }
 export function filterMessage(message, rules) {
+  if (['allow','block'].some(g => ['keywords','labels'].some(f => rules[g][f]?.length) || (g === 'allow' && rules[g].subjectKeywords?.length))) return 'RULE_REVIEW_REQUIRED';
   const sender = address(message.from), domain = sender.split('@')[1];
   // Legacy mailbox tags never grant permission; legacy subject blocks stay subject-only.
   const contains = (values, fields) => (values ?? []).some((value) =>
     fields.some((field) => field.toLowerCase().includes(value.trim().toLowerCase())));
   const matches = (r) => r.senders.some((s) => address(s) === sender)
-    || r.domains.some((d) => d.trim().toLowerCase() === domain)
-    || contains(r.keywords, [message.subject, sender, domain]);
+    || r.domains.some((d) => d.trim().toLowerCase() === domain);
   if (matches(rules.block) || contains(rules.block.subjectKeywords, [message.subject])) return 'EXCLUDED';
-  if (![...rules.allow.senders, ...rules.allow.domains, ...(rules.allow.keywords ?? [])].length) return 'NO_ALLOWLIST';
+  if (![...rules.allow.senders, ...rules.allow.domains].length) return 'NO_ALLOWLIST';
   return matches(rules.allow) ? 'PERMITTED' : 'NOT_ALLOWED';
 }
 export function cleanBody(body) {
@@ -62,20 +64,42 @@ export function cleanBody(body) {
   }
   return { body: kept.join('\n').trim(), removed };
 }
+export function semanticPreferences(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || Object.keys(value).length !== 2 || !Object.hasOwn(value,'include') || !Object.hasOwn(value,'exclude')) fail('INVALID_SEMANTIC_PREFERENCES');
+  const result = {};
+  for (const group of ['include','exclude']) {
+    if (!Array.isArray(value[group]) || value[group].length > 200
+      || !value[group].every(s => typeof s === 'string' && s.trim().length >= 1 && s.trim().length <= 254 && !/[\x00-\x1f\x7f]/.test(s))) fail('INVALID_SEMANTIC_PREFERENCES');
+    result[group] = [...new Set(value[group].map(s=>s.trim().toLowerCase()))];
+  }
+  return result;
+}
 export function prepareInput(input, defaults) {
   if (!input?.user || !validTimeZone(input.user.timeZone) || !validTimestamp(input.analysisTime)) fail('INVALID_INPUT');
   const email = address(input.user.email);
   validateRules(input.rules);
+  const semantic = input.semanticPreferences === undefined ? null : semanticPreferences(input.semanticPreferences);
+  const gmail = input.contract === 'gmail-v1';
+  if (input.contract !== undefined && !gmail) fail('INVALID_CONTRACT');
+  const existing = gmail ? input.existingTaskContext : null;
+  if (gmail && (!Array.isArray(existing) || existing.length>10 || JSON.stringify(existing).length>12000
+    || existing.some(t=>!t || !/^[0-9a-f-]{36}$/i.test(t.id) || !Number.isSafeInteger(t.revision) || t.revision<0
+      || !t.acceptedFields || !Array.isArray(t.sourceMessageIds)))) fail('INVALID_TASK_CONTEXT');
   const m = input.message;
   validateMessage(m);
   const limits = { ...defaults, ...input.contextLimits };
-  if (!bounded(limits.maxMessages, 0, 10) || !bounded(limits.maxAgeDays, 1, 90)
+  if (!bounded(limits.maxMessages, 0, 10) || !bounded(limits.maxAgeDays, 1, 365)
     || !bounded(limits.maxMessageChars, 100, 30000) || !bounded(limits.maxTotalChars, 100, 60000)) fail('INVALID_LIMITS');
   const decision = filterMessage(m, input.rules);
   if (decision !== 'PERMITTED') return { status: 'skipped', messageId: m.id, reason: decision };
   if (Date.parse(m.sentAt) > Date.parse(input.analysisTime)) fail('FUTURE_MESSAGE');
   if (!Array.isArray(input.threadContext) || input.threadContext.length > 100) fail('INVALID_CONTEXT');
   const warnings = [];
+  if (gmail && input.retrievalWarnings!==undefined) {
+    if(!Array.isArray(input.retrievalWarnings)||input.retrievalWarnings.length>10||!input.retrievalWarnings.every(w=>typeof w==='string'&&w.length<=250))fail('INVALID_CONTEXT_WARNINGS');
+    warnings.push(...input.retrievalWarnings);
+  }
   const current = cleanBody(m.body);
   if (current.removed) warnings.push('Quoted history/signature removed; permitted originals must supply context.');
   if (!current.body || current.body.length > limits.maxMessageChars || current.body.length > limits.maxTotalChars) {
@@ -107,6 +131,8 @@ export function prepareInput(input, defaults) {
   }
   context.reverse();
   return { status: 'prepared', messageId: m.id, payload: {
+    ...(gmail ? { contract:'gmail-v1',existingTaskContext:existing } : {}),
+    ...(semantic ? { semanticPreferences: semantic } : {}),
     user: { email, timeZone: input.user.timeZone }, analysisTime: input.analysisTime,
     currentMessage: view(m, current.body), threadContext: context,
     contextWarnings: [...new Set(warnings)],
@@ -146,14 +172,38 @@ function pastDeadline(d, analysisTime) {
   return date > d.date || (date === d.date && d.time !== null && `${parts.hour}:${parts.minute}` > d.time);
 }
 export function validateExtraction(value, payload) {
-  validateSchema(value);
+  const gmail=payload.contract==='gmail-v1';
+  validateSchema(value,gmail?gmailSchema:schema);
   const sources = new Map([payload.currentMessage, ...payload.threadContext].map((m) => [m.id, m]));
   const verifyEvidence = (e) => {
     if (!sources.has(e.messageId) || !norm(sources.get(e.messageId).body).includes(norm(e.quote))) fail('UNGROUNDED_EVIDENCE');
   };
   verifyEvidence(value.evidence);
   if (value.evidence.messageId !== payload.currentMessage.id) fail('WRONG_CLASSIFICATION_SOURCE');
-  if ((value.category === 'Actionable') !== (value.tasks.length > 0)) fail('CATEGORY_TASK_MISMATCH');
+  if ((value.category === 'Actionable') !== (value.tasks.length > 0 || (gmail && value.taskChanges.some(c=>c.kind==='edit')))) fail('CATEGORY_TASK_MISMATCH');
+  if (gmail) {
+    const seen=new Set();
+    for (const change of value.taskChanges) {
+      verifyEvidence(change.evidence);
+      if (change.evidence.messageId!==payload.currentMessage.id) fail('WRONG_CHANGE_SOURCE');
+      if ((change.targetTaskId===null)!==(change.expectedRevision===null)) fail('INVALID_CHANGE_TARGET');
+      if (new Set(change.changedFields).size!==change.changedFields.length) fail('INVALID_CHANGE_FIELDS');
+      if (change.kind==='cancel' && (change.fields!==null || change.changedFields.length)) fail('INVALID_CHANGE_FIELDS');
+      if (change.kind==='edit' && (!change.fields || !change.changedFields.length)) fail('INVALID_CHANGE_FIELDS');
+      if (change.fields) validateDeadline(change.fields.deadline);
+      if (change.targetTaskId!==null) {
+        const target=payload.existingTaskContext.find(t=>t.id===change.targetTaskId && t.revision===change.expectedRevision);
+        if (!target || seen.has(target.id)) fail('INVALID_CHANGE_TARGET');
+        seen.add(target.id);
+        if (change.fields) for (const key of ['action','requirements','condition','deadline']) {
+          if (!change.changedFields.includes(key) && !same(change.fields[key],target.acceptedFields[key])) fail('OVERWRITTEN_USER_EDIT');
+        }
+      }
+    }
+    const prefs=payload.semanticPreferences;
+    if (prefs && !prefs.include.length && !prefs.exclude.length && (value.topicRelevance.decision!=='relevant'
+      || [...value.tasks,...value.waitingFor,...value.suggestedFollowUps,...value.taskChanges].some(i=>i.topicRelevance!=='relevant'))) fail('INVALID_TOPIC_RELEVANCE');
+  }
   for (const t of value.tasks) {
     if (t.owner.toLowerCase() !== payload.user.email) fail('WRONG_TASK_OWNER');
     verifyEvidence(t.evidence); validateDeadline(t.deadline);
@@ -169,15 +219,19 @@ export function validateExtraction(value, payload) {
 export async function extract(input, { settings, systemPrompt, generate }) {
   const prepared = prepareInput(input, settings.contextLimits);
   if (prepared.status !== 'prepared') return { ...prepared, modelCalls: 0 };
-  const generated = await generate({ payload: prepared.payload, systemPrompt, settings, schema });
+  const effectiveSchema=prepared.payload.contract==='gmail-v1'?gmailSchema:schema;
+  if (JSON.stringify(prepared.payload).length+systemPrompt.length+JSON.stringify(effectiveSchema).length>60000) fail('MODEL_INPUT_TOO_LARGE');
+  const generated = await generate({ payload: prepared.payload, systemPrompt, settings, schema:effectiveSchema });
   let result;
   try { result = validateExtraction(generated.value, prepared.payload); }
   catch (error) { if (error instanceof PipelineError) error.usage = generated.usage; throw error; }
   // Preserve the model's bounded schema; backend warnings live in the envelope
   // so they cannot be omitted by the model or overflow its uncertainties array.
   return { status: 'extracted', messageId: prepared.messageId, modelCalls: generated.attempts ?? 1,
+    ...(input.contract==='gmail-v1'?{contract:'gmail-v1'}:{}),
     returnedModelVersion: generated.modelVersion ?? null,
     contextWarnings: prepared.payload.contextWarnings,
-    needsReview: prepared.payload.contextWarnings.length > 0 || result.uncertainties.length > 0 || result.tasks.some((t) => t.deadline === null),
+    needsReview: prepared.payload.contextWarnings.length > 0 || result.uncertainties.length > 0 || result.tasks.some((t) => t.deadline === null)
+      || (result.topicRelevance?.decision==='uncertain') || result.taskChanges?.some(c=>c.targetTaskId===null) === true,
     result, usage: generated.usage, latencyMs: generated.latencyMs };
 }

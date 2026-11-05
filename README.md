@@ -1,3 +1,5 @@
+> **Working-tree navigation (November 5, 2026):** Start with [current implementation state](<Checkpoint 3/CURRENT_STATE.md>) and [repository instructions](AGENTS.md). Active code is under Checkpoint 3; earlier checkpoints and the project proposal below are historical requirements/context. For continuation, see [the Claude handoff](CLAUDE_HANDOFF.md). Code present does not imply local migrations are applied or live acceptance has passed.
+
 # 1. Project Title & Tagline
 
 ## **InboxToTask**

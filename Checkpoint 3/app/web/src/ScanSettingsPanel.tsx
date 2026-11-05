@@ -3,10 +3,10 @@ import { loadScanSettings, saveScanSettings, type ScanRules, type ScanSettings }
 import "./scan-settings.css"
 
 const fields = [
-  ["senders", "Sender email addresses"], ["domains", "Sender domains"], ["keywords", "Words or phrases"],
+  ["senders", "Sender email addresses"], ["domains", "Sender domains"],
 ] as const
 const limitFields = [
-  ["maxMessages", "Earlier messages", 0, 10], ["maxAgeDays", "Maximum context age (days)", 1, 90],
+  ["maxMessages", "Earlier messages", 0, 10], ["maxAgeDays", "Maximum context age (days)", 1, 365],
   ["maxMessageChars", "Characters per message", 100, 30000], ["maxTotalChars", "Total characters including current message", 100, 60000],
 ] as const
 
@@ -41,35 +41,35 @@ export default function ScanSettingsPanel() {
     const normalized = structuredClone(settings)
     for (const group of ["allow", "block"] as const) for (const field of ["labels", "senders", "domains", "subjectKeywords", "keywords"] as const)
       normalized.rules[group][field] = normalized.rules[group][field].map(v => v.trim()).filter(Boolean)
+    for (const group of ["include", "exclude"] as const) normalized.semantic_preferences[group] = normalized.semantic_preferences[group].map(v => v.trim()).filter(Boolean)
     try {
       const result = await saveScanSettings(normalized)
-      if (live.current) { setSettings(result); setNotice(`Saved revision ${result.revision}. No email was read. Scanning is not connected yet.`) }
+      if (live.current) { setSettings(result); setNotice(`Saved revision ${result.revision}. No email was read. Scanning requires a separate manual request.`) }
     } catch (err) { if (live.current) setError((err as Error).message) }
     finally { if (live.current) setBusy(false) }
   }
   return <section className="scan-settings" aria-labelledby={`${helpId}-title`}>
     <h2 id={`${helpId}-title`}>Scanning permission and sources</h2>
-    <p>These settings are saved to your account. Scanning is not connected yet. Connecting Gmail and saving filters alone do not grant scanning consent.</p>
+    <p>These settings are saved to your account. Scanning requires a separate manual request. Connecting Gmail and saving filters alone do not grant scanning consent.</p>
     {busy && <p role="status">Loading or saving settings…</p>}
     {error && <p role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <button type="button" disabled={busy} onClick={() => setReload(v => v + 1)}>Reload saved settings</button>
     {settings && <form onSubmit={e => { e.preventDefault(); void save() }}>
       <p aria-label="Current form scope">Current form scope: {([
-        ...settings.rules.allow.keywords.filter(v => v.trim()).map(v => `subject or sender contains ${v.trim()}`),
         ...settings.rules.allow.senders.filter(v => v.trim()).map(v => `sender ${v.trim()}`),
         ...settings.rules.allow.domains.filter(v => v.trim()).map(v => `domain ${v.trim()}`),
-      ].join(" OR ") || "No inclusions configured; nothing is permitted")}. Any matching exclusion blocks processing. Scanning remains unavailable.</p>
+      ].join(" OR ") || "No inclusions configured; nothing is permitted")}. Any matching exclusion blocks processing. Saving does not start a scan.</p>
       <fieldset disabled={busy}>
-        <legend>Words, phrases, and sender filters</legend>
+        <legend>Source access permissions</legend>
         <span className="scan-help" onMouseEnter={() => setHelp(true)} onMouseLeave={() => setHelp(false)}>
           <button type="button" aria-label="About sender, domain, and subject filters" aria-expanded={help} aria-controls={helpId}
             onFocus={() => setHelp(true)} onBlur={() => setHelp(false)} onClick={() => setHelp(true)}
             onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setHelp(false) } }}>ⓘ</button>
-          {help && <span id={helpId} role="tooltip">Words and phrases match subject lines or sender addresses/domains. Sender and domain controls match exactly. Bodies are not searched for filtering. Inclusions combine with OR; exclusions always win.</span>}
+          {help && <span id={helpId} role="tooltip">Sender and domain controls match exactly. Optional subject exclusions match literal text without case sensitivity. Bodies are not searched for access decisions. Inclusions combine with OR; exclusions always win.</span>}
         </span>
         <p>One entry per line; up to 200 entries of 254 characters per list. Domains do not include subdomains. Words and phrases match literal text without case sensitivity.</p>
-        <p>Words and phrases can include or exclude messages. Permitted bodies may still be analyzed for task extraction; metadata filters do not classify sensitive topics.</p>
+        <p>With no topics of interest selected, all source-permitted topics qualify; semantic exclusions still apply. Semantic topics never grant access. Permitted bodies may be sent to Gemini before semantic relevance is known.</p>
         {fields.map(([field, label]) => <div className="scan-rule-pair" key={field}>
           {(["allow", "block"] as const).map(group =>
             <label key={group}>{group === "allow" ? "Include" : "Exclude"}: {label}
@@ -77,10 +77,20 @@ export default function ScanSettingsPanel() {
             </label>)}
         </div>)}
       </fieldset>
-      {settings.rules.block.subjectKeywords.length > 0 && <p>Previous subject-only exclusions: {settings.rules.block.subjectKeywords.join(", ")}. These retain their original scope.</p>}
+      <fieldset disabled={busy}><legend>Subject exclusions</legend><label>Exclude subjects containing (one literal phrase per line)
+        <textarea value={settings.rules.block.subjectKeywords.join("\n")} onChange={e => list("block", "subjectKeywords", e.target.value)} /></label></fieldset>
+      <fieldset disabled={busy}><legend>Semantic preferences</legend><p>Topics are evaluated by Gemini after source permission. Semantic exclusions cannot prevent transmission to Gemini.</p>
+        {(["include", "exclude"] as const).map(group => <label key={group}>{group === "include" ? "Topics of interest" : "Topics to omit from results"}
+          <textarea value={settings.semantic_preferences[group].join("\n")} onChange={e => setSettings({ ...settings, semantic_preferences: { ...settings.semantic_preferences, [group]: e.target.value.split("\n") } })} /></label>)}
+      </fieldset>
+      {settings.requires_review && <fieldset disabled={busy}><legend>Previous phrase rules require review</legend>
+        <p>Scanning was paused and consent revoked. Previous phrases cannot safely be converted to source permissions or semantic topics. Review these rules and choose exact sources and subject exclusions above.</p>
+        <pre>{JSON.stringify(settings.legacy_phrase_rules, null, 2)}</pre>
+        <label><input type="checkbox" required checked={settings.reviewed ?? false} onChange={e => setSettings({ ...settings, reviewed: e.target.checked })} />I reviewed and replaced the previous phrase rules.</label>
+      </fieldset>}
       <fieldset disabled={busy}>
         <legend>Context limits</legend>
-        <p>Each earlier message must independently pass current permissions. Zero earlier messages is the starting setting. Quoted-text removal is imperfect.</p>
+        <p>Each earlier message must independently pass current permissions. New accounts default to five earlier messages within 90 days. Existing saved limits are preserved. Age is measured backward from the current message; zero disables earlier context. Quoted-text removal is imperfect.</p>
         {limitFields.map(([field, label, min, max]) => <label key={field}>{label} ({min}–{max})
           <input type="number" required step="1" min={min} max={max} value={settings.context_limits[field]}
             onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, context_limits: { ...settings.context_limits, [field]: e.target.valueAsNumber } }) }} />
@@ -88,7 +98,7 @@ export default function ScanSettingsPanel() {
       </fieldset>
       <fieldset disabled={busy}>
         <legend>Consent and pause</legend>
-        <p>When scanning becomes available, permitted bodies and selected context may be sent to the configured Gemini service for extraction. Full bodies are transient. Supporting excerpts and unreviewed results currently expire after 30 days; accepted tasks remain until completion or deletion. Minimal source identifiers and suppression records remain until account deletion. Provider and backup retention are separate and provider terms still require verification before real-email processing.</p>
+        <p>During an authorized manual scan, permitted bodies and selected context may be sent to the configured Gemini service for extraction. Full bodies are transient. Supporting excerpts and unreviewed results currently expire after 30 days; accepted tasks remain until completion or deletion. Minimal source identifiers and suppression records remain until account deletion. Provider and backup retention are separate and provider terms still require verification before real-email processing.</p>
         <p>Rules affect queued and future processing. Changes cannot retract content already transmitted. Existing results remain available unless separately deleted. Task approval never authorizes Calendar writes.</p>
         <label className="scan-checkbox"><input type="checkbox" checked={settings.consent} onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, consent: e.target.checked }) }} />I consent to processing permitted Gmail content under the disclosure above.</label>
         <label className="scan-checkbox"><input type="checkbox" checked={settings.paused} onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, paused: e.target.checked }) }} />Pause scanning</label>

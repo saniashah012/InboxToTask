@@ -1,11 +1,12 @@
 # Supabase backend guidance
 
-Read [setup](README.md) for local commands and [the storage contract](STORAGE.md) for tables, RPCs, limits, and retention. Treat dated reports as evidence rather than proof that a stack is currently running.
+Read [setup](README.md) for local commands and [the storage contract](STORAGE.md) for tables, RPCs, limits, and retention. Use [current implementation state](../../CURRENT_STATE.md) for pending migrations and latest evidence. Treat dated reports as evidence rather than proof that a stack is currently running.
 
 ## Entry points
 
 - [Migrations](migrations/) define tables, grants, RLS, review transactions, and lifecycle behavior. Use a new ordered migration for changes to an already-shared/applied schema; preserve existing rows and migration history.
 - [analysis_email](functions/analysis_email/index.ts) verifies Auth and connects the canonical extraction pipeline to [the storage coordinator](functions/_shared/storage.mjs). [The fixture handler](functions/_shared/fixture-handler.mjs) accepts only case IDs, not caller-selected identity, email bodies, prompts, or model settings.
+- [gmail_scan](functions/gmail_scan/index.ts) is a separate authenticated manual endpoint, disabled by default. It supports retrieval-only and persistent modes; canonical [retrieval](../pipeline/gmail-retrieval.mjs) and [processing](../pipeline/gmail-processor.mjs) are staged by `supabase:prepare`. Pending persistence/status migrations and live acceptance must be verified before use.
 - [storage_cleanup](functions/storage_cleanup/index.ts) is disabled by default and uses its own scheduler credential. [The optional schedule installer](operations/install_cleanup_schedule.sql) is a separate deployment operation, not an automatically installed migration or scan scheduler.
 - [Config](config.toml) is local runtime configuration. A linked hosted project does not make hosted schema/function changes part of a local task.
 

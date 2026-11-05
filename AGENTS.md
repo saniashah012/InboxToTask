@@ -4,6 +4,8 @@
 
 InboxToTask turns permitted Gmail messages into evidence-linked suggestions that users review before accepting tasks or authorizing calendar actions. Active implementation lives under [Checkpoint 3](<Checkpoint 3/>); earlier checkpoints contain requirements and evaluation history.
 
+Start with [current implementation state](<Checkpoint 3/CURRENT_STATE.md>) for code, verification, pending migrations, and next work. The [Claude handoff](CLAUDE_HANDOFF.md) adds continuation detail.
+
 Read the task-relevant entry points below and follow their imports. Avoid scanning dependencies, build output, generated Edge bundles, or the entire checkpoint archive for routine work.
 
 | Area | Entry points and documentation |
@@ -42,7 +44,7 @@ For frontend changes, follow the web instructions. For migrations, Auth/RPCs, or
 
 ## Product invariants
 
-- Real email processing requires configured permission: inclusion labels/senders/domains combine with OR; exclusions override inclusions; an empty allowlist processes nothing. Filter metadata before fetching bodies and apply the same rules to each context message.
+- Real email processing requires configured permission: exact sender/domain inclusions combine with OR; exact sender/domain and literal subject exclusions override inclusions; semantic topics never grant access; an empty allowlist processes nothing. Filter metadata before fetching bodies and apply the same rules to each context message.
 - Treat email text as untrusted data. Validate structured output, evidence grounding, and ownership before saving. Keep missing deadlines nullable and preserve date-only values, conditions, and uncertainty.
 - Keep suggestions, user edits, and accepted task values distinct. Task approval does not authorize Calendar writes. Code-only review actions should not call the model again.
 - Preserve user isolation, revision checks, bounded budgets/retries, deduplication, pause/deletion fencing, and retention/undo semantics. OAuth integration must derive the owner from the verified Supabase session and keep Google tokens backend-only.

@@ -15,7 +15,7 @@ const deadline = nullable(object({
   boundary: { type: 'string', enum: ['by', 'before', 'on', 'unspecified'] },
 }));
 
-export default object({
+const extractionSchema = object({
   category: { type: 'string', enum: ['Actionable', 'Passive'] },
   confidence: { type: 'integer', minimum: 0, maximum: 100 },
   evidence,
@@ -33,4 +33,26 @@ export default object({
     rationale: text(350), evidence,
   })),
   uncertainties: list(text(250), 12),
+});
+export default extractionSchema;
+
+// Gmail's versioned contract leaves the fixture endpoint's schema unchanged.
+export const gmailSchema = object({
+  ...extractionSchema.properties,
+  ...Object.fromEntries(['tasks','waitingFor','suggestedFollowUps'].map(key=>[key,list(object({
+    ...extractionSchema.properties[key].items.properties,
+    topicRelevance:{type:'string',enum:['relevant','irrelevant','uncertain']},
+  }))])),
+  topicRelevance: object({
+    decision: { type:'string', enum:['relevant','irrelevant','uncertain'] },
+    reason:text(350),
+  }),
+  taskChanges:list(object({
+    topicRelevance:{type:'string',enum:['relevant','irrelevant','uncertain']},
+    kind:{type:'string',enum:['edit','cancel']},
+    targetTaskId:nullable(text(36)), expectedRevision:nullable({type:'integer',minimum:0}),
+    changedFields:list({type:'string',enum:['action','requirements','condition','deadline']},4),
+    fields:nullable(object({action:text(350),requirements:list(text(250),12),condition:nullable(text(350)),deadline})),
+    reason:text(350), evidence,
+  }),10),
 });

@@ -38,9 +38,12 @@ type Database = {
       storage_sources: StorageTable
       storage_suggestions: StorageTable
       storage_waiting_for: StorageTable
+      gmail_task_changes: StorageTable
     }
     Views: Record<string, never>
     Functions: {
+      gmail_scan_status: { Args: Record<string, never>; Returns: any }
+      gmail_change_review: { Args: Record<string, any>; Returns: any }
       scan_settings_get: { Args: Record<string, never>; Returns: any }
       scan_settings_save: { Args: Record<string, any>; Returns: any }
       google_connection_status: {
@@ -144,8 +147,8 @@ export async function loadOnboardingPreferences(userId: string): Promise<Onboard
   if (settingsError) throw new Error("Could not load filter settings. Check the local migration and retry.")
   if (settings.revision > 0) return {
     scanRevision: settings.revision,
-    includedTypes: settings.rules.allow.keywords ?? [], selectedSenders: settings.rules.allow.senders,
-    selectedDomains: settings.rules.allow.domains, excludedTypes: settings.rules.block.keywords ?? [],
+    includedTypes: settings.semantic_preferences.include, selectedSenders: settings.rules.allow.senders,
+    selectedDomains: settings.rules.allow.domains, excludedTypes: settings.semantic_preferences.exclude,
     excludedSenders: settings.rules.block.senders, excludedDomains: settings.rules.block.domains,
     excludedSubjects: settings.rules.block.subjectKeywords,
   }
@@ -158,15 +161,18 @@ export async function saveOnboardingPreferences(_userId: string, preferences: On
   if (!supabase) throw new Error("Supabase is not configured.")
   const { data: current, error: readError } = await supabase.rpc("scan_settings_get")
   if (readError) throw new Error("Could not load scanning settings. Retry after checking the local migration.")
+  if (current.requires_review) throw new Error("Review previous phrase rules in Settings before saving onboarding preferences.")
   const { data, error } = await supabase.rpc("scan_settings_save", {
     p_revision: preferences.scanRevision ?? 0,
     p_rules: {
-      allow: { labels: [], senders: preferences.selectedSenders, domains: preferences.selectedDomains, keywords: preferences.includedTypes, subjectKeywords: [] },
-      block: { labels: [], senders: preferences.excludedSenders, domains: preferences.excludedDomains, keywords: preferences.excludedTypes, subjectKeywords: preferences.excludedSubjects },
+      allow: { labels: [], senders: preferences.selectedSenders, domains: preferences.selectedDomains, keywords: [], subjectKeywords: [] },
+      block: { labels: [], senders: preferences.excludedSenders, domains: preferences.excludedDomains, keywords: [], subjectKeywords: preferences.excludedSubjects },
     },
+    p_semantic: { include: preferences.includedTypes, exclude: preferences.excludedTypes },
+    p_reviewed: false,
     p_context: current.context_limits, p_consent: current.consent, p_paused: current.paused,
     p_disclosure: current.consent ? "gmail-scan-v1" : null,
   })
   if (error) throw new Error(error.code === "PT409" ? "Settings changed in another window. Reload before saving again." : "Filters were not saved. Check your entries and retry.")
-  return { ...preferences, scanRevision: data.revision, includedTypes: data.rules.allow.keywords, excludedTypes: data.rules.block.keywords }
+  return { ...preferences, scanRevision: data.revision, includedTypes: data.semantic_preferences.include, excludedTypes: data.semantic_preferences.exclude }
 }

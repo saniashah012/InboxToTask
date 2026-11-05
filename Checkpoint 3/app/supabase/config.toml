@@ -449,3 +449,8 @@ enabled = true
 # Google redirects without a Supabase bearer. Single-use state authorizes callback.
 verify_jwt = false
 entrypoint = "./functions/google_callback/index.ts"
+
+[functions.gmail_scan]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/gmail_scan/index.ts"

@@ -72,7 +72,7 @@ export async function googleConnectionStatus(): Promise<GoogleStatus> {
   if (error) throw new Error("Could not load Google connection status. Check the backend setup.")
   return data
 }
-export async function googleConnectionAction(action: "connect" | "check" | "disconnect") {
+export async function googleConnectionAction(action: "connect" | "connect_calendar" | "check" | "disconnect") {
   if (!supabase) throw new Error("Account connection is not configured.")
   const { data, error } = await supabase.functions.invoke("google_connection", { body: { action } })
   if (error) {

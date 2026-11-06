@@ -405,7 +405,7 @@ successful by the user; the remaining live checklist and hosted setup remain.
 
 ### CP3.5 Approval, calendars, and lifecycle
 
-Connected Calendar items below are postponed to CP4 by user decision. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is on GitHub and not merged, with offline tests reported passing and no live test. Its recorded OAuth reconnect failures block release. Sania's original branch is on origin.
+Connected Calendar items below are postponed to CP4 by user decision. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261110000000`) is on GitHub and not merged, with offline tests reported passing and no live test. Its recorded OAuth reconnect failures block release. Sania's original branch is on origin.
 
 - [ ] CP4: set the supported Calendar destination model and least necessary scopes; implement optional onboarding connection and later connection from Add to Calendar/settings. Calendar connection may not be required for sign-in, Gmail processing, or task approval.
 - [ ] Keep task approval separate from calendar authorization; enforce approval server-side. Review RPCs and separate calendar approval records exist; the future Calendar executor must enforce these approvals before external writes.

@@ -17,16 +17,17 @@ suppress raw errors: a parser error once printed a secret (see Security below).
 | Item | State |
 | --- | --- |
 | `main` | `e2b0009`, does not have this work |
-| [PR #22](https://github.com/saniashah012/InboxToTask/pull/22) `mzheng/gmail-scan-hardening` | Includes `cef7f06` and later `ffa915a`, **not merged**. CI was green on `cef7f06`; recheck the head |
+| [PR #22](https://github.com/saniashah012/InboxToTask/pull/22) `mzheng/gmail-scan-hardening` | Pushed through `fe4a654` (docs and draft deck), **not merged**. CI was green on `cef7f06`; check the head |
 | `feadf66` | Live-test fixes, manual resolution of ambiguous updates, test log |
 | `cef7f06` | Source-email links from another session, kept as a separate commit by user request |
 | PR #20 (Sania, chips) | Open, separate. Both it and PR #22 change `STORAGE.md` |
 | Calendar branch `agents/proceed-with-the-minimal-google-calendar-integra` at `b6f84e6` (Sania) | Pushed, unmerged. Based on a cherry-pick of `4bb256b`, so it needs a rebase |
 
-**Ownership right now:** another session owns the hosted rollout questions, the shared OAuth
-review of Sania's Calendar branch, and the "nine restore errors" question. Its untracked
-`Checkpoint 3/docs/hosted-backup-verification-2026-11-06.md` is not this session's file.
-Coordinate before touching the Calendar branch or hosted.
+**Ownership right now:** the "Gmail features in Figma prototype" session coordinates hosted changes, the
+shared OAuth review of Sania's Calendar branch, and the restore-errors question. The "CP3 progress check"
+session owns `docs/demo-script.md`. An uncommitted `ManualWorkspace.tsx` edit seen after `fe4a654` was not from
+this session. Several sessions share this checkout, so follow their rules: no stash, reset, restore, clean,
+checkout, rebase or merge; stage named files only; no installs in `Checkpoint 3/app`; leave others' processes running.
 
 ## Hosted rollout
 Sania said hosted changes are left to the user. `ffa915a` records that hosted received steps 1-6
@@ -110,8 +111,16 @@ None block PR #22. Only the first two need SQL.
    user to the plain `ManualWorkspace`, so the designed onboarding and PR #20's chips cannot be reached.
    Their save path already uses `scan_settings_save`. Coordinate with PR #20 and Calendar, which both
    touch these files. Do not start until the user says so.
-5. Graded docs not yet updated for this work: `docs/observability.md`, `docs/safety_privacy.md`,
-   `docs/architecture.md`, `app/INSTALL.md`.
+5. Finish the presentation: `docs/InboxToTask-CP3-presentation-draft.pptx` is a draft. Remove DRAFT, assign
+   speakers, rehearse, and reconcile it with `docs/demo-script.md` (another session's file). Graded docs were
+   updated in `fe4a654`; INSTALL has not been run on a clean machine.
+
+## Deadline and demo
+Repo reported due Nov 5 at 11:30 PM Central, demo Friday morning. `main` lacks this work until migrations 7-9
+reach hosted and PR #22 merges. The test account's local daily limit was raised from 20 to 50 for the demo (16 used at last check for UTC day
+2026-11-06, which resets at 6 PM Central Friday and is shared by rehearsal and demo). Demo setup needs `ENABLE_GMAIL_SCAN=true`, a functions
+restart and a Gmail reconnect on the test account; turn the flag off afterward. A scan after unpausing has not
+been run. The tester's personal address can appear on screen as the allowed sender.
 
 ## Testing notes
 - Offline fixtures must use thread context and different days. Fixtures with neither hid real bugs here.

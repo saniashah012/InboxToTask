@@ -5,7 +5,7 @@ import {PGlite} from '../app/node_modules/@electric-sql/pglite/dist/index.js';
 
 test('saved scanning settings: permissions, validation, revisions, and stale-work fencing',async(t)=>{
   const db=new PGlite();
-  const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
+  const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222',C='44444444-4444-4444-8444-444444444444';
   const q=async(sql,args=[]) => (await db.query(sql,args)).rows;
   const scalar=async(sql,args=[])=>Object.values((await q(sql,args))[0])[0];
   const as=async(role,user,fn)=>{
@@ -16,13 +16,13 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
   const rules={allow:{labels:[],keywords:[],senders:[' Teacher@Example.org ','teacher@example.org'],domains:[]},block:{labels:[],senders:[],domains:[],subjectKeywords:[' Newsletter ','newsletter']}};
   const context={maxMessages:0,maxAgeDays:30,maxMessageChars:12000,maxTotalChars:24000};
   const get=(user=A)=>as('authenticated',user,()=>scalar('select public.scan_settings_get()'));
-  const save=(revision=0,r=rules,c=context,consent=false,paused=true,disclosure=null,user=A)=>as('authenticated',user,()=>scalar('select public.scan_settings_save($1,$2,$3,$4,$5,$6,$7)',[revision,r,c,consent,paused,disclosure,{include:[' School ','school'],exclude:[]}]));
+  const save=(revision=0,r=rules,c=context,consent=false,paused=true,disclosure=null,user=A,semantic={include:[' School ','school'],exclude:[]})=>as('authenticated',user,()=>scalar('select public.scan_settings_save($1,$2,$3,$4,$5,$6,$7)',[revision,r,c,consent,paused,disclosure,semantic]));
   try {
     await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
       create schema auth;grant usage on schema auth to anon,authenticated,service_role;
       create table auth.users(id uuid primary key,email text);
       create function auth.uid() returns uuid language sql stable as $$select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid$$;`);
-    await q('insert into auth.users values($1,$2),($3,$4)',[A,'student@example.org',B,'b@example.org']);
+    await q('insert into auth.users values($1,$2),($3,$4),($5,$6)',[A,'student@example.org',B,'b@example.org',C,'c@example.org']);
     const path=new URL('../app/supabase/migrations/',import.meta.url);
     const legacyUser='33333333-3333-4333-8333-333333333333';
     for(const name of (await readdir(path)).filter(n=>n.endsWith('.sql')).sort()) {
@@ -50,9 +50,38 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
     });
     await t.test('new users default to no consent, pause, empty rules and five prior messages',async()=>{
       const settings=await get();assert.equal(settings.revision,0);assert.equal(settings.consent,false);assert.equal(settings.paused,true);
-      assert.deepEqual(settings.rules.allow,{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[]});assert.equal(settings.context_limits.maxMessages,5);
-      assert.equal(await scalar('select count(*) from public.scan_settings'),0);
+    assert.deepEqual(settings.rules.allow,{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[]});assert.equal(settings.context_limits.maxMessages,5);
+    assert.equal(await scalar('select count(*) from public.scan_settings'),0);
+  });
+  await t.test('semantic category names and overlapping phrases save, reload, and remove independently',async()=>{
+    const saved=await save(0,rules,context,false,true,null,C,{
+      include:['School','homework','my custom phrase'],
+      exclude:['Financial','invoice','custom exclusion'],
     });
+    assert.deepEqual(saved.semantic_preferences,{include:['school','homework','my custom phrase'],exclude:['financial','invoice','custom exclusion']});
+    const loaded=await get(C);
+    assert.deepEqual(loaded.semantic_preferences,saved.semantic_preferences);
+
+    const removedSuggestion=await save(1,rules,context,false,true,null,C,{
+      include:['homework','my custom phrase'],
+      exclude:['invoice','custom exclusion'],
+    });
+    assert.deepEqual(removedSuggestion.semantic_preferences,{
+      include:['homework','my custom phrase'],
+      exclude:['invoice','custom exclusion'],
+    });
+    assert.deepEqual((await get(C)).semantic_preferences,removedSuggestion.semantic_preferences);
+
+    const removedCustom=await save(2,rules,context,false,true,null,C,{
+      include:['School','homework'],
+      exclude:['Financial','invoice'],
+    });
+    assert.deepEqual(removedCustom.semantic_preferences,{
+      include:['school','homework'],
+      exclude:['financial','invoice'],
+    });
+    assert.deepEqual((await get(C)).semantic_preferences,removedCustom.semantic_preferences);
+  });
     await t.test('anonymous, owner injection and direct writes cannot bypass the RPC',async()=>{
       await as('anon',A,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
       await as('authenticated',null,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
@@ -130,7 +159,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       await assert.rejects(scan('assert',{lease:fresh.lease}),{code:'PT409'});
     });
     await t.test('account deletion removes saved privacy settings',async()=>{
-      await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings'),0);
+      await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings where user_id=$1',[A]),0);
     });
   } finally {await db.close();}
 });

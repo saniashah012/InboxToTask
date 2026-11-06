@@ -2632,10 +2632,6 @@ textarea:focus-visible {
   margin: 0 0 8px;
 }
 
-.category-preferences .rule-chip small {
-  display: none;
-}
-
 .rule-heading {
   justify-content: space-between;
 }
@@ -2713,6 +2709,12 @@ textarea:focus-visible {
   font-size: 14px;
 }
 
+.rule-chip.selected {
+  border-color: #9cc5b3;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
 .rule-chip small {
   color: var(--muted);
   font-size: 12px;
@@ -2729,6 +2731,11 @@ textarea:focus-visible {
   border-radius: 50%;
   background: #eef2f0;
   cursor: pointer;
+}
+
+.rule-chip.selected button {
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--green);
 }
 
 .scope-summary {

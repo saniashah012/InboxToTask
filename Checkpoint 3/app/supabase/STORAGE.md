@@ -73,6 +73,14 @@ current access rules before body retrieval. The endpoint returns no bodies or
 provider diagnostics, and stores only coordination IDs, cursor and sanitized counts.
 See [phase evidence and limitations](../../docs/gmail-manual-scan-phases-2026-11-05.md).
 
+The [semantic contract migration](migrations/20261105200000_source_semantic_contract.sql)
+stores included and excluded topics as `semantic_preferences.include` and
+`semantic_preferences.exclude`. Short suggestion names and custom phrases are
+independent semantic strings; they are not expanded into Gmail labels or source
+keyword rules. Source access remains governed separately by sender/domain rules.
+The category-group migration used by an earlier frontend iteration was removed;
+it is unnecessary for this contract and must not be applied.
+
 ## Trial limits and lifecycle
 
 - Per-user defaults: 20 requests and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.

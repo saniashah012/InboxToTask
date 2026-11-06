@@ -1,6 +1,6 @@
 # InboxToTask architecture
 
-Updated November 5, 2026. This describes the code in this repository as of this update and how it has been verified. Results are in [use cases](use-cases.md); limits are in [safety and privacy](safety_privacy.md) and [observability](observability.md).
+Updated November 5, 2026. This describes the code in this repository and its verification as of this update. Results are in [use cases](use-cases.md); limits are in [safety and privacy](safety_privacy.md) and [observability](observability.md).
 
 ## Status at a glance
 
@@ -109,7 +109,7 @@ sequenceDiagram
   UI->>DB: Review RPC with revision check, no model call
 ```
 
-The handler rechecks the scan lease and saved permission before each external request ([retrieval](../app/pipeline/gmail-retrieval.mjs), [processor](../app/pipeline/gmail-processor.mjs), [endpoint](../app/supabase/functions/gmail_scan/index.ts)). If work remains, the user clicks **Scan more** after the 60-second cooldown. Nothing continues on its own, and results appear when a batch finishes: there is no streaming.
+The handler rechecks the scan lease and saved permission before each external request ([retrieval](../app/pipeline/gmail-retrieval.mjs), [processor](../app/pipeline/gmail-processor.mjs), [endpoint](../app/supabase/functions/gmail_scan/index.ts)). If work remains, the user clicks **Scan more** after the 60-second cooldown. Nothing continues on its own. Results appear when a batch finishes; there is no streaming.
 
 ## Components
 
@@ -169,4 +169,4 @@ Details and tests are in [safety and privacy](safety_privacy.md).
 
 ## Not yet built
 
-Each item below is planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes (postponed to CP4), a complete account-deletion flow, and a verified hosted rollout.
+The following items are planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes (postponed to CP4), a complete account-deletion flow, and a verified hosted rollout.

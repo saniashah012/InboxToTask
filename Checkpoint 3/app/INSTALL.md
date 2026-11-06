@@ -1,8 +1,8 @@
 # Installation
 
-Local setup for InboxToTask. Run commands from the folder named in each step. On macOS or Linux, use `npm` and `npx` instead of `npm.cmd` and `npx.cmd`.
+To set up InboxToTask locally, run commands from the folder named in each step. On macOS or Linux, use `npm` and `npx` instead of `npm.cmd` and `npx.cmd`.
 
-Hosted Gmail scanning is not deployed or verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first. For a short teammate walkthrough of setup and use, see [local setup and use](../docs/local-setup-and-use.md).
+Hosted Gmail scanning is not deployed or verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first. For a short teammate walkthrough, see [local setup and use](../docs/local-setup-and-use.md).
 
 ## Requirements
 
@@ -65,7 +65,7 @@ Copy the local URL and publishable key into `web/.env` as `VITE_SUPABASE_URL` an
 
 Follow [Google setup, steps 2 to 5](supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup): one project and client for sign-in, a second for Gmail, and the test account listed in both.
 
-Then use these values in `supabase/functions/.env`, which replace the guide's handoff defaults:
+Then replace the guide's handoff defaults with these values in `supabase/functions/.env`:
 
 | Setting | Value |
 | --- | --- |
@@ -81,7 +81,7 @@ Generate the key privately, and do not replace an existing one that encrypted sa
 node -p "require('node:crypto').randomBytes(32).toString('base64')"
 ```
 
-Google test-mode Gmail grants expire after seven days, so reconnect when that happens. To load changed sign-in settings, run `npx.cmd supabase --agent no stop`, then `start` again. That keeps local data.
+Google test-mode Gmail grants expire after seven days, so reconnect when that happens. To load changes to sign-in settings, run `npx.cmd supabase --agent no stop`, then `start` again. That keeps local data.
 
 ## 6. Run the app
 
@@ -170,6 +170,6 @@ Passing these does not show that live Gmail or extraction works. See [live resul
 
 ## Hosted deployment
 
-Not part of local setup. The hosted session reports 20 ledger versions through `20261106040000`, with Gmail functions not deployed, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip. The Vercel production branch is `main`, per Sania, so treat a merge as a production deployment. Instant Rollback is available, but it does not undo migrations. Applying migrations or deploying functions needs a separate decision. Requirements are in [the backend guide](supabase/README.md) and the [Google setup rollout section](supabase/GOOGLE_AUTH.md#hosted-rollout-separate-from-local-implementation). Keep `ENABLE_GMAIL_SCAN` off on hosted.
+Hosted deployment is separate from local setup. The hosted session reports 20 ledger versions through `20261106040000`, with Gmail functions not deployed, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip. The Vercel production branch is `main`, per Sania, so treat a merge as a production deployment. Instant Rollback is available, but it does not undo migrations. Applying migrations or deploying functions needs a separate decision. Requirements are in [the backend guide](supabase/README.md) and the [Google setup rollout section](supabase/GOOGLE_AUTH.md#hosted-rollout-separate-from-local-implementation). Keep `ENABLE_GMAIL_SCAN` off on hosted.
 
 For a frontend build, set the Vercel root directory to `Checkpoint 3/app/web`, use the Vite preset, and set install command `pnpm install --frozen-lockfile`, build command `pnpm build` and output `dist`. Only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` belong in its environment. `/storage` is excluded from production builds.

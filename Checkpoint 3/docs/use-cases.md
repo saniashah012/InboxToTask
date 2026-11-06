@@ -1,6 +1,6 @@
 # InboxToTask use cases and acceptance scenarios
 
-Updated November 5, 2026. Walkthrough scripts and test cases for the primary flows in [Checkpoint 3](../CP3_INSTRUCTIONS.md). Each status says what has actually been run. **Expected** lines are test criteria unless a status or evidence line says the case was run.
+Updated November 5, 2026. Walkthrough scripts and test cases for the primary flows in [Checkpoint 3](../CP3_INSTRUCTIONS.md). Each status says what has been run. **Expected** lines are test criteria unless a status or evidence line says the case was run.
 
 ## Test surfaces and evidence
 
@@ -106,7 +106,7 @@ See [canonical filtering](../app/pipeline/core.mjs) and [retrieval regression te
 
 1. Open a pending suggestion and compare it with the supporting excerpt.
 2. Approve or dismiss it. In the development tester, you can edit fields first, or restore an eligible dismissed suggestion.
-3. Reload and verify the decision persists. The original proposal remains separate from accepted/user-edited values.
+3. Reload and verify the decision persists. The original proposal remains separate from accepted or user-edited values.
 4. Complete the accepted task, undo completion, and complete it again.
 
 **Expected:** Review actions use stored fields and controlled RPCs without another model call. Stale revisions cannot overwrite newer edits. Completion starts the 30-day eligibility period; undo clears it, and recompletion starts a new period. Source deletion and task deletion have different effects, described in [the storage contract](../app/supabase/STORAGE.md).
@@ -215,7 +215,7 @@ A scan after the final unpause was not repeated live. Not run live: settings cha
 | F11 | The account's Google notices are listed and blocked correctly, but they inflate candidate and blocked counts, which can look like missing or extra mail. | Note |
 | F7 | `School` marked a campus bakery email relevant. Topic relevance is a judgment call and a preference, never an access control. | Note for evaluation |
 
-Automated coverage for this workflow: [retrieval](../tests/gmail-retrieval.test.mjs), [extraction](../tests/gmail-extraction.test.mjs), [persistence](../tests/gmail-persistence.test.mjs) and the [local API trial](../tests/storage-local.mjs). These use injected responses, so they complement the live cases above and do not replace them.
+Automated coverage for this workflow: [retrieval](../tests/gmail-retrieval.test.mjs), [extraction](../tests/gmail-extraction.test.mjs), [persistence](../tests/gmail-persistence.test.mjs) and the [local API trial](../tests/storage-local.mjs). These use injected responses and complement the live cases above; they do not replace them.
 
 ### Remaining acceptance
 

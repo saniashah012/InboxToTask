@@ -1,6 +1,6 @@
-> **Working-tree navigation (November 5, 2026):** Start with [current implementation state](<Checkpoint 3/CURRENT_STATE.md>) and [repository instructions](AGENTS.md). Active code is under Checkpoint 3; earlier checkpoints and the project proposal below are historical requirements/context. For continuation, see [the Claude handoff](CLAUDE_HANDOFF.md). Code present does not imply local migrations are applied or live acceptance has passed.
+> **Working-tree navigation (November 5, 2026):** Start with [current implementation state](<Checkpoint 3/CURRENT_STATE.md>) and [repository instructions](AGENTS.md). Active code is under Checkpoint 3; earlier checkpoints and the project proposal below are historical requirements/context. For continuation, see [the Claude handoff](CLAUDE_HANDOFF.md). The presence of code does not mean local migrations are applied or live acceptance has passed.
 
-**Checkpoint 3 deliverables** are under `Checkpoint 3/`. The demo runs locally.
+**Checkpoint 3 deliverables** are in `Checkpoint 3/`. The demo runs locally.
 
 | Required | Location |
 | --- | --- |

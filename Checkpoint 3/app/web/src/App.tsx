@@ -9,11 +9,21 @@ import {
 } from "./demoData"
 import { previewAdapter } from "./previewAdapter"
 import {
-  loadOnboardingPreferences,
+  loadSavedSetup,
   saveOnboardingPreferences,
+  SetupSaveError,
   supabase,
   type OnboardingPreferences,
+  type SavedSetup,
 } from "./supabase"
+import { googleConnectionStatus } from "./storageAdapter"
+import GoogleConnectionPanel from "./GoogleConnectionPanel"
+import {
+  consentDecision,
+  SCAN_CONSENT_LABEL,
+  SCAN_DISCLOSURE,
+  SCAN_DISCLOSURE_EFFECTS,
+} from "./scanConsent"
 import type { Session } from "@supabase/supabase-js"
 import ScanSettingsPanel from "./ScanSettingsPanel"
 import ManualWorkspace from "./ManualWorkspace"
@@ -402,16 +412,24 @@ const emptyOnboardingPreferences: OnboardingPreferences = {
   excludedSubjects: [],
 }
 
+// Everything routing needs, tagged by account so one user's state can't route another.
+type SetupRecord = {
+  userId: string
+  status: "loading" | "error" | "ready"
+  rerun: boolean
+  saved: SavedSetup | null
+  workspaceTab: "review" | "settings"
+  notice: string
+}
+
 function App() {
   const [screen, setScreen] = useState<AppScreen>("onboarding")
   const [authInitialized, setAuthInitialized] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
   const [authError, setAuthError] = useState("")
   const [authPending, setAuthPending] = useState(false)
-  const [preferenceStatus, setPreferenceStatus] =
-    useState<"idle" | "loading" | "missing" | "saved" | "error">("idle")
-  const [preferenceError, setPreferenceError] = useState("")
-  const [preferenceReloadCount, setPreferenceReloadCount] = useState(0)
+  const [setupRecord, setSetupRecord] = useState<SetupRecord | null>(null)
+  const [setupReloadCount, setSetupReloadCount] = useState(0)
   const [savingPreferences, setSavingPreferences] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [previewGmailAccount, setPreviewGmailAccount] = useState<string | null>(
@@ -438,8 +456,10 @@ function App() {
       authVersion++; setAuthInitialized(true)
       setSession(nextSession)
       setAuthError("")
+      // A real account always leaves the fictional preview.
+      if (nextSession) setPreviewMode(false)
       if (!nextSession) {
-        setPreferenceStatus("idle")
+        setSetupRecord(null)
         setSavedPreferences(emptyOnboardingPreferences)
         setScreen("onboarding")
       }
@@ -455,6 +475,7 @@ function App() {
           setSession(null)
         } else {
           setSession(data.session)
+          if (data.session) setPreviewMode(false)
         }
         setAuthInitialized(true)
       })
@@ -470,36 +491,41 @@ function App() {
     }
   }, [])
 
+  const userId = session?.user.id ?? null
+  // Ignoring another account's record means a switch shows loading, never the old screen.
+  const setup = setupRecord?.userId === userId ? setupRecord : null
+
   useEffect(() => {
-    if (!session || !previewMode) return
+    if (!userId) return
     let active = true
-    setPreferenceStatus("loading")
-    setPreferenceError("")
-    void loadOnboardingPreferences(session.user.id)
-      .then((preferences) => {
+    setSetupRecord((current) => current?.userId === userId
+      ? { ...current, status: "loading" }
+      : { userId, status: "loading", rerun: false, saved: null, workspaceTab: "review", notice: "" })
+    void loadSavedSetup(userId)
+      .then((saved) => {
         if (!active) return
-        if (preferences) {
-          setSavedPreferences(preferences)
-          setPreferenceStatus("saved")
-          setScreen("dashboard")
-        } else {
-          setSavedPreferences(emptyOnboardingPreferences)
-          setPreferenceStatus("missing")
-          setScreen("onboarding")
-        }
+        setSetupRecord((current) => current?.userId === userId ? { ...current, status: "ready", saved } : current)
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (!active) return
-        setPreferenceError(
-          "Could not load your preferences. Check that the database migration has been applied, then retry.",
-        )
-        setPreferenceStatus("error")
+        setSetupRecord((current) => current?.userId === userId ? { ...current, status: "error" } : current)
       })
 
     return () => {
       active = false
     }
-  }, [session?.user.id, preferenceReloadCount, previewMode])
+  }, [userId, setupReloadCount])
+
+  const reloadSetup = (rerun: boolean) => {
+    setSetupRecord((current) => current ? { ...current, status: "loading", rerun } : current)
+    setSetupReloadCount((count) => count + 1)
+  }
+
+  const returnToWorkspace = () => {
+    setSetupRecord((current) => current
+      ? { ...current, status: "ready", rerun: false, workspaceTab: "settings", notice: "" }
+      : current)
+  }
 
   const signInWithGoogle = async () => {
     if (!supabase) return
@@ -522,24 +548,23 @@ function App() {
 
   const persistOnboardingPreferences = async (
     preferences: OnboardingPreferences,
+    consent?: boolean,
   ) => {
     if (!session) throw new Error("A signed-in session is required.")
+    const owner = session.user.id
     setSavingPreferences(true)
-    setPreferenceError("")
     try {
-      const saved = await saveOnboardingPreferences(
-        session.user.id,
-        preferences,
-      )
-      setSavedPreferences(saved)
-      setPreferenceStatus("saved")
-      setProcessingEnabled(false)
-      setScreen("dashboard")
-    } catch (error) {
-      setPreferenceError(
-        error instanceof Error ? error.message : "Preferences were not saved. Check your connection and try again.",
-      )
-      throw error
+      const saved = await saveOnboardingPreferences(owner, preferences, consent)
+      setSetupRecord((current) => current?.userId === owner && current.saved
+        ? {
+            ...current,
+            status: "ready",
+            rerun: false,
+            saved: { ...current.saved, revision: saved.scanRevision ?? current.saved.revision, requiresReview: false, preferences: saved },
+            workspaceTab: "review",
+            notice: "Setup saved. No email was read. Scanning requires a separate manual request.",
+          }
+        : current)
     } finally {
       setSavingPreferences(false)
     }
@@ -562,23 +587,63 @@ function App() {
     }
   }
 
-  if (authInitialized && session && !previewMode) return <ManualWorkspace key={session.user.id} userId={session.user.id} email={session.user.email ?? "Signed-in account"} onSignOut={() => void signOut()} />
-
-  if (
-    !authInitialized ||
-    (session && !["missing", "saved", "error"].includes(preferenceStatus))
-  ) {
+  if (!authInitialized) {
     return <AppStatus message="Restoring your InboxToTask session…" />
   }
 
-  if (session && preferenceStatus === "error") {
+  if (session) {
+    if (!setup || setup.status === "loading") {
+      return <AppStatus message="Loading your saved settings…" />
+    }
+    const canReturn = setup.rerun && Boolean(setup.saved)
+    if (setup.status === "error" || !setup.saved) {
+      return (
+        <AppStatus
+          actionLabel="Retry"
+          message="Could not load your saved settings. Check your connection, then retry."
+          onAction={() => reloadSetup(setup.rerun)}
+          secondaryActionLabel={canReturn ? "Back to workspace" : "Sign out"}
+          onSecondaryAction={() => canReturn ? returnToWorkspace() : void signOut()}
+        />
+      )
+    }
+    const saved = setup.saved
+    if (saved.requiresReview || (saved.revision > 0 && !setup.rerun)) {
+      // Google's return lands on the root; open the tab that reports its outcome.
+      const googleReturn = new URLSearchParams(window.location.search).has("google")
+      return (
+        <ManualWorkspace
+          key={session.user.id}
+          userId={session.user.id}
+          email={session.user.email ?? "Signed-in account"}
+          onSignOut={() => void signOut()}
+          onRunSetup={() => reloadSetup(true)}
+          initialTab={saved.requiresReview || googleReturn ? "settings" : setup.workspaceTab}
+          initialNotice={saved.requiresReview ? "Previous phrase rules need your review before scanning. Review them under Scanning permission and sources below." : setup.notice}
+        />
+      )
+    }
     return (
-      <AppStatus
-        actionLabel="Retry"
-        message={preferenceError}
-        onAction={() => setPreferenceReloadCount((count) => count + 1)}
-        secondaryActionLabel="Sign out"
-        onSecondaryAction={() => void signOut()}
+      <Onboarding
+        key={session.user.id}
+        authConfigured
+        authEmail={session.user.email ?? null}
+        authError={authError}
+        authPending={false}
+        isAuthenticated
+        previewMode={false}
+        initialPreferences={{ ...(saved.preferences ?? emptyOnboardingPreferences), scanRevision: saved.revision }}
+        initialConsent={saved.revision > 0 && saved.consent}
+        initialPaused={saved.revision > 0 && saved.paused}
+        onReturnToWorkspace={setup.rerun ? returnToWorkspace : undefined}
+        onConnectGmail={() => {}}
+        onSavePreferences={persistOnboardingPreferences}
+        onSignIn={() => {}}
+        onSignOut={() => void signOut()}
+        onFinish={() => {}}
+        savingPreferences={savingPreferences}
+        onExplore={() => {}}
+        onPreviewOnboarding={() => {}}
       />
     )
   }
@@ -586,11 +651,12 @@ function App() {
   if (screen === "onboarding" || (!previewMode && !session)) {
     return (
       <Onboarding
+        key="public"
         authConfigured={Boolean(supabase)}
-        authEmail={session?.user.email ?? null}
+        authEmail={null}
         authError={authError}
         authPending={authPending}
-        isAuthenticated={Boolean(session)}
+        isAuthenticated={false}
         onConnectGmail={setPreviewGmailAccount}
         onSavePreferences={persistOnboardingPreferences}
         onSignIn={() => void signInWithGoogle()}
@@ -622,30 +688,20 @@ function App() {
 
   return (
     <Dashboard
-      key={previewMode ? "preview" : session?.user.id ?? "signed-out"}
+      key="preview"
       calendarAccount={previewCalendarAccount}
       gmailAccount={previewGmailAccount}
       onCalendarAccountChange={setPreviewCalendarAccount}
       onGmailAccountChange={setPreviewGmailAccount}
       onProcessingChange={setProcessingEnabled}
       onPreferencesChange={(preferences) => {
-        if (previewMode || !session) {
-          setSavedPreferences(preferences)
-          return Promise.resolve()
-        }
-        return saveOnboardingPreferences(session.user.id, preferences)
-          .then((saved) => {
-            setSavedPreferences(saved)
-            setPreferenceError("")
-          })
-          .catch((error: unknown) => {
-            throw error
-          })
+        setSavedPreferences(preferences)
+        return Promise.resolve()
       }}
       previewMode={previewMode}
       processingEnabled={processingEnabled}
       preferences={savedPreferences}
-      userEmail={session?.user.email ?? null}
+      userEmail={null}
       onSignOut={() => void signOut()}
     />
   )
@@ -666,7 +722,7 @@ function AppStatus({
 }) {
   return (
     <main className="onboarding-shell">
-      <section className="onboarding-card sign-in-card" role="status">
+      <section className="onboarding-card sign-in-card" role={actionLabel ? "alert" : "status"}>
         <Brand />
         <p>{message}</p>
         {actionLabel && onAction && (
@@ -1693,6 +1749,10 @@ function Onboarding({
   onSavePreferences,
   onFinish,
   savingPreferences,
+  initialPreferences = emptyOnboardingPreferences,
+  initialConsent = false,
+  initialPaused = false,
+  onReturnToWorkspace,
 }: {
   authConfigured: boolean
   authEmail: string | null
@@ -1705,9 +1765,13 @@ function Onboarding({
   onConnectGmail: (email: string | null) => void
   onSignIn: () => void
   onSignOut: () => void
-  onSavePreferences: (preferences: OnboardingPreferences) => Promise<void>
+  onSavePreferences: (preferences: OnboardingPreferences, consent?: boolean) => Promise<void>
   onFinish: (preferences: OnboardingPreferences) => void
   savingPreferences: boolean
+  initialPreferences?: OnboardingPreferences
+  initialConsent?: boolean
+  initialPaused?: boolean
+  onReturnToWorkspace?: () => void
 }) {
   const [step, setStep] = useState(isAuthenticated ? 1 : 0)
   const [gmailConnected, setGmailConnected] = useState(false)
@@ -1715,8 +1779,28 @@ function Onboarding({
   const [starting, setStarting] = useState(false)
   const [setupError, setSetupError] = useState("")
   const [preferences, setPreferences] = useState<OnboardingPreferences>(
-    emptyOnboardingPreferences,
+    initialPreferences,
   )
+  const [consentChecked, setConsentChecked] = useState(initialConsent)
+  const [gmailStatus, setGmailStatus] = useState("Checking…")
+  useEffect(() => {
+    if (!isAuthenticated || step !== 4) return
+    let active = true
+    setGmailStatus("Checking…")
+    googleConnectionStatus()
+      .then((status) => {
+        if (!active) return
+        setGmailStatus(status.state === "connected"
+          ? `Connected${status.email ? ` · ${status.email}` : ""}`
+          : status.state === "reconnect_required"
+            ? "Reconnect required · a scan needs a working connection"
+            : "Not connected · a scan needs a connected Gmail account")
+      })
+      .catch(() => {
+        if (active) setGmailStatus("Status unavailable · check it under Connection and permissions")
+      })
+    return () => { active = false }
+  }, [isAuthenticated, step])
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
   const hasPreferences =
       preferences.selectedSenders.length +
@@ -1732,6 +1816,11 @@ function Onboarding({
             <span className="demo-mode-badge">
               Signed in{authEmail ? ` · ${authEmail}` : ""}
             </span>
+            {onReturnToWorkspace && (
+              <button className="text-link onboarding-return" onClick={onReturnToWorkspace}>
+                Back to workspace without saving
+              </button>
+            )}
             <button className="text-link" onClick={onSignOut}>
               Sign out
             </button>
@@ -1826,32 +1915,40 @@ function Onboarding({
               </div>
               <h2>Connect your inbox</h2>
               <p className="setup-description">
-                Connect Gmail to find tasks and deadlines automatically.
+                {isAuthenticated
+                  ? "Connect Gmail so you can check permitted email when you ask."
+                  : "Connect Gmail to find tasks and deadlines automatically."}
               </p>
-              <div
-                className={`setup-connection ${gmailConnected ? "connected" : "unavailable"}`}
-                role="status"
-              >
-                {gmailConnected && (
-                  <span className="connected-check" aria-hidden="true">
-                    <Icon name="check" size={22} />
-                  </span>
-                )}
-                <div>
-                  <strong>
-                    {gmailConnected
-                      ? "Preview inbox connected"
-                      : "Gmail connection is unavailable"}
-                  </strong>
-                  <span>
-                    {gmailConnected
-                      ? "Fictional account only. No real mailbox was accessed."
-                      : previewMode
-                        ? "Use the fictional preview inbox to continue this walkthrough."
-                        : "Gmail authorization is separate from Google sign-in and is not configured. No mailbox has been accessed."}
-                  </span>
+              {isAuthenticated ? (
+                <div className="storage-page onboarding-google">
+                  <GoogleConnectionPanel />
                 </div>
-              </div>
+              ) : (
+                <div
+                  className={`setup-connection ${gmailConnected ? "connected" : "unavailable"}`}
+                  role="status"
+                >
+                  {gmailConnected && (
+                    <span className="connected-check" aria-hidden="true">
+                      <Icon name="check" size={22} />
+                    </span>
+                  )}
+                  <div>
+                    <strong>
+                      {gmailConnected
+                        ? "Preview inbox connected"
+                        : "Gmail connection is unavailable"}
+                    </strong>
+                    <span>
+                      {gmailConnected
+                        ? "Fictional account only. No real mailbox was accessed."
+                        : previewMode
+                          ? "Use the fictional preview inbox to continue this walkthrough."
+                          : "Gmail authorization is separate from Google sign-in and is not configured. No mailbox has been accessed."}
+                    </span>
+                  </div>
+                </div>
+              )}
               {previewMode && !gmailConnected && (
                 <button
                   className="setup-gmail-cta"
@@ -1879,11 +1976,11 @@ function Onboarding({
                 {gmailConnected
                   ? "This fictional connection is isolated from real Gmail."
                   : isAuthenticated
-                    ? "You can save preferences now. Scanning stays off until Gmail is separately authorized."
+                    ? "This step is optional for now. You can continue and connect later under Connection and permissions. Nothing is scanned until you ask."
                     : "Nothing is scanned until you finish setup and start."}
               </p>
               <FooterActions
-                back={() => setStep(0)}
+                back={isAuthenticated ? undefined : () => setStep(0)}
                 next={() => setStep(2)}
                 nextDisabled={
                   !isAuthenticated && !(previewMode && gmailConnected)
@@ -1898,9 +1995,9 @@ function Onboarding({
               <p className="setup-description">
                 Choose exact sender or domain permissions. Topics describe relevance within permitted email.
               </p>
-              <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" />
+              <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" realAccount={isAuthenticated} />
               <p className="setup-helper requirement-helper">
-                Choose at least one sender or domain. Topics alone permit nothing. Real Gmail scanning is not connected yet.
+                Choose at least one sender or domain. Topics alone permit nothing. {isAuthenticated ? "Saving does not start a scan." : "Real Gmail scanning is not connected yet."}
               </p>
               <FooterActions
                 back={() => setStep(1)}
@@ -1914,20 +2011,20 @@ function Onboarding({
             <>
               <h2>What would you like to keep private?</h2>
               <p className="setup-description">
-                Add semantic topics, exact senders, or domains to exclude from your
-                preferences.
+                Add semantic topics, exact senders, domains, or subject phrases to
+                exclude from your preferences.
               </p>
-              <RulesEditor rules={preferences} onChange={setPreferences} section="excluded" />
+              <RulesEditor rules={preferences} onChange={setPreferences} section="excluded" realAccount={isAuthenticated} />
               <p className="setup-helper requirement-helper">
-                Any matching exclusion blocks an email, even if it matches an inclusion. Real Gmail scanning is not connected yet.
+                Any matching exclusion blocks an email, even if it matches an inclusion. {isAuthenticated ? "Saving does not start a scan." : "Real Gmail scanning is not connected yet."}
               </p>
               <details className="privacy-disclosure">
                 <summary>How privacy filtering works</summary>
                 <ul>
                   <li>Exact source exclusions override inclusions before body retrieval. Semantic topics are evaluated after Gemini receives permitted content.</li>
-                  <li>The extraction pipeline supports metadata rules; real Gmail scanning and authorization are not connected here.</li>
+                  <li>{isAuthenticated ? "Metadata rules are checked before an email body is fetched, and only during a scan you start." : "The extraction pipeline supports metadata rules; real Gmail scanning and authorization are not connected here."}</li>
                   <li>Metadata rules cannot guarantee that all health or financial content is excluded.</li>
-                  <li>This preview uses fictional data and does not retrieve or send real email.</li>
+                  <li>{isAuthenticated ? "During a scan you start, permitted email bodies may be sent to Gemini. Saving here does not read or send email." : "This preview uses fictional data and does not retrieve or send real email."}</li>
                 </ul>
               </details>
               <FooterActions back={() => setStep(2)} next={() => setStep(4)} />
@@ -1940,7 +2037,7 @@ function Onboarding({
               <p className="setup-description">
                 {previewMode
                   ? "Review your choices before the simulated preview checks begin."
-                  : "Review your choices. Saving preferences does not authorize Gmail or start scanning."}
+                  : "Review your choices. Saving does not start a scan."}
               </p>
               <div className="review-preferences">
                 <ReviewPreference
@@ -1948,7 +2045,7 @@ function Onboarding({
                   onEdit={() => setStep(1)}
                   values={[
                     isAuthenticated
-                      ? "Not authorized · Gmail access requires separate consent"
+                      ? gmailStatus
                       : gmailConnected
                         ? "Fictional preview account · no real mailbox accessed"
                         : "Unavailable in this deployment",
@@ -1987,8 +2084,8 @@ function Onboarding({
                 />
               </div>
               <p className="setup-helper requirement-helper">
-                Topics never grant source access. Real Gmail scanning
-                is not connected yet.
+                Topics never grant source access.{" "}
+                {isAuthenticated ? "An empty inclusion list processes nothing." : "Real Gmail scanning is not connected yet."}
               </p>
               <div className="scan-plan">
                 <div>
@@ -1996,7 +2093,7 @@ function Onboarding({
                   <strong>
                     {previewMode
                       ? "Past 7 days · simulated preview only"
-                      : "Not started · Gmail authorization required"}
+                      : "Not started · you start scans from your workspace"}
                   </strong>
                 </div>
                 <div>
@@ -2004,10 +2101,35 @@ function Onboarding({
                   <strong>
                     {previewMode
                       ? "Simulated preview checks"
-                      : "Off until Gmail is separately authorized"}
+                      : "Off · scans run only when you ask"}
                   </strong>
                 </div>
               </div>
+              {isAuthenticated && (
+                <div className="onboarding-consent">
+                  <p>{SCAN_DISCLOSURE}</p>
+                  <p>{SCAN_DISCLOSURE_EFFECTS}</p>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={consentChecked}
+                      onChange={(event) => setConsentChecked(event.target.checked)}
+                    />
+                    <span>{SCAN_CONSENT_LABEL}</span>
+                  </label>
+                  <p role="status" className="setup-helper">
+                    {initialConsent && !consentChecked
+                      ? "Saving will revoke your scanning consent."
+                      : initialConsent && initialPaused
+                        ? "Consent is on and scanning is paused. Saving keeps it paused."
+                        : consentChecked
+                          ? initialConsent
+                            ? "Consent is on. Saving keeps it."
+                            : "Saving records your consent and turns off the scanning pause. It does not start a scan."
+                          : "You can save without consenting. Scans stay blocked until you consent here or under Connection and permissions."}
+                  </p>
+                </div>
+              )}
               <p className="approval-reminder">
                 You review task suggestions before approving them. Calendar
                 entries require separate approval.
@@ -2015,7 +2137,7 @@ function Onboarding({
               <p className="setup-helper">
                 {previewMode
                   ? "Preview only. No account is accessed and these preferences are not saved to Supabase."
-                  : "Google sign-in does not grant Gmail access. Scanning remains disabled until Gmail is separately authorized."}
+                  : "Google sign-in does not grant Gmail access. A manual scan needs a connected Gmail account, saved consent, an unpaused account, and at least one included sender or domain."}
               </p>
               <FooterActions
                 back={() => setStep(3)}
@@ -2024,10 +2146,12 @@ function Onboarding({
                   setSetupError("")
                   if (isAuthenticated) {
                     try {
-                      await onSavePreferences(preferences)
-                    } catch {
+                      await onSavePreferences(preferences, consentDecision(initialConsent, consentChecked))
+                    } catch (error) {
                       setSetupError(
-                        "Could not save your preferences. Please try again.",
+                        error instanceof SetupSaveError
+                          ? error.message
+                          : "Could not save your preferences. Please try again.",
                       )
                     }
                     return
@@ -2108,16 +2232,18 @@ function FooterActions({
   nextDisabled = false,
   nextLabel = "Continue",
 }: {
-  back: () => void
+  back?: () => void
   next: () => void
   nextDisabled?: boolean
   nextLabel?: string
 }) {
   return (
     <div className="step-actions">
-      <button className="secondary-button" onClick={back}>
-        Back
-      </button>
+      {back && (
+        <button className="secondary-button" onClick={back}>
+          Back
+        </button>
+      )}
       <button className="primary-button" disabled={nextDisabled} onClick={next}>
         {nextLabel}
       </button>
@@ -2161,11 +2287,13 @@ function RulesEditor({
   onChange,
   compact = false,
   section = "all",
+  realAccount = false,
 }: {
   rules: OnboardingPreferences
   onChange: (rules: OnboardingPreferences) => void
   compact?: boolean
   section?: "allowed" | "excluded" | "all"
+  realAccount?: boolean
 }) {
   const [drafts, setDrafts] = useState<Record<RuleKey, string>>({
     includedTypes: "",
@@ -2188,6 +2316,10 @@ function RulesEditor({
     if ((isSender && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) ||
         (isDomain && !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(value))) {
       setRuleError(isSender ? "Enter a complete sender email address." : "Enter a valid domain, such as example.edu.")
+      return
+    }
+    if (key === "excludedSubjects" && (value.length > 254 || /[\x00-\x1f\x7f]/.test(value) || rules[key].length >= 200)) {
+      setRuleError("Use up to 200 subject phrases, each 1-254 characters without control characters.")
       return
     }
     if (rules[key].some((item) => item.toLowerCase() === value.toLowerCase())) {
@@ -2222,6 +2354,11 @@ function RulesEditor({
       key: "excludedDomains",
       label: "Blocked domain",
       placeholder: "example.com",
+    },
+    {
+      key: "excludedSubjects",
+      label: "Subject contains",
+      placeholder: "Literal phrase, such as newsletter",
     },
   ]
 
@@ -2284,12 +2421,11 @@ function RulesEditor({
         />
         <div className="rule-heading">
           <div>
-            <strong>Excluded senders and domains</strong>
-            <span>Exact address or domain matches. Domains do not include subdomains.</span>
+            <strong>Excluded senders, domains and subjects</strong>
+            <span>Exact address or domain matches. Domains do not include subdomains. Subject phrases match literal text without case sensitivity.</span>
           </div>
         </div>
-        {rules.excludedSubjects.length > 0 && <div className="notice"><p>Previous subject-only exclusions (kept at their original scope):</p><Chips entries={rules.excludedSubjects.map(value => ({ key: "excludedSubjects" as RuleKey, value, prefix: "Subject only" }))} onRemove={remove} /></div>}
-        {fields.slice(2, 4).map((field) => {
+        {fields.slice(2).map((field) => {
           const entries = rules[field.key].map((value) => ({
             key: field.key,
             value,
@@ -2311,7 +2447,7 @@ function RulesEditor({
         })}
       </div>}
       <FilterHelp />
-      <div className="scope-summary live" aria-live="polite"><span>Effective scope</span><strong>{preferenceScope(rules)}</strong></div>
+      <div className="scope-summary live" aria-live="polite"><span>Effective scope</span><strong>{preferenceScope(rules, realAccount)}</strong></div>
       {ruleError && <p className="notice warning" role="alert">{ruleError}</p>}
     </div>
   )

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+import { resolveScanConsent } from "./scanConsent"
 
 export type OnboardingPreferences = {
   scanRevision?: number
@@ -141,29 +142,47 @@ function fromPreferenceRow(row: PreferenceRow): OnboardingPreferences {
   }
 }
 
-// Canonical scanning settings are the source of truth after a reviewed save.
-// Older category titles remain draft phrases until explicitly reviewed and saved.
-export async function loadOnboardingPreferences(userId: string): Promise<OnboardingPreferences | null> {
-  if (!supabase) throw new Error("Supabase is not configured.")
-  const { data: settings, error: settingsError } = await supabase.rpc("scan_settings_get")
-  if (settingsError) throw new Error("Could not load filter settings. Check the local migration and retry.")
-  if (settings.revision > 0) return {
-    scanRevision: settings.revision,
-    includedTypes: settings.semantic_preferences.include, selectedSenders: settings.rules.allow.senders,
-    selectedDomains: settings.rules.allow.domains, excludedTypes: settings.semantic_preferences.exclude,
-    excludedSenders: settings.rules.block.senders, excludedDomains: settings.rules.block.domains,
-    excludedSubjects: settings.rules.block.subjectKeywords,
-  }
-  const { data, error } = await supabase.from("user_onboarding_preferences").select(preferenceColumns).eq("user_id", userId).maybeSingle()
-  if (error) throw new Error("Could not load previous preferences.")
-  return data ? { ...fromPreferenceRow(data), scanRevision: 0 } : null
+export type SavedSetup = {
+  revision: number
+  requiresReview: boolean
+  consent: boolean
+  paused: boolean
+  preferences: OnboardingPreferences | null
 }
 
-export async function saveOnboardingPreferences(_userId: string, preferences: OnboardingPreferences): Promise<OnboardingPreferences> {
+// Canonical scanning settings decide routing and consent. A legacy preference row
+// can only prefill a first-run draft; it never counts as saved settings or consent.
+export async function loadSavedSetup(userId: string): Promise<SavedSetup> {
   if (!supabase) throw new Error("Supabase is not configured.")
+  const { data: settings, error: settingsError } = await supabase.rpc("scan_settings_get")
+  if (settingsError || typeof settings?.revision !== "number") throw new Error("Could not load scanning settings.")
+  const requiresReview = settings.requires_review === true
+  if (settings.revision > 0 || requiresReview) return {
+    revision: settings.revision, requiresReview, consent: settings.consent === true, paused: settings.paused === true,
+    preferences: {
+      scanRevision: settings.revision,
+      includedTypes: settings.semantic_preferences.include, selectedSenders: settings.rules.allow.senders,
+      selectedDomains: settings.rules.allow.domains, excludedTypes: settings.semantic_preferences.exclude,
+      excludedSenders: settings.rules.block.senders, excludedDomains: settings.rules.block.domains,
+      excludedSubjects: settings.rules.block.subjectKeywords,
+    },
+  }
+  const { data, error } = await supabase.from("user_onboarding_preferences").select(preferenceColumns).eq("user_id", userId).maybeSingle()
+  return {
+    revision: 0, requiresReview: false, consent: false, paused: true,
+    preferences: !error && data ? { ...fromPreferenceRow(data), scanRevision: 0 } : null,
+  }
+}
+
+// These messages are fixed text, so the screen may show them to the user as written.
+export class SetupSaveError extends Error {}
+
+// consent: true grants, false revokes, omitted keeps the saved consent and pause state.
+export async function saveOnboardingPreferences(_userId: string, preferences: OnboardingPreferences, consent?: boolean): Promise<OnboardingPreferences> {
+  if (!supabase) throw new SetupSaveError("Account connection is not configured.")
   const { data: current, error: readError } = await supabase.rpc("scan_settings_get")
-  if (readError) throw new Error("Could not load scanning settings. Retry after checking the local migration.")
-  if (current.requires_review) throw new Error("Review previous phrase rules in Settings before saving onboarding preferences.")
+  if (readError) throw new SetupSaveError("Could not load scanning settings, so nothing was saved. Please retry.")
+  if (current.requires_review) throw new SetupSaveError("Review previous phrase rules under Connection and permissions before saving.")
   const { data, error } = await supabase.rpc("scan_settings_save", {
     p_revision: preferences.scanRevision ?? 0,
     p_rules: {
@@ -172,9 +191,9 @@ export async function saveOnboardingPreferences(_userId: string, preferences: On
     },
     p_semantic: { include: preferences.includedTypes, exclude: preferences.excludedTypes },
     p_reviewed: false,
-    p_context: current.context_limits, p_consent: current.consent, p_paused: current.paused,
-    p_disclosure: current.consent ? "gmail-scan-v1" : null,
+    p_context: current.context_limits,
+    ...resolveScanConsent(current, consent),
   })
-  if (error) throw new Error(error.code === "PT409" ? "Settings changed in another window. Reload before saving again." : "Filters were not saved. Check your entries and retry.")
+  if (error) throw new SetupSaveError(error.code === "PT409" ? "Settings changed in another window. Reload this page before saving again." : "Filters were not saved. Check your entries and retry.")
   return { ...preferences, scanRevision: data.revision, includedTypes: data.semantic_preferences.include, excludedTypes: data.semantic_preferences.exclude }
 }

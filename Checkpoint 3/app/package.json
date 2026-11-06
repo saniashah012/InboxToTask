@@ -12,6 +12,7 @@
     "test:storage": "node --test ../tests/storage-database.test.mjs ../tests/storage.test.mjs",
     "test:local": "node ../tests/storage-local.mjs",
     "test:calendar": "node --experimental-strip-types --test ../tests/calendar-export.test.mjs",
+    "test:onboarding": "node --experimental-strip-types --test ../tests/onboarding-consent.test.mjs",
     "supabase:prepare": "node pipeline/prepare-edge.mjs",
     "fixtures:cp2": "node pipeline/import-cp2.mjs",
     "extract:plan": "node pipeline/cli.mjs --all",

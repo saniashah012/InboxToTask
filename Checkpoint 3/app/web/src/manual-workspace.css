@@ -43,6 +43,20 @@
 .manual-workspace .google-state-reconnect_required { background:#fdf6e7; border-color:var(--amber); color:#7a5610; }
 .google-state-checking svg,.google-state-disconnecting svg { animation:manual-spin .9s linear infinite; }
 
+/* The real connection panel and consent box inside the designed onboarding card. */
+.storage-page.onboarding-google { max-width:none; margin:16px 0 0; padding:0; color:var(--ink); font-family:inherit; text-align:left; }
+.onboarding-google .storage-panel { margin:0; padding:16px; border-color:var(--line); }
+.onboarding-google .google-state { display:inline-flex; align-items:center; gap:8px; margin:8px 0; padding:6px 12px 6px 8px; border:1px solid var(--line); border-radius:999px; background:var(--canvas); color:var(--muted); font-weight:600; overflow-wrap:anywhere; }
+.onboarding-google .google-state svg { flex:none; }
+.onboarding-google .google-state-connected { background:var(--green-soft); border-color:var(--green); color:var(--green-dark); }
+.onboarding-google .google-state-reconnect_required { background:#fdf6e7; border-color:var(--amber); color:#7a5610; }
+.onboarding-google button { border-color:var(--line); border-radius:8px; color:var(--ink); font-weight:600; }
+.onboarding-google :focus-visible,.onboarding-consent :focus-visible,.onboarding-return:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.onboarding-consent { margin:16px 0; padding:16px; border:1px solid var(--line); border-radius:8px; text-align:left; font-size:.9rem; }
+.onboarding-consent p { margin:0 0 10px; }
+.onboarding-consent label { display:flex; align-items:flex-start; gap:10px; font-weight:600; }
+.onboarding-consent input { flex:none; width:18px; height:18px; margin-top:2px; }
+
 .manual-workspace .scan-settings { margin-block:18px; background:var(--surface); border-color:var(--line); border-radius:12px; color:var(--ink); }
 .manual-workspace .scan-settings fieldset { border-color:var(--line); border-radius:8px; }
 .manual-workspace .scan-settings textarea,.manual-workspace .scan-settings input[type=number] { background:var(--canvas); border-color:var(--line); border-radius:8px; }

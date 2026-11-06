@@ -23,10 +23,10 @@ function display(value:any):string{
 function Fields({fields}:{fields:TaskFields}){
  return <><p>{display(fields.deadline)}</p>{fields.condition&&<p>Condition: {fields.condition}</p>}{fields.requirements.length>0&&<ul>{fields.requirements.map((r,i)=><li key={i}>{r}</li>)}</ul>}</>
 }
-export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;email:string;onSignOut:()=>void}){
+export default function ManualWorkspace({userId,email,onSignOut,onRunSetup,initialTab='review',initialNotice=''}:{userId:string;email:string;onSignOut:()=>void;onRunSetup:()=>void;initialTab?:'review'|'settings';initialNotice?:string}){
  const [snapshot,setSnapshot]=useState<Snapshot>(empty),[status,setStatus]=useState<ScanStatus|null>(null)
- const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
- const [tab,setTab]=useState('review'),[exportId,setExportId]=useState<string|null>(null),[exportDone,setExportDone]=useState<string|null>(null),[sourceLinks,setSourceLinks]=useState<TaskSourceLink[]|null>([])
+ const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(initialNotice)
+ const [tab,setTab]=useState<string>(initialTab),[exportId,setExportId]=useState<string|null>(null),[exportDone,setExportDone]=useState<string|null>(null),[sourceLinks,setSourceLinks]=useState<TaskSourceLink[]|null>([])
  const [scanning,setScanning]=useState(false),[now,setNow]=useState(()=>Date.now())
  const epoch=useRef(0),sequence=useRef(0),exportButtons=useRef(new Map<string,HTMLButtonElement>())
  const cooldownEnd=status?.cooldownUntil?Date.parse(status.cooldownUntil):0
@@ -107,7 +107,7 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
   </section>
   {error&&<p className="storage-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   <nav className="storage-actions" aria-label="Workspace sections">{[['review',`Review (${suggestions.length+changes.length})`],['tasks','Accepted tasks'],['information','Information'],['settings','Connection and permissions']].map(([key,label])=><button key={key} aria-pressed={tab===key} onClick={()=>{setTab(key);setExportId(null);setExportDone(null)}}>{label}</button>)}</nav>
-  {tab==='settings'&&<><GoogleConnectionPanel key={`google-${userId}`}/><ScanSettingsPanel key={`settings-${userId}`} collapseOnSave onSaved={()=>{setError('');setNotice('');void reload()}}/></>}
+  {tab==='settings'&&<><GoogleConnectionPanel key={`google-${userId}`}/><ScanSettingsPanel key={`settings-${userId}`} collapseOnSave onSaved={()=>{setError('');setNotice('');void reload()}}/><section className="storage-panel" aria-labelledby="manual-setup-title"><h2 id="manual-setup-title">Guided setup</h2><p>Go through your connection, sources, exclusions and consent step by step, starting from your saved settings. Nothing changes until you save there. Unsaved edits on this tab are not carried over.</p><button disabled={busy||status?.running} onClick={onRunSetup}>Run setup again</button></section></>}
   {tab==='review'&&<section aria-label="Saved proposals">
    {!suggestions.length&&!changes.length&&!loading&&<p>No pending suggestions or task changes. Connect Gmail and review saved permission under Connection and permissions before scanning.</p>}
    {suggestions.map(s=>{const quote=evidence.get(s.evidence_id);const fields=s.review_fields??s.fields;const group=siblingIds.get(s.extraction_id)??[];return <article className="storage-panel" key={s.id}>{group.length>1&&<p className="manual-sibling">{group.indexOf(s.id)+1} of {group.length} pending tasks found in this email</p>}<h2>{fields.action}</h2><Fields fields={fields}/><ExtractionReview extraction={extractions.get(s.extraction_id)}/>

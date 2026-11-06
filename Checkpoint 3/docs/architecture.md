@@ -1,6 +1,6 @@
 # InboxToTask architecture
 
-Updated November 5, 2026. This describes the code on branch `mzheng/gmail-scan-hardening` and how it has been verified. Results are in [use cases](use-cases.md); limits are in [safety and privacy](safety_privacy.md) and [observability](observability.md).
+Updated November 5, 2026. This describes the code in this repository as of this update and how it has been verified. Results are in [use cases](use-cases.md); limits are in [safety and privacy](safety_privacy.md) and [observability](observability.md).
 
 ## Status at a glance
 

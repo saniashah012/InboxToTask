@@ -2,7 +2,7 @@
 
 Local setup for InboxToTask. Run commands from the folder named in each step. On macOS or Linux, use `npm` and `npx` instead of `npm.cmd` and `npx.cmd`.
 
-Hosted Gmail scanning is not deployed or verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first.
+Hosted Gmail scanning is not deployed or verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first. For a short teammate walkthrough of setup and use, see [local setup and use](../docs/local-setup-and-use.md).
 
 ## Requirements
 

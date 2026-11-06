@@ -6,6 +6,7 @@
 | --- | --- |
 | `/app/` source and run scripts | [Checkpoint 3/app](<Checkpoint 3/app/>) |
 | `INSTALL.md`, `.env.example` | [INSTALL.md](<Checkpoint 3/app/INSTALL.md>), [.env.example](<Checkpoint 3/app/.env.example>) |
+| Teammate setup and use guide | [local-setup-and-use.md](<Checkpoint 3/docs/local-setup-and-use.md>) |
 | `/prompts/` | [Checkpoint 3/app/prompts](<Checkpoint 3/app/prompts/>) |
 | Architecture | [architecture.md](<Checkpoint 3/docs/architecture.md>) |
 | Use cases | [use-cases.md](<Checkpoint 3/docs/use-cases.md>) |

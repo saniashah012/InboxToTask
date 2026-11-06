@@ -31,9 +31,12 @@ export function createGmailProcessor({rpc,user,work,settings,systemPrompt,genera
   if(context.omitted) prepared.payload.contextWarnings.push('Some relevant task context was omitted by task-state limits. Verify update targets.');
   // The warning enters extraction too, without caller-controlled model settings.
   const effectivePrompt=systemPrompt+(context.omitted?'\nTask context was bounded; flag incomplete update-target context for review.':'');
-  const configKey=await hash({settings,systemPrompt:effectivePrompt,schema:gmailSchema,rules:email.rules,topics:work.semanticPreferences,contextLimits:email.contextLimits});
+  // Access rules are absent on purpose: SQL rechecks current permission on every use,
+  // and a rule change that alters permitted context already changes the content. The
+  // scan date is absent because relative dates resolve from the message's sent date.
+  const configKey=await hash({settings,systemPrompt:effectivePrompt,schema:gmailSchema,topics:work.semanticPreferences,contextLimits:email.contextLimits});
   const {existingTaskContext,analysisTime,...content}=prepared.payload;
-  const base=await hash({content,analysisDate:analysisTime.slice(0,10),configKey});
+  const base=await hash({content,configKey});
   const key=await hash({base,existingTaskContext});
   const meta={namespace:'gmail',messageId:email.message.id,threadId:email.message.threadId,subject:email.message.subject,
     sender:email.message.from,sentAt:email.message.sentAt,analysisTime:input.analysisTime,version:'gmail-v1',model:settings.model};

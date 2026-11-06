@@ -11,7 +11,14 @@ const same = (a,b) => JSON.stringify(canonical(a))===JSON.stringify(canonical(b)
 const bounded = (n, min, max) => Number.isInteger(n) && n >= min && n <= max;
 export function address(value) {
   if (typeof value !== 'string') fail('INVALID_ADDRESS');
-  const email = (value.match(/<([^<>]+)>/)?.[1] ?? value).trim().toLowerCase();
+  // Quoted display names and comments never supply the address. Anything naming
+  // more than one address grants nothing, because access rules test one sender.
+  // An unquoted comma in a display name is common and harmless without a second address.
+  const bare = value.replace(/"(?:[^"\\]|\\.)*"/g, ' ').replace(/\((?:[^()\\]|\\.)*\)/g, ' ');
+  const angle = bare.match(/<[^<>]*>/g) ?? [];
+  const outside = bare.replace(/<[^<>]*>/g, '');
+  if (angle.length > 1 || /[<>]/.test(outside) || (angle.length && outside.includes('@'))) fail('INVALID_ADDRESS');
+  const email = (angle[0]?.slice(1, -1) ?? bare).trim().toLowerCase();
   if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) fail('INVALID_ADDRESS');
   return email;
 }

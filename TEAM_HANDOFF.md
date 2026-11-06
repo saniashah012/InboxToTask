@@ -1,7 +1,19 @@
 # Manual Gmail Scan Handoff for Team Review
 
 ## Status
-This branch contains the in-progress local implementation for the manual Gmail scanning milestone. The work remains uncommitted and was intentionally preserved as-is. The current direction is to continue the work carefully without opening broad email access or enabling live Gmail/Gemini processing before the remaining guardrails and verification steps are complete.
+Current status lives in [CURRENT_STATE.md](<Checkpoint 3/CURRENT_STATE.md>); sections below may lag it. The manual scan code is implemented and locally verified with fictional injected data. No real Gmail or Gemini call has been made, and live Gmail/Gemini processing stays disabled until the live acceptance gate passes.
+
+## Database migrations for the Gmail scanner
+Apply these in filename order, together, after any earlier repository migrations:
+
+1. `20261105200000_source_semantic_contract.sql`
+2. `20261105210000_manual_gmail_retrieval.sql`
+3. `20261105212000_manual_gmail_pause_gate.sql`
+4. `20261105220000_gmail_persistence.sql`
+5. `20261105223000_gmail_scan_status.sql`
+6. `20261106000000_gmail_scan_hardening.sql`
+
+Do not stop after step 5: step 6 fixes defects in steps 4 and 5. Applying these enables no scanning; `gmail_scan` stays a separate function and is disabled by default. Please report which versions were applied and to which environment.
 
 ## What is already implemented
 - Source/semantic permission separation and filter handling are in place.
@@ -31,35 +43,10 @@ Key files in the current implementation:
 - User isolation, revision checks, deletion/pause fencing, and retention behavior remain in scope.
 - Gmail retrieval and scanning should remain disabled unless explicitly authorized and verified.
 
-## Local migration status
-Applied locally:
-- `20261105200000_source_semantic_contract.sql`
-- `20261105210000_manual_gmail_retrieval.sql`
-- `20261105212000_manual_gmail_pause_gate.sql`
-
-Not yet applied to the actual local database:
-- `20261105220000_gmail_persistence.sql`
-- `20261105223000_gmail_scan_status.sql`
-
-These two pending migrations were exercised in PGlite, but they should be reviewed before applying to the actual local database. Do not reset local data while attempting to apply them.
-
 ## Remaining verification work
-Before live use, the following items still need to be finished:
-1. Review and apply the two pending persistence/status migrations locally.
-2. Resolve the Google OAuth return destination mismatch between the template and the current runtime config.
-3. Verify the authenticated browser flow and manual workspace behavior end-to-end using a dedicated fictional mailbox.
-4. Confirm the live Gmail → Gemini → storage workflow under the real permission rules.
-5. Re-check stale-target review/rebase safeguards and persistence behavior before broader release.
+Live acceptance with a dedicated fictional mailbox remains: see the [Phase 6 runbook](<Checkpoint 3/docs/gmail-manual-scan-review-2026-11-05.md#phase-6-live-acceptance-runbook>).
 
 ## Validation status
-Current evidence is:
-- Offline pipeline and targeted Gmail tests pass in the local test harness.
-- Frontend build/type checks pass for the current UI work.
-- No live Gmail or real-model execution is confirmed as part of this branch.
-- Offline and local test results do not establish live Gmail accuracy or hosted integration correctness.
-
-## Recommended next action
-A teammate should continue with the pending verification work while preserving the current local branch state. The feature should stay disabled until the remaining auth and persistence checks are complete. This branch should not be treated as production-ready until the live acceptance gate is passed.
-
-## Handoff note for reviewers
-This work is intentionally scoped to the local manual Gmail scanning milestone. The implementation is not yet complete, but the groundwork is in place and the current state was preserved to avoid losing uncommitted work. Please continue carefully, maintain the guardrails above, and do not enable broad scanning or production OAuth flows without explicit verification.
+- Offline, local database, local API and seeded browser checks pass. See the [review report](<Checkpoint 3/docs/gmail-manual-scan-review-2026-11-05.md>).
+- No live Gmail or real-model execution has occurred.
+- These results do not establish live Gmail accuracy or hosted integration correctness. This branch is not production-ready until the live acceptance gate passes.

@@ -17,24 +17,24 @@ suppress raw errors: a parser error once printed a secret (see Security below).
 | Item | State |
 | --- | --- |
 | `main` | `e2b0009`, does not have this work |
-| [PR #22](https://github.com/saniashah012/InboxToTask/pull/22) `mzheng/gmail-scan-hardening` | Pushed through `fe4a654` (docs and draft deck), **not merged**. CI was green on `cef7f06`; check the head |
+| [PR #22](https://github.com/saniashah012/InboxToTask/pull/22) `mzheng/gmail-scan-hardening` | Open and **not merged** when last checked; recheck its head and CI |
 | `feadf66` | Live-test fixes, manual resolution of ambiguous updates, test log |
 | `cef7f06` | Source-email links from another session, kept as a separate commit by user request |
 | PR #20 (Sania, chips) | Open, separate. Both it and PR #22 change `STORAGE.md` |
-| Calendar branch `agents/proceed-with-the-minimal-google-calendar-integra` at `b6f84e6` (Sania) | Pushed, unmerged. Based on a cherry-pick of `4bb256b`, so it needs a rebase |
+| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is local-only at `da4417d`, with its migration renamed `20261106050000`; offline tests reported passing, no live test |
 
-**Ownership right now:** the "Gmail features in Figma prototype" session coordinates hosted changes, the
-shared OAuth review of Sania's Calendar branch, and the restore-errors question. The "CP3 progress check"
-session owns `docs/demo-script.md`. An uncommitted `ManualWorkspace.tsx` edit seen after `fe4a654` was not from
-this session. Several sessions share this checkout, so follow their rules: no stash, reset, restore, clean,
+**Ownership right now:** the "Gmail features in Figma prototype" session coordinates hosted changes and owns
+`CURRENT_STATE.md` and the hosted records. The "CP3 progress check" session owns `docs/demo-script.md` and tonight's
+order of commits. Several sessions share this checkout, so follow their rules: no stash, reset, restore, clean,
 checkout, rebase or merge; stage named files only; no installs in `Checkpoint 3/app`; leave others' processes running.
 
 ## Hosted rollout
-Sania said hosted changes are left to the user. `ffa915a` records that hosted received steps 1-6
-below at 03:26 UTC on November 6, done by another session; recheck rather than trust this line.
-Steps 7-9 were not on hosted then. Apply them before merging PR #22, in filename order. Merging does not apply migrations, and Vercel probably
-updates the live site from `main` (settings not inspected), which would then call missing
-functions. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy `gmail_scan` as part of this.
+Per the session coordinating hosted (reported, not checked here), hosted has all nine migrations below,
+through `20261106040000`, applied by 03:50 UTC on November 6. The Gmail functions are not deployed there, so
+connecting Gmail and scanning work only locally. Sania reports hosted preview checks passed on `ffa915a` for settings
+save/reload, sign-out/in, stale-tab rejection and two-account isolation in the tested flows; they do not cover
+onboarding, chips, RLS penetration, review, manual resolution or source links. Recheck before relying on this. Merging does not apply migrations, and Vercel production deploys
+from `main` per Sania. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy `gmail_scan` as part of this.
 
 1. `20261105200000_source_semantic_contract.sql`
 2. `20261105210000_manual_gmail_retrieval.sql`
@@ -46,9 +46,8 @@ functions. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy `gmail_scan`
 8. `20261106030000_gmail_task_source_links.sql`
 9. `20261106040000_gmail_token_recheck.sql`
 
-Calendar's `20261106020000_calendar_events.sql` sorts between 7 and 8 but is a separate later
-step, and local already has 030000 and 040000. It may need `--include-all` or a newer timestamp
-(recommended, but it is Sania's file). It also redefines `google_connection_service`.
+Calendar's migration is not on hosted or in this branch. It redefines `google_connection_service`, so
+review that against the Gmail flow when Calendar resumes in CP4.
 
 ## Local runtime
 - All nine migrations above are applied locally without reset. Calendar's is not.
@@ -83,8 +82,8 @@ step, and local already has 030000 and 040000. It may need `--include-all` or a 
 ## Evidence
 Live results are the table in [UC8](<Checkpoint 3/docs/use-cases.md>), cases L01–L25, with the
 [labeled email set](<Checkpoint 3/tests/fixtures/gmail-live-cases.json>). Latest automated results:
-168 offline, 71 pgTAP, 15 local API groups unmodified with scanning off, frontend type check and
-build, and CI on `cef7f06`.
+168 offline at `92b882a`; 71 pgTAP and 15 local API groups unmodified with scanning off, run at `cef7f06`.
+Check GitHub for CI at the current branch tip.
 
 **Not run live:** settings changed during a scan, Gmail or Gemini rate limits, wrong-account
 connection, replayed OAuth state, domain and subdomain rules (needs a second sender). The Spam/Trash
@@ -103,10 +102,10 @@ None block PR #22. Only the first two need SQL.
 - Two calls per batch and 20 requests per day are too low for real use.
 
 ## Next work, in order
-1. Other session: document the restore errors and finish the OAuth review.
-2. User: decide on the hosted migrations, then merge PR #22.
-3. Rebase Calendar, resolve the migration order, retest locally. After reconnecting, retest revocation
-   (L17), refused refresh (L20) and a normal scan.
+1. Merge PR #22 when the team is ready. Vercel production is `main` per Sania, and Instant Rollback does not undo migrations.
+2. In CP4, resume Calendar from `mzheng/calendar-rebase`: review the shared OAuth changes, then after
+   reconnecting, retest revocation (L17), refused refresh (L20) and a normal scan.
+3. A separate session may land onboarding work. Until confirmed merged, treat onboarding as not connected.
 4. **Phase 5:** connect real data to the designed dashboard. `App.tsx` line 565 sends every signed-in
    user to the plain `ManualWorkspace`, so the designed onboarding and PR #20's chips cannot be reached.
    Their save path already uses `scan_settings_save`. Coordinate with PR #20 and Calendar, which both
@@ -116,8 +115,7 @@ None block PR #22. Only the first two need SQL.
    updated in `fe4a654`; INSTALL has not been run on a clean machine.
 
 ## Deadline and demo
-Repo reported due Nov 5 at 11:30 PM Central, demo Friday morning. `main` lacks this work until migrations 7-9
-reach hosted and PR #22 merges. The test account's local daily limit was raised from 20 to 50 for the demo (16 used at last check for UTC day
+Repo reported due Nov 5 at 11:30 PM Central, demo Friday morning. `main` lacks this work until PR #22 merges. The test account's local daily limit was raised from 20 to 50 for the demo (16 used at last check for UTC day
 2026-11-06, which resets at 6 PM Central Friday and is shared by rehearsal and demo). Demo setup needs `ENABLE_GMAIL_SCAN=true`, a functions
 restart and a Gmail reconnect on the test account; turn the flag off afterward. A scan after unpausing has not
 been run. The tester's personal address can appear on screen as the allowed sender.

@@ -10,7 +10,7 @@ Updated November 5, 2026. The system records latency boundaries, token accountin
 | --- | --- | --- | --- |
 | Batch counts: candidates, permitted, blocked, skipped, prepared, reused, failed, context bodies, model calls | `private.gmail_scan_work.last_result`, returned by the `gmail_scan` endpoint and `gmail_scan_status` | Owner, shown in the workspace | Live local (L07, L14, L21, L22) |
 | Batch stop reason, per-code failure counts, unresolved count, backlog flag | Same | Owner | Automated; some stop reasons live local |
-| Last started, finished and successful times; cooldown end | `gmail_scan_status` | Owner | Local API. Known issue F6: "last successful" does not update when a batch stops at the model-call limit |
+| Last started, finished and successful times; cooldown end | `gmail_scan_status` | Owner; the workspace shows the last successful time and a cooldown countdown | Local API. Known issue F6: "last successful" does not update when a batch stops at the model-call limit |
 | One row per model attempt: state, `safe_error`, `reserved_tokens`, `reported_tokens`, `started_at`, `finished_at` | [`private.storage_attempts`](../app/supabase/migrations/20261104060000_storage_schema.sql) | Database operator only | Automated |
 | Daily requests and tokens per user | `private.storage_usage` | Owner totals through `storage_activity`, shown only in the `/storage` tester | Automated |
 | Shared requests per model per minute | `private.storage_provider_usage` | Database operator only | Automated |
@@ -74,7 +74,7 @@ Sender, subject, summaries, evidence and `storage_jobs.owner_email` are applicat
 
 ## Debugging a local scan
 
-1. Read the workspace's last-batch line and stop message. Most issues end here. Common cases: Gmail filed the test mail as spam; the account's Google notices inflate blocked counts (F11); new mail arrived after the saved window, so use **Scan past seven days**.
+1. Read the workspace's last-batch tiles and stop message. Most issues end here. Common cases: Gmail filed the test mail as spam; the account's Google notices inflate blocked counts (F11); new mail arrived after the saved window, so use **Scan past seven days**.
 2. Check the mode. `GMAIL_SCAN_DISABLED` means the flag, key or Google connection setting is off ([setup](../app/INSTALL.md)).
 3. As the local database owner, for example in local Studio, read only safe columns:
 
@@ -95,7 +95,7 @@ Automated coverage: [storage database tests](../tests/storage-database.test.mjs)
 - Add a correlation ID across dispatch, retrieval, inference and saving.
 - Add distinct safe codes for validation failures.
 - Estimate dollar cost from token categories, with the pricing date recorded.
-- Show remaining allowance and cooldown time in the workspace.
+- Show remaining allowance in the workspace.
 - Add operator alerts for stuck leases, repeated failures and budget deferrals.
 - Add schedule timing once scheduled scans exist.
 - Audit platform log contents and retention before any hosted use.

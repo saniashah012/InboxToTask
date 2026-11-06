@@ -3,7 +3,7 @@
 This implements app sign-in and an account-bound Google connection. Connecting does not
 itself retrieve Gmail messages, enable scanning, call a model, or connect Calendar. Manual
 scanning is a separate, disabled-by-default feature; see [UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
-Signed-in users at `/` get the plain persistent workspace with Gmail connection controls;
+Signed-in users at `/` get the persistent workspace with Gmail connection controls;
 preview at `/` remains simulated. Development controls are on `/storage` only through a
 localhost Vite development server with `VITE_STORAGE_ENABLED=true`. Production builds exclude
 the development dashboard regardless of that flag; `/storage` and its callback show Page not
@@ -64,6 +64,8 @@ by itself. See the [current handoff](../../docs/frontend-integration-handoff-202
 for the frontend integration priorities and no-push/Vercel constraint.
 
 ## Hosted inspection, November 5, 2026
+
+This section is dated. Later migration rollouts are recorded in [current state](../../CURRENT_STATE.md).
 
 Read-only inspection of the linked `IS492_c3` project found:
 
@@ -169,7 +171,7 @@ written above, even if an external tutorial uses `_CLIENT_SECRET`.
    `GOOGLE_CLIENT_SECRET` in the private Functions file. These must be the Gmail
    client's values, not the sign-in client's values.
 4. Leave `GOOGLE_CALLBACK_URL` and `GOOGLE_RETURN_URL` at their local defaults.
-   The return URL is `http://127.0.0.1:5173/storage`; it is the backend's final
+   The return URL is `http://127.0.0.1:5173/`; it is the backend's final
    destination, not the redirect URI to register with Google.
 5. Leave `ENABLE_GOOGLE_CONNECTION=false` and `GOOGLE_TOKEN_KEYS` blank for the
    handoff. Keep `ENABLE_FIXTURE_EXTRACTION=false`. Gemini credentials are not
@@ -194,7 +196,7 @@ and the encryption key can be configured during this handoff. The agent should:
 3. Configure the frontend's local public URL/key, enable the local Auth provider
    and relevant frontend/backend flags, and reload services while preserving data.
 4. Apply pending local migrations if needed, serve both Google functions, and
-   open `http://127.0.0.1:5173/storage` through Vite development.
+   open `http://127.0.0.1:5173/` through Vite development.
 5. Have you complete Google login/consent in the browser using the same test
    account for both steps, then verify reload and disconnect/reconnect behavior.
 

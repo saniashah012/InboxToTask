@@ -2,7 +2,7 @@
 
 Local setup for InboxToTask. Run commands from the folder named in each step. On macOS or Linux, use `npm` and `npx` instead of `npm.cmd` and `npx.cmd`.
 
-Hosted behavior is not verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first.
+Hosted Gmail scanning is not deployed or verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first.
 
 ## Requirements
 
@@ -65,7 +65,7 @@ Copy the local URL and publishable key into `web/.env` as `VITE_SUPABASE_URL` an
 
 Follow [Google setup, steps 2 to 5](supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup): one project and client for sign-in, a second for Gmail, and the test account listed in both.
 
-That guide predates the product page. Where it differs, use these values in `supabase/functions/.env`:
+Then use these values in `supabase/functions/.env`, which replace the guide's handoff defaults:
 
 | Setting | Value |
 | --- | --- |
@@ -97,7 +97,7 @@ corepack pnpm dev --host 127.0.0.1
 
 Check first whether ports 54321 and 5173 are already serving. Open `http://127.0.0.1:5173/` and sign in with Google. Use `127.0.0.1` throughout, because `localhost` is a different OAuth origin.
 
-Under **Connection and permissions**, connect Gmail with the same address. Connecting reads no mail, and scans stay refused while scanning is off. Signed-in users see the plain workspace page: the designed dashboard is not connected to real data.
+Under **Connection and permissions**, connect Gmail with the same address. Connecting reads no mail, and scans stay refused while scanning is off. Signed-in users see the workspace page; the designed dashboard is not yet connected to real data.
 
 ## 7. Turn on manual scanning deliberately
 
@@ -113,8 +113,8 @@ Each model call uses Gemini quota. Do this only with the dedicated fictional mai
 
    To override the [default model](prompts/model-settings.json), add `GEMINI_MODEL=<model id>`. Keep the key in this file only, never in a `VITE_*` variable.
 2. Stop and restart the `functions serve` command. Settings load at startup.
-3. In the app, under **Connection and permissions**, save at least one exact sender or domain, give consent, and uncheck **Pause scanning**. Keep the list narrow: everything it permits can go to Gemini.
-4. Under **Check Gmail**, click **Scan past seven days**. Use **Scan more** when work remains, after the 60-second cooldown.
+3. In the app, under **Connection and permissions** (select **Edit settings** if you see a summary), save at least one exact sender or domain, give consent, and uncheck **Pause scanning**. Keep the list narrow: everything it permits can go to Gemini.
+4. Under **Check Gmail**, click **Scan past seven days**. The scan buttons stay disabled with a countdown during the 60-second cooldown. Use **Scan more** when work remains.
 
 Without all three settings, the endpoint returns `GMAIL_SCAN_DISABLED`. Without consent, sources or a connection, scans are refused. See the [walkthrough](../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
 
@@ -170,6 +170,6 @@ Passing these does not show that live Gmail or extraction works. See [live resul
 
 ## Hosted deployment
 
-Not verified, and not part of local setup. Applying migrations or deploying functions needs a separate decision. Requirements are in [the backend guide](supabase/README.md) and the [Google setup rollout section](supabase/GOOGLE_AUTH.md#hosted-rollout-separate-from-local-implementation). Keep `ENABLE_GMAIL_SCAN` off on hosted.
+Not part of local setup. The hosted session reports 20 ledger versions through `20261106040000`, with Gmail functions not deployed, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip. The Vercel production branch is `main`, per Sania, so treat a merge as a production deployment. Instant Rollback is available, but it does not undo migrations. Applying migrations or deploying functions needs a separate decision. Requirements are in [the backend guide](supabase/README.md) and the [Google setup rollout section](supabase/GOOGLE_AUTH.md#hosted-rollout-separate-from-local-implementation). Keep `ENABLE_GMAIL_SCAN` off on hosted.
 
 For a frontend build, set the Vercel root directory to `Checkpoint 3/app/web`, use the Vite preset, and set install command `pnpm install --frozen-lockfile`, build command `pnpm build` and output `dist`. Only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` belong in its environment. `/storage` is excluded from production builds.

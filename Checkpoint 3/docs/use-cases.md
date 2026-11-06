@@ -4,13 +4,13 @@ Updated November 5, 2026. Walkthrough scripts and test cases for the primary flo
 
 ## Test surfaces and evidence
 
-- **Main product (`/`):** signed-in users reach a plain persistent workspace with Gmail connection, saved settings, manual scans and review. The designed onboarding and dashboard are **not connected to real data**. They appear only in preview mode, with fictional data and simulated actions.
+- **Main product (`/`):** signed-in users reach a persistent workspace page with Gmail connection, saved settings, manual scans and review. The designed onboarding and dashboard are **not yet connected to real data**. They appear only in preview mode, with fictional data and simulated actions.
 - **Development tester (`/storage`):** local Vite development route for fixture trials, activity totals, waiting-for records, ICS export and task deletion. It is excluded from production builds, and its password sign-in is development tooling.
 - **Canonical pipeline:** offline tests and the CLI use fictional messages.
 
-**Evidence types:** *Automated* (offline tests with PGlite and injected responses), *Local API* (real local Auth, PostgREST, Edge, pgTAP), *Seeded browser* (fictional records, real local page), *Live local* (real Gmail and Gemini on fictional mail, cases L01 to L25 in [UC8](#uc8-real-gmail-to-review-workflow)), *Planned*. **Hosted behavior is not verified, and automatic scans are not implemented.**
+**Evidence types:** *Automated* (offline tests with PGlite and injected responses), *Local API* (real local Auth, PostgREST, Edge, pgTAP), *Seeded browser* (fictional records, real local page), *Live local* (real Gmail and Gemini on fictional mail, cases L01 to L25 in [UC8](#uc8-real-gmail-to-review-workflow)), *Planned*. **Hosted Gmail scanning is not deployed or verified, and automatic scans are not implemented.** Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip.
 
-Latest recorded results: 168 offline tests, 71 pgTAP checks, 15 local API groups with scanning off, frontend type check and build, and CI on `cef7f06` ([current state](../CURRENT_STATE.md)). One tester and about 15 fictional emails show the workflow runs; they do not measure accuracy.
+Automated results, by run: 168 offline and 5 ICS tests passed when rerun at `92b882a`. GitHub CI (offline tests, frontend type check and build) is reported passing at that tip. The 71 pgTAP checks and 15 local API groups with scanning off are from an earlier local run at `cef7f06` and were not repeated ([current state](../CURRENT_STATE.md)); no tests or migrations have changed since. One tester and about 15 fictional emails show the workflow runs; they do not measure accuracy.
 
 Use a dedicated Google account with fictional mail. Never include credentials, callback codes, tokens or personal mail in test reports. Setup is in [the install guide](../app/INSTALL.md).
 
@@ -23,14 +23,14 @@ Use a dedicated Google account with fictional mail. Never include credentials, c
 | [UC3](#uc3-resolve-conflicting-inclusion-and-exclusion-rules) Rule conflicts | Implemented | Live local for one sender; domain rules automated only |
 | [UC4](#uc4-extract-a-fictional-message-and-review-its-evidence) Fixture extraction | Implemented, off by default | Automated, separate CLI evaluations |
 | [UC5](#uc5-correct-approve-dismiss-and-complete-a-task) Review and complete | Implemented, partly in the tester | Live local, seeded browser |
-| [UC6](#uc6-export-a-calendar-file-without-authorizing-calendar-writes) ICS export | Workspace and tester | Automated, isolated browser check of the form; workspace button not browser-checked |
+| [UC6](#uc6-export-a-calendar-file-without-authorizing-calendar-writes) ICS export | Workspace and tester | Automated; Google Calendar imports tester-reported |
 | [UC7](#uc7-pause-disconnect-sign-out-and-handle-failures) Pause and failures | Implemented; no account deletion | Live local for several cases |
 | [UC8](#uc8-real-gmail-to-review-workflow) **Primary flow:** Gmail to review | Implemented, manual only | Live local |
-| [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle) Connected Calendar | Not in this branch | None |
+| [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle) Connected Calendar | Postponed to CP4 | No live test |
 
 ## UC1: Sign in and authorize Gmail separately
 
-**Status:** Implemented. Live local passed for sign-in and Gmail connection, token refresh (L16), revocation (L17, L20), disconnect (L18), cancelled consent and reconnect (L19), reload (L24), and sign-out and back in (L25). **Not run live:** wrong-account connection and replayed OAuth state.
+**Status:** Implemented. Live local passed for sign-in and Gmail connection, token refresh (L16), revocation (L17, L20), disconnect (L18), cancelled consent and reconnect (L19), reload (L24), and sign-out and back in (L25). **Not run live:** wrong-account connection and replayed OAuth state. **Known limitation:** Product sign-in silently reuses the current Google account, so unassisted account switching is unverified.
 
 1. Open the main app and select Google sign-in with the test account. Reload, and confirm the same account is restored.
 2. Open **Connection and permissions**, select **Connect Google**, and authorize Gmail with the same address.
@@ -48,7 +48,7 @@ Use a dedicated Google account with fictional mail. Never include credentials, c
 
 1. Open **Connection and permissions**, then **Scanning permission and sources**.
 2. Enter exact sender/domain inclusions and exclusions, literal subject exclusions, and semantic topics. Topics never grant access.
-3. Review the scope summary and context limits. Leave consent unchecked and scanning paused, then save.
+3. Review the scope summary and context limits. Leave consent unchecked and scanning paused, then save. In the workspace, the form collapses to a summary; select **Edit settings** to change it.
 4. Reload. Verify the rules persist without consent being granted implicitly.
 5. Read the disclosure, explicitly change consent/pause if desired, save, and verify persistence again.
 6. Open two tabs at the same saved revision. Save a change in one; saving the older revision in the other must fail with a stale-settings message. Reload before retrying.
@@ -117,11 +117,11 @@ Waiting-for entries are saved from real scans (L04), but the workspace does not 
 
 ## UC6: Export a calendar file without authorizing Calendar writes
 
-**Status:** ICS export is available on accepted tasks in the signed-in workspace and in the `/storage` development tester. Automated tests and an isolated browser check of the export form pass; the workspace button has passed its type check and build but has not been browser-checked, and saving a file and importing it into a real calendar has not been verified. Connected Calendar writes are covered in [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle).
+**Status:** ICS export is available on accepted tasks in the signed-in workspace and in the `/storage` development tester. In the workspace, a download closes the form and shows a confirmation. Automated tests and an isolated browser check of the export form pass. **Tester-reported:** one all-day and one timed import were checked in Google Calendar (27 minutes, 1:43-2:10 PM). Duplicate-import behavior is **untested**; each export uses a stable per-task UID, and the form warns that repeated imports may create duplicates. Connected Calendar writes are covered in [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle).
 
 1. Under **Accepted tasks**, on an approved or completed task that is not cancelled, open **Export calendar file**.
 2. Review the title and choose an all-day or timed schedule. Supply a date if no task deadline exists; timed entries require a time zone and explicit duration.
-3. Export and manually import the file into a test calendar, checking date/time behavior and duplicate-import behavior.
+3. Select **Download ICS**, confirm the form closes and the download message appears, then import the file into a test calendar and check date and time behavior. Importing the same file twice is an untested case.
 
 **Expected:** Task approval alone never writes a Google Calendar event. ICS export does not alter accepted task fields or call a model. Manual imports have no app-managed synchronization or remote undo. See [calendar export tests](../tests/calendar-export.test.mjs) and [export limitations](../app/supabase/STORAGE.md#manual-calendar-export).
 
@@ -134,7 +134,7 @@ Waiting-for entries are saved from real scans (L04), but the workspace does not 
 | Save pause or withdraw consent | Save permission state and fence older work; do not claim that Gmail access was revoked | Live local: L23 for a scan while paused. Automated |
 | Disconnect Gmail | Block backend connection use immediately; attempt provider revocation; retain a retryable disconnecting state on revocation failure | Live local: L18. Failed revocation is automated only |
 | Access removed on Google's page | Scan stops, saved results stay, reconnect offered | Live local: L17, L20 |
-| Sign out | Clear protected UI state and end the app session; keep Gmail connection and saved data | Live local: L25. Seeded browser for account switching |
+| Sign out | Clear protected UI state and end the app session; keep Gmail connection and saved data | Live local: L25. Seeded browser for account switching, using password sign-in on `/storage`; unassisted Google account switching is unverified |
 | Processing busy, budget or provider limit | Show a fixed error or deferral; keep progress for **Scan more** | Automated only. **Rate limits not run live** |
 | Invalid or truncated model output | Reject the result, keep failure accounting, create no task | Automated. Live local: F1 before its fix |
 | Settings changed during a scan | Late results are refused | Automated only. **Not run live** |
@@ -144,20 +144,21 @@ Disconnecting does not remove the separate Google sign-in grant or delete accoun
 
 ## UC8: Real Gmail-to-review workflow
 
-**Status:** The manual scan runs end to end locally with real Gmail and real Gemini on fictional mail in a dedicated test account; results are below. Scanning is switched off again by default. Automatic scheduled scans and hosted operation are not implemented or verified. The workspace is a plain page, not yet the designed dashboard.
+**Status:** The manual scan runs end to end locally with real Gmail and real Gemini on fictional mail in a dedicated test account; results are below. Scanning is switched off again by default. Automatic scheduled scans are not implemented. Gmail functions are not deployed on hosted (reported by the hosted session), so connecting and scanning work only locally. The workspace is a separate page, and the designed dashboard is not yet connected to real data.
 
 This is the primary CP3 workflow. Demonstrating fixtures, a simulated preview, or Google connection alone does not satisfy it.
 
 ### Walkthrough
 
 1. Sign in with Google, then under **Connection and permissions** connect Gmail with the same address. Connecting reads no mail.
-2. Save at least one exact sender or domain, give consent, and uncheck **Pause scanning**. Without all of these a scan is refused.
-3. Under **Check Gmail**, click **Scan past seven days**. Sender and subject rules are checked on metadata before any body is fetched, and again for each earlier message in the thread.
+2. Save at least one exact sender or domain, give consent, and uncheck **Pause scanning**. Saved settings collapse to a summary with **Edit settings**. Without all of these a scan is refused.
+3. Under **Check Gmail**, click **Scan past seven days**. Sender and subject rules are checked on metadata before any body is fetched, and again for each earlier message in the thread. A spinner shows during the batch, and number tiles show its counts afterward.
 4. Permitted email goes to Gemini with permitted thread history and existing same-thread tasks. Output is validated before it is saved.
-5. Each batch makes at most two model calls. When work remains, wait for the 60-second cooldown and click **Scan more**.
-6. Under **Review**, approve or dismiss suggestions. Approval makes no model call and no Calendar event. Each task shows the emails that created or changed it, with a link to the conversation in Gmail. Full bodies are not stored or fetched here.
+5. Each batch makes at most two model calls. During the 60-second cooldown the scan buttons are disabled and a countdown shows. When work remains, click **Scan more** after it ends.
+6. Under **Review**, approve or dismiss suggestions. Several pending tasks from one email are labeled, for example, **1 of 2 pending tasks found in this email**. Approval makes no model call and no Calendar event. Under **Accepted tasks**, an email history timeline shows the emails that created or changed each task, with a link to the conversation in Gmail, and tasks from one thread are grouped under **N tasks from this conversation**. Full bodies are not stored or fetched here.
 7. A later reply can propose an edit or cancellation of an accepted task. It shows a before/after comparison, and the accepted value does not change until approved. If the task changed in the meantime, the proposal must be refreshed against the current revision first.
 8. If an email seems to change a task but does not make clear which one or what the new values are, the app applies nothing and asks **Which task changed?** It shows the saved sender, subject, date and excerpt with a link to the full email in Gmail. The user chooses the task and enters the values, or dismisses the item. Full bodies are not stored, so the complete message stays in Gmail.
+9. Under **Information**, each saved summary has an **Executive summary** label, its subject, sender and date when available, and **Open conversation in Gmail**. **Mark as read** collapses an item; **View summary** and **Mark as unread** bring it back. Read state is kept only in this browser and persists across re-extraction. The summary wording is the existing saved text, with no prompt change. This tab was built and type-checked (`370873b`) but has no visual confirmation.
 
 Budgets per account: 20 model requests and 200,000 tokens per UTC day, both project-set trial values. Failed attempts keep their conservative token reservation ([accounting](observability.md#token-usage-and-cost)).
 
@@ -191,7 +192,7 @@ Budgets per account: 20 model requests and 200,000 tokens per UTC day, both proj
 | L20 | Token refresh after access removed on Google's page | Google refuses; status changes to reconnect required | "Google authorization expired or was revoked"; status `reconnect required`; **Reconnect Google** offered. The token was marked expired in the local database to force the refresh | Pass |
 | L21 | Same address both included and excluded | Exclusion wins; nothing permitted | 0 permitted, 17 blocked, 0 model calls | Pass |
 | L22 | Rescan after removing the exclusion, with a new email | New email processed; others reused | Library books processed with 1 model call; 10 messages reused. Permitted was 11 rather than 13 because the Study group thread had moved to Trash, which scans exclude by design (confirmed by a header-only mailbox audit) | Pass |
-| L23 | Scan while paused | Refused | Refused with a 409; resumed after unpausing | Pass |
+| L23 | Scan while paused | Refused | Refused with a 409. The user then unpaused and saved; no scan ran after unpausing | Pass |
 | L24 | Reload the page | Still signed in and connected | Still signed in and connected (tester-reported) | Pass |
 | L25 | Sign out and back in with Google | Gmail stays connected without new approval; tasks kept | Connected, no new Gmail approval, tasks kept (tester-reported) | Pass |
 
@@ -218,11 +219,11 @@ Automated coverage for this workflow: [retrieval](../tests/gmail-retrieval.test.
 
 ### Remaining acceptance
 
-Two items remain, and neither has started: real data in the designed dashboard, and automatic scheduled scans. Automatic scans are **not implemented**, and no schedule is installed. The plan's **15-minute default interval** is a target for that future work, not current behavior. Remaining criteria are in [the implementation plan](../IMPLEMENTATION_PLAN.md).
+Two items remain: real data in the designed dashboard and onboarding, and automatic scheduled scans. Automatic scans are **not implemented**, and no schedule is installed. The plan's **15-minute default interval** is a target for that future work, not current behavior. Remaining criteria are in [the implementation plan](../IMPLEMENTATION_PLAN.md).
 
 ## UC9: Future optional Calendar connection and approved event lifecycle
 
-**Status: Not in this branch.** No Calendar connection or Calendar API call exists here, and scans and task approval create no events. Calendar approval records and ICS export do not establish this workflow. A separate team branch (`agents/proceed-with-the-minimal-google-calendar-integra`, `b6f84e6`) adds event creation; it is unmerged and unreviewed, and its behavior is not claimed here. The script below is the acceptance target for whatever is eventually merged.
+**Status: Postponed to CP4 by user decision.** This branch has no Calendar connection or Calendar API call, and scans and task approval create no events. Calendar approval records and ICS export do not establish this workflow. Event creation exists on a rebased, local-only branch (`mzheng/calendar-rebase`, `da4417d`, migration renamed `20261106050000`). The rebase session reported offline tests passing, and it has had no live test. Sania's original branch (`agents/proceed-with-the-minimal-google-calendar-integra`) is on origin. Neither is merged. The script below is the CP4 acceptance target.
 
 1. During onboarding, offer **Connect Google Calendar** and **Skip for now**. Skipping or denying access must leave app sign-in, permitted Gmail processing, and task review usable. Offer connection later from Settings or Add to Calendar.
 2. If the user connects, verify actual granted capabilities and show real connection status. Do not infer Calendar authorization from Gmail access or app sign-in.
@@ -232,4 +233,4 @@ Two items remain, and neither has started: real data in the designed dashboard, 
 6. Present later deadline/event changes as proposals. Preserve accepted task values until task-update approval, and require separate approval for an external event update.
 7. Offer explicit undo for app-created events and show whether remote removal succeeded. Completing or deleting a task must not silently delete an event or a Gmail message.
 
-**Acceptance:** No event write occurs before approval; skip/denial paths stay usable; stale revisions fail; retries do not duplicate events; approved updates and undo affect only the intended app-managed event. Tests require the future executor and a controlled test calendar. If Calendar shares the Gmail Google Cloud project, grant revocation can affect both services; independent revocation would require a separate project. That topology remains a design choice, not an implemented guarantee.
+**Acceptance:** No event write occurs before approval; skip/denial paths stay usable; stale revisions fail; retries do not duplicate events; approved updates and undo affect only the intended app-managed event. Tests require the future executor and a controlled test calendar. If Calendar shares the Gmail Google Cloud project, grant revocation can affect both services; independent revocation would require a separate project. This branch implements no such topology.

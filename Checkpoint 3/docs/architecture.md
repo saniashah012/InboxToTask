@@ -7,12 +7,12 @@ Updated November 5, 2026. This describes the code on branch `mzheng/gmail-scan-h
 | Part | State | Evidence |
 | --- | --- | --- |
 | Manual Gmail scan → Gemini → storage → review | Works locally | Live local on fictional mail ([UC8](use-cases.md#uc8-real-gmail-to-review-workflow)) and automated tests |
-| Signed-in product page | Plain `ManualWorkspace` page ([App.tsx line 565](../app/web/src/App.tsx)) | Seeded local browser and live local |
-| Designed dashboard and onboarding | **Not connected to real data.** Reachable only as a fictional preview | Code |
+| Signed-in product page | Separate `ManualWorkspace` page ([App.tsx line 565](../app/web/src/App.tsx)) | Seeded local browser and live local |
+| Designed dashboard and onboarding | **Not yet connected to real data.** Reachable only as a fictional preview | Code |
 | Automatic scheduled scans | **Not implemented** | Code: no schedule exists |
-| Hosted (Vercel and hosted Supabase) | **Not verified** | Some migrations are applied, but scanning is not deployed or enabled there and signed-in checks remain open ([current state](../CURRENT_STATE.md)) |
-| Google Calendar event creation | **Not in this branch.** Exists only on an unmerged, unreviewed branch (`agents/proceed-with-the-minimal-google-calendar-integra`, `b6f84e6`) | Not evaluated here |
-| ICS file export | Implemented on accepted tasks in the workspace and in the `/storage` development tester | Automated tests and an isolated browser check of the form; workspace button not browser-checked |
+| Hosted (Vercel and hosted Supabase) | **Gmail scanning not deployed; signed-in checks partial** | Reported by the hosted session: 20 ledger versions through `20261106040000`, applied 03:50 UTC November 6. Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip. Vercel's production branch is `main`, per Sania. See also [current state](../CURRENT_STATE.md) |
+| Google Calendar event creation | **Postponed to CP4** by user decision, and not in this branch. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is local only; Sania's original branch is on origin | Offline tests passed per the rebase session (reported); no live test |
+| ICS file export | Implemented on accepted tasks in the workspace and in the `/storage` development tester | Automated tests and an isolated browser check of the form. Tester-reported: one all-day and one timed import checked in Google Calendar. Duplicate imports untested |
 
 ## End-to-end diagram
 
@@ -45,7 +45,7 @@ flowchart LR
 
   subgraph Absent["Not in this branch"]
     Scheduler["PLANNED: scan scheduler<br/>Not implemented"]
-    Calendar["UNMERGED: Google Calendar events<br/>Separate branch, unreviewed"]
+    Calendar["CP4, UNMERGED: Google Calendar events<br/>Separate branches, no live test"]
   end
 
   Product --> Auth
@@ -115,7 +115,7 @@ The handler rechecks the scan lease and saved permission before each external re
 
 | Layer | Component | Responsibility |
 | --- | --- | --- |
-| Client UI | [ManualWorkspace](../app/web/src/ManualWorkspace.tsx), [manual scan adapter](../app/web/src/manualScanAdapter.ts), [source emails](../app/web/src/SourceEmails.tsx) | Scan, counts, review, before/after changes, manual resolution and Gmail links |
+| Client UI | [ManualWorkspace](../app/web/src/ManualWorkspace.tsx), [manual scan adapter](../app/web/src/manualScanAdapter.ts), [source emails](../app/web/src/SourceEmails.tsx) | Scan status and counts, review, before/after changes, manual resolution, email history with Gmail links, ICS export, [Information tab](../app/web/src/InformationTab.tsx) |
 | Client UI | [App](../app/web/src/App.tsx) and preview adapter | Sign-in, routing, fictional preview with simulated actions |
 | Client UI | [StorageDashboard](../app/web/src/StorageDashboard.tsx) | Development only: fixture trials, activity totals, ICS export, task deletion |
 | Backend | [gmail_scan](../app/supabase/functions/gmail_scan/index.ts) | Authenticated manual scan, disabled by default |
@@ -145,6 +145,7 @@ Details and tests are in [safety and privacy](safety_privacy.md).
 | Summaries and supporting excerpts | `storage_extractions`, `storage_evidence` | Default 30-day expiry, enforced only when cleanup runs |
 | Suggestions, accepted tasks, proposed changes | `storage_suggestions`, `tasks`, `gmail_task_changes` | Model proposals stay separate from accepted values |
 | Waiting-for records | `storage_waiting_for`, `storage_followups` | Saved; displayed only in the development tester |
+| Information read markers | Browser `localStorage`, keyed by user and source ID, not the database | Source IDs only; persist across re-extraction, in that browser only |
 | Jobs, attempts, usage, scan work | `private.storage_*`, `private.gmail_scan_work` | No browser access; see [observability](observability.md) |
 | Reuse index | `private.gmail_result_cache` | Links a source and content hash to its extraction, with task fingerprints instead of accepted values. No browser access |
 | Encrypted Google credentials | `private.google_connections` | No browser access |
@@ -168,4 +169,4 @@ Details and tests are in [safety and privacy](safety_privacy.md).
 
 ## Not yet built
 
-Each item below is planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes after review of the separate branch, a complete account-deletion flow, and a verified hosted rollout.
+Each item below is planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes (postponed to CP4), a complete account-deletion flow, and a verified hosted rollout.

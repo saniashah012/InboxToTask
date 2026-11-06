@@ -73,7 +73,8 @@ slide 5 first.
 
 ## Part B details
 
-Do these in order, and drop from the end.
+Do these in order, and drop from the end. The run sheet leaves about 50 seconds, so expect to cover
+two or three.
 
 1. **Ambiguous date (L05).** Deadline is empty and the app asks which date `12/11` means.
 2. **Prompt injection (L06).** The email tells AI assistants to create a password task and mark it
@@ -134,6 +135,9 @@ Say these plainly:
   connecting Gmail and scanning don't work on the live site.
 - Live cases are fictional mail in one test mailbox, about 15 emails and one tester. They show the
   workflow runs, not extraction accuracy. L06 is one probe, not proof of injection resistance.
+- Hosted settings save, reload, stale-tab rejection and two-account isolation passed in a teammate's
+  check of an earlier preview. That doesn't cover review or the newest screens. Sign-in also silently
+  reuses the current Google account, so switching accounts isn't verified.
 - Not run live: settings changed mid-scan, rate limits, wrong-account connection, and domain and
   subdomain rules.
 

@@ -6,6 +6,7 @@ import ManualChangeResolver from './ManualChangeResolver'
 import GoogleConnectionPanel from './GoogleConnectionPanel'
 import ScanSettingsPanel from './ScanSettingsPanel'
 import ExtractionReview from './ExtractionReview'
+import InformationTab from './InformationTab'
 import CalendarExport from './CalendarExportPanel'
 import {loadTaskSourceLinks,OpenInGmail,TaskSourceEmails,type TaskSourceLink} from './SourceEmails'
 import inboxToTaskLogo from './assets/inbox-to-task-logo.png'
@@ -130,6 +131,6 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
    if(group[0].id!==t.id)return null
    const subject=(group.map(g=>primaryLink(g.id)).find(l=>l?.role==='created')??primaryLink(t.id))?.subject
    return <section className="manual-thread" key={`thread-${thread}`} aria-labelledby={`thread-${thread}`}><h2 id={`thread-${thread}`}>{group.length} tasks from this conversation</h2><p className="manual-thread-subject">{subject||'(no subject)'}</p>{group.map(renderTask)}</section>})}</section>}
-  {tab==='information'&&<section aria-label="Informational results">{!information.length&&!loading&&<p>No informational summaries are saved.</p>}{information.map(e=><article className="storage-panel" key={e.id}><h2>{e.category}</h2><p>{e.summary}</p><ExtractionReview extraction={e}/></article>)}</section>}
+  {tab==='information'&&<InformationTab key={`info-${userId}`} userId={userId} email={email} items={information} sources={snapshot.sources} loading={loading}/>}
  </main>
 }

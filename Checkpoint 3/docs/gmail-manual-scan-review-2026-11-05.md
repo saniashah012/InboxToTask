@@ -1,7 +1,7 @@
 # Manual Gmail scan: code review, fixes and live-acceptance runbook
 
-Date: November 5, 2026. Local work only. No real Gmail or Gemini calls, no hosted
-changes and no push. This continues the
+Date: November 5, 2026. Local work only, with no hosted changes. The review itself made no
+real Gmail or Gemini calls; the later live run is recorded in [UC8](use-cases.md#uc8-real-gmail-to-review-workflow). This continues the
 [phase record](gmail-manual-scan-phases-2026-11-05.md); it is evidence for this run,
 not proof of current runtime state.
 
@@ -46,8 +46,11 @@ acceptance of `gmailSchema`, extraction or targeting accuracy, or hosted behavio
 
 ## Known limitations
 
-- An ambiguous (untargeted) proposal can only be dismissed; there is no target picker.
-- The product workspace has no task-field editor; edits exist in the RPC and `/storage`.
+- Signed-in users reach the plain `ManualWorkspace`, not the designed dashboard and
+  onboarding, which stay sample-only. Phase 5's dashboard integration is still open.
+- The product workspace has no general task-field editor. Ambiguous proposals are the one
+  exception: by user decision, the user reads the source, chooses the task and enters the
+  values ([migration](../app/supabase/migrations/20261106010000_gmail_manual_resolution.sql)).
 - Each batch allows two model calls with a 60-second cooldown, so a full 100-message
   backlog needs about 50 Scan more requests. This is conservative and untuned.
 - Scanning is newest-first and approval happens after scans, so an update usually

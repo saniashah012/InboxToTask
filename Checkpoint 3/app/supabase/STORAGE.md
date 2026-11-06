@@ -63,7 +63,9 @@ results. Live acceptance of persistent mode is still outstanding.
 Proposed edits and cancellations are stored in `gmail_task_changes` with states
 `pending`, `approved`, `dismissed` and `superseded`. A source can be re-extracted after
 task or settings changes; earlier review decisions win, so repeats are dropped and open
-proposals are superseded. Cancelled tasks allow only deletion. Deleting a source purges
+proposals are superseded. A proposal with no identifiable target can only be dismissed or
+resolved through `gmail_change_resolve`, where the user chooses the task and enters the
+values; once resolved, re-extraction does not raise it again. Cancelled tasks allow only deletion. Deleting a source purges
 its retained metadata and stops later scans from fetching it as mail or context.
 
 Service-only `gmail_scan_service` coordinates one four-minute lease per owner,

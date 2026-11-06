@@ -30,6 +30,20 @@ test('ambiguous updates remain untargeted review proposals',()=>{
  const v=output();v.taskChanges[0].targetTaskId=null;v.taskChanges[0].expectedRevision=null;v.uncertainties=['Which research report does this refer to?'];
  assert.equal(validateExtraction(v,payload()).taskChanges[0].targetTaskId,null);
 });
+test('an edit with no identifiable target can reach review without proposed values, in either category',()=>{
+ // Shape returned by the real model for the live "that deliverable" case, on both replayed runs.
+ for(const category of ['Passive','Actionable']){
+  const v=output();v.category=category;v.uncertainties=['Which deliverable is being pushed back?'];
+  Object.assign(v.taskChanges[0],{targetTaskId:null,expectedRevision:null,fields:null});
+  assert.equal(validateExtraction(v,payload()).taskChanges[0].fields,null);
+ }
+});
+test('a targeted edit still needs complete values, Actionable and at least one changed field',()=>{
+ for(const mutate of [v=>v.taskChanges[0].fields=null,v=>v.category='Passive',v=>v.taskChanges[0].changedFields=[]]){
+  const v=output();mutate(v);assert.throws(()=>validateExtraction(v,payload()));
+ }
+ const none=output();none.taskChanges=[];assert.throws(()=>validateExtraction(none,payload()),/CATEGORY_TASK_MISMATCH/);
+});
 test('new tasks coexist with changes without requiring inferred deadlines',()=>{
  const v=output();v.tasks=[{...fields,action:'Upload the slides',owner:'student@example.org',topicRelevance:'relevant',evidence:{messageId:'gmail1',quote:'Also upload the slides.'}}];
  assert.equal(validateExtraction(v,payload()).tasks[0].deadline,null);

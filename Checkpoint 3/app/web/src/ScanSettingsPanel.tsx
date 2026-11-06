@@ -11,7 +11,7 @@ const limitFields = [
 ] as const
 
 // The parent must key this component by verified user ID to discard account state.
-export default function ScanSettingsPanel() {
+export default function ScanSettingsPanel({ onSaved }: { onSaved?: () => void } = {}) {
   const [settings, setSettings] = useState<ScanSettings | null>(null)
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState("")
@@ -44,7 +44,7 @@ export default function ScanSettingsPanel() {
     for (const group of ["include", "exclude"] as const) normalized.semantic_preferences[group] = normalized.semantic_preferences[group].map(v => v.trim()).filter(Boolean)
     try {
       const result = await saveScanSettings(normalized)
-      if (live.current) { setSettings(result); setNotice(`Saved revision ${result.revision}. No email was read. Scanning requires a separate manual request.`) }
+      if (live.current) { setSettings(result); setNotice(`Saved revision ${result.revision}. No email was read. Scanning requires a separate manual request.`); onSaved?.() }
     } catch (err) { if (live.current) setError((err as Error).message) }
     finally { if (live.current) setBusy(false) }
   }

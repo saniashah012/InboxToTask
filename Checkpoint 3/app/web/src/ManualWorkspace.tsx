@@ -1,7 +1,8 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {supabase} from './supabase'
 import {loadStorageSnapshot,reviewStoredRecord,type Snapshot,type TaskFields} from './storageAdapter'
-import {manualScan,manualScanStatus,reviewTaskChange,scanStopMessage,type ScanStatus} from './manualScanAdapter'
+import {manualScan,manualScanStatus,resolveTaskChange,reviewTaskChange,scanStopMessage,type ScanStatus} from './manualScanAdapter'
+import ManualChangeResolver from './ManualChangeResolver'
 import GoogleConnectionPanel from './GoogleConnectionPanel'
 import ScanSettingsPanel from './ScanSettingsPanel'
 import ExtractionReview from './ExtractionReview'
@@ -61,6 +62,7 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
  const changes=(snapshot.changes??[]).filter(c=>extractions.has(c.extraction_id)&&c.state==='pending')
  const tasks=snapshot.tasks.filter(t=>!t.deleted_at&&t.accepted_fields&&['approved','completed'].includes(t.status))
  const counts=status?.result?.counts
+ const needsReconnect=status?.result?.error==='GMAIL_RECONNECT_REQUIRED'
  return <main className="storage-page manual-workspace">
   <header><div><p className="storage-eyebrow">InboxToTask</p><h1>Your inbox, ready for review</h1><p>{email}</p></div><button onClick={onSignOut}>Sign out</button></header>
   <section className="storage-panel" aria-labelledby="manual-scan-title"><h2 id="manual-scan-title">Check Gmail</h2>
@@ -70,26 +72,29 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
    {counts&&<p>Last batch: {counts.candidates??0} candidate messages, {counts.permitted??0} permitted, {counts.blocked??0} blocked, {counts.prepared??0} processed ({counts.reused??0} reused without a model call), {counts.failed??0} could not be processed, {counts.modelCalls??0} model calls.</p>}
    {counts?.failed>0&&<p role="status">{status?.result?.unresolved>0?`${status?.result?.unresolved} messages stopped after repeated attempts. A new seven-day scan tries them again. `:''}Other failed messages are retried by Scan more.</p>}
    {status?.result?.error&&<p role="status">{scanStopMessage(status.result.error)} Previously saved results remain available.</p>}
-   {status?.backlog&&<p>More work remains; the exact backlog count is unknown. Scan more continues the saved window and checks current permissions again.</p>}
+   {status?.backlog&&!needsReconnect&&<p>More work remains; the exact backlog count is unknown. Scan more continues the saved window and checks current permissions again.</p>}
    <div className="storage-actions"><button disabled={busy||status?.running} onClick={()=>void scan('initial')}>Scan past seven days</button>
-    <button disabled={busy||status?.running||!status?.backlog} onClick={()=>void scan('more')}>Scan more</button>
+    <button disabled={busy||status?.running||!status?.backlog||needsReconnect} onClick={()=>void scan('more')}>Scan more</button>
     <button disabled={busy} onClick={()=>{setError('');void reload()}}>Reload saved results</button></div>
    <p>No Calendar events are created by scans or task approval.</p>
   </section>
   {error&&<p className="storage-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   <nav className="storage-actions" aria-label="Workspace sections">{[['review',`Review (${suggestions.length+changes.length})`],['tasks','Accepted tasks'],['information','Information'],['settings','Connection and permissions']].map(([key,label])=><button key={key} aria-pressed={tab===key} onClick={()=>setTab(key)}>{label}</button>)}</nav>
-  {tab==='settings'&&<><GoogleConnectionPanel key={`google-${userId}`}/><ScanSettingsPanel key={`settings-${userId}-${refresh}`}/><button disabled={busy} onClick={()=>setRefresh(v=>v+1)}>Reload settings form</button></>}
+  {tab==='settings'&&<><GoogleConnectionPanel key={`google-${userId}`}/><ScanSettingsPanel key={`settings-${userId}-${refresh}`} onSaved={()=>{setError('');setNotice('');void reload()}}/><button disabled={busy} onClick={()=>setRefresh(v=>v+1)}>Reload settings form</button></>}
   {tab==='review'&&<section aria-label="Saved proposals">
    {!suggestions.length&&!changes.length&&!loading&&<p>No pending suggestions or task changes. Connect Gmail and review saved permission under Connection and permissions before scanning.</p>}
    {suggestions.map(s=>{const quote=evidence.get(s.evidence_id);const fields=s.review_fields??s.fields;return <article className="storage-panel" key={s.id}><h2>{fields.action}</h2><Fields fields={fields}/><ExtractionReview extraction={extractions.get(s.extraction_id)}/>
     <blockquote>{quote?.quote??'Supporting evidence has expired.'}</blockquote><div className="storage-actions"><button disabled={busy||!quote?.quote} onClick={()=>void perform(()=>reviewStoredRecord('suggestion',s.id,'approve',s.revision),'Task approved. No Calendar event was created.')}>Approve task</button><button disabled={busy} onClick={()=>void perform(()=>reviewStoredRecord('suggestion',s.id,'dismiss',s.revision),'Suggestion dismissed.')}>Dismiss</button></div></article>})}
-   {changes.map(c=>{const target=tasks.find(t=>t.id===c.target_task_id),open=target?.status==='approved'&&!target.cancelled_at,stale=open&&target.revision!==c.expected_revision,quote=evidence.get(c.evidence_id);return <article className="storage-panel" key={c.id}>
+   {changes.map(c=>{const target=tasks.find(t=>t.id===c.target_task_id),open=target?.status==='approved'&&!target.cancelled_at,stale=open&&target.revision!==c.expected_revision,quote=evidence.get(c.evidence_id);
+    if(!c.target_task_id)return <ManualChangeResolver key={`${c.id}-${c.revision}`} change={c} source={snapshot.sources.find(s=>s.id===extractions.get(c.extraction_id)?.source_id)} quote={quote?.quote} tasks={tasks.filter(t=>t.status==='approved'&&!t.cancelled_at)} email={email} busy={busy}
+     onResolve={(taskId,taskRevision,fields)=>void perform(()=>resolveTaskChange(c.id,c.revision,taskId,taskRevision,fields),fields?'Your values were saved to the task. No Calendar write was authorized.':'The task was marked cancelled. No Calendar write was authorized.')}
+     onDismiss={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'dismiss'),'Item dismissed.')}/>
+    return <article className="storage-panel" key={c.id}>
     <h2>{c.kind==='cancel'?'Proposed cancellation':'Proposed task edit'}: {c.baseline?.action??'Target needs review'}</h2><p>{c.reason}</p><p>Target: {target?.accepted_fields.action??'No eligible task selected'} · expected revision {c.expected_revision??'unresolved'}</p>
     {c.kind==='edit'&&<table><thead><tr><th>Field</th><th>Accepted at inference</th><th>Proposed</th></tr></thead><tbody>{c.changed_fields.map((field:string)=><tr key={field}><th scope="row">{field}</th><td>{display(c.baseline?.[field])}</td><td>{display(c.fields?.[field])}</td></tr>)}</tbody></table>}
     {c.kind==='cancel'&&c.baseline&&<><p>Accepted values are retained if cancellation is approved.</p><Fields fields={c.baseline}/></>}
     <ExtractionReview extraction={extractions.get(c.extraction_id)}/><blockquote>{quote?.quote??'Supporting evidence has expired.'}</blockquote>
-    {!c.target_task_id&&<p>This reference is ambiguous. No accepted task can be changed from this proposal.</p>}
-    {c.target_task_id&&!open&&<p>The task is no longer open, so this proposal cannot be applied. You can dismiss it.</p>}
+    {!open&&<p>The task is no longer open, so this proposal cannot be applied. You can dismiss it.</p>}
     {stale&&<><p>The task changed since this proposal. Current accepted values:</p><Fields fields={target.accepted_fields}/><button disabled={busy} onClick={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'rebase',target.revision),'Proposal refreshed against the current task. Review the new comparison before approving.')}>Review against current revision</button></>}
     <div className="storage-actions"><button disabled={busy||!open||!!stale||!quote?.quote} onClick={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'approve'),'Task change approved. No Calendar write was authorized.')}>{c.kind==='cancel'?'Approve cancellation':'Approve edit'}</button><button disabled={busy} onClick={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'dismiss'),'Proposal dismissed.')}>Dismiss</button></div>
    </article>})}

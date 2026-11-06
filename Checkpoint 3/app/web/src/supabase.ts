@@ -44,6 +44,7 @@ type Database = {
     Functions: {
       gmail_scan_status: { Args: Record<string, never>; Returns: any }
       gmail_change_review: { Args: Record<string, any>; Returns: any }
+      gmail_change_resolve: { Args: Record<string, any>; Returns: any }
       scan_settings_get: { Args: Record<string, never>; Returns: any }
       scan_settings_save: { Args: Record<string, any>; Returns: any }
       google_connection_status: {

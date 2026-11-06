@@ -55,6 +55,8 @@ export function createGmailProcessor({rpc,user,work,settings,systemPrompt,genera
    const output=await extract(input,{settings:{...settings,maxAttempts:1,timeoutMs:Math.min(settings.timeoutMs,remainingMs-5000)},systemPrompt:effectivePrompt,
     generate:async args=>{calls++;return generate(args);}});
    if(context.omitted) {output.contextWarnings.push('Relevant task context was bounded; verify update targets.');output.needsReview=true;}
+   // The prompt has the model repeat backend warnings as uncertainties. Store each once.
+   output.result.uncertainties=output.result.uncertainties.filter(item=>!output.contextWarnings.includes(item));
    await rpc('gmail_process_finish',{p_user:user.id,p_job:claim.jobId,p_lease:claim.leaseToken,p_output:filterRelevantOutput(output),p_meta:meta});
    return {modelCalls:output.modelCalls,reused:false,saved:true};
   } catch(error) {

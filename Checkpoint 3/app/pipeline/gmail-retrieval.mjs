@@ -10,6 +10,8 @@ const MAX_TRACKED_FAILURES = 50;
 const MESSAGE_FAILURES = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_BODY_EMPTY','GMAIL_CONTEXT_LIMIT','GMAIL_INVALID_RESPONSE',
   'GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_MESSAGE_REVIEW_REQUIRED','MODEL_INPUT_TOO_LARGE','INVALID_TASK_CONTEXT',
   'GMAIL_EXTRACTION_FAILED','STORAGE_RETRY_LATER','STORAGE_ATTEMPT_LIMIT']);
+// The message list skips Spam and Trash, but thread and single-message reads do not.
+const hiddenFromScans = data => Array.isArray(data?.labelIds) && data.labelIds.some(label => label === 'SPAM' || label === 'TRASH');
 const CONTEXT_OMISSIONS = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_INVALID_RESPONSE','GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_METADATA_UNVERIFIABLE']);
 const id = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
 async function boundedJson(response, cap) {
@@ -47,7 +49,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
   };
   const message = async (messageId, format) => {
     if (!id(messageId)) throw problem('GMAIL_INVALID_RESPONSE');
-    const params = new URLSearchParams({ format, fields: format === 'metadata' ? 'id,threadId,internalDate,payload(headers)' : 'id,threadId,internalDate,payload' });
+    const params = new URLSearchParams({ format, fields: format === 'metadata' ? 'id,threadId,labelIds,internalDate,payload(headers)' : 'id,threadId,internalDate,payload' });
     if (format === 'metadata') for (const header of ['From','Subject']) params.append('metadataHeaders',header);
     return get(`messages/${messageId}`, params, format === 'full' ? 2000000 : 16000);
   };
@@ -65,7 +67,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
     full: messageId => message(messageId, 'full'),
     async thread(threadId) {
       if (!id(threadId)) throw problem('GMAIL_INVALID_RESPONSE');
-      const params = new URLSearchParams({ format: 'metadata',fields:'id,messages(id,threadId,internalDate,payload(headers))' });
+      const params = new URLSearchParams({ format: 'metadata',fields:'id,messages(id,threadId,labelIds,internalDate,payload(headers))' });
       for (const header of ['From','Subject']) params.append('metadataHeaders',header);
       const data = await get(`threads/${threadId}`,params,100000);
       if (!Array.isArray(data.messages) || data.messages.length > 100) throw problem('GMAIL_CONTEXT_LIMIT');
@@ -160,8 +162,12 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
     try {
       await boundary();
       let current;
-      try { current = gmailMetadata(await gmail.metadata(messageId)); }
-      catch (error) {
+      try {
+        const listed = await gmail.metadata(messageId);
+        // A saved continuation can name a message that has since moved to Spam or Trash.
+        if (hiddenFromScans(listed)) { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
+        current = gmailMetadata(listed);
+      } catch (error) {
         if (error?.code !== 'GMAIL_METADATA_UNVERIFIABLE') throw error;
         counts.candidates++; metadataRecords++; counts.blocked++; retry.delete(messageId); pending.shift(); continue;
       }
@@ -183,8 +189,16 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
         let excluded = false;
         const threadMetadata = thread.flatMap(item => {
           try {
+            if (item.id !== messageId && hiddenFromScans(item)) {
+              if (Number(item.internalDate) <= Date.parse(current.sentAt)) excluded = true;
+              return [];
+            }
             const meta = gmailMetadata(item);
-            if (meta.id !== messageId && (suppressed.has(meta.id) || filterMessage(meta,work.rules) !== 'PERMITTED')) { excluded = true; return []; }
+            if (meta.id !== messageId && (suppressed.has(meta.id) || filterMessage(meta,work.rules) !== 'PERMITTED')) {
+              // Later mail is never context for this message, so excluding it hides nothing.
+              if (Date.parse(meta.sentAt) <= Date.parse(current.sentAt)) excluded = true;
+              return [];
+            }
             return [meta];
           } catch { excluded = true; return []; }
         });
@@ -222,7 +236,8 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       if (code === 'STORAGE_SUPPRESSED') { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
       if (!MESSAGE_FAILURES.has(code)) { lastError = code; break; }
       counts.failed++; failures[code] = (failures[code] ?? 0)+1; pending.shift();
-      const attempts = (retry.get(messageId)?.attempts ?? 0)+1;
+      // Waiting out a retry window made no attempt, so it must not use one up.
+      const attempts = (retry.get(messageId)?.attempts ?? 0)+(code==='STORAGE_RETRY_LATER'?0:1);
       if (attempts >= MAX_RETRY_ATTEMPTS) { retry.delete(messageId); unresolved++; }
       else retry.set(messageId,{id:messageId,code,attempts});
       if (retry.size >= MAX_TRACKED_FAILURES) { lastError = 'SCAN_FAILURE_LIMIT'; break; }

@@ -82,6 +82,34 @@ test('an unverifiable thread message is excluded from context without losing the
  assert.deepEqual(s.inputs[0].threadContext.map(m=>m.id),['older']);assert.ok(!s.calls.includes('body:badcontext'));assert.equal(r.error,null);
  assert.ok(s.inputs[0].retrievalWarnings.some(w=>/excluded/.test(w)));
 });
+test('thread messages in Spam or Trash are never fetched as context, with a visible warning',async()=>{
+ const hidden=(id,label,sentAt)=>({...message(id,'teacher@example.org',sentAt),labelIds:[label]});
+ const s=setup([message('current')],[hidden('trashed','TRASH','2026-11-04T12:00:00Z'),hidden('spam','SPAM','2026-11-03T12:00:00Z'),{...message('kept','teacher@example.org','2026-11-02T12:00:00Z'),labelIds:['INBOX']}]);
+ await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs[0].threadContext.map(m=>m.id),['kept']);
+ assert.ok(!s.calls.includes('body:trashed'));assert.ok(!s.calls.includes('body:spam'));
+ assert.ok(s.inputs[0].retrievalWarnings.some(w=>/excluded/.test(w)));
+});
+test('a later trashed reply does not warn, and a continuation message now in Trash is skipped unread',async()=>{
+ const later={...message('latertrash','teacher@example.org','2026-11-06T12:00:00Z'),labelIds:['TRASH']};
+ const s=setup([message('current')],[later]);await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs[0].retrievalWarnings,[]);
+ const moved=setup([{...message('moved'),labelIds:['TRASH']},message('next')]);
+ const r=await retrieveGmail(moved.options);
+ assert.ok(!moved.calls.includes('body:moved'));assert.equal(r.counts.skipped,1);assert.deepEqual(moved.inputs.map(i=>i.message.id),['next']);
+});
+test('an excluded later reply does not warn about history on an earlier message',async()=>{
+ const s=setup([message('current')],[message('laterblocked','blocked@example.org','2026-11-06T12:00:00Z')]);
+ await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs[0].retrievalWarnings,[]);
+});
+test('waiting out a retry window does not use up the bounded retry attempts',async()=>{
+ const s=setup([message('waiting')]);
+ s.options.consume=async()=>{throw Object.assign(new Error(),{code:'STORAGE_RETRY_LATER'});};
+ let r=await retrieveGmail(s.options);
+ for(let attempt=0;attempt<5;attempt++){s.options.work.continuation=r.continuation;r=await retrieveGmail(s.options);}
+ assert.equal(r.unresolved,0);assert.equal(r.continuation.failed[0].attempts,0);assert.equal(r.backlog,true);
+});
 test('one unprocessable message is recorded and later mail still scans; retries are bounded',async()=>{
  const s=setup([message('bad'),message('good')]);const full=s.options.gmail.full;
  s.options.gmail.full=async id=>{if(id==='bad')throw Object.assign(new Error(),{code:'GMAIL_BODY_ENCODING'});return full(id);};
@@ -136,7 +164,7 @@ test('HTTP adapter fixes mailbox to me, uses metadata before full and sanitizes 
   calls.push({url,options});return new Response(JSON.stringify(message('m')));
  }});
  await gmail.metadata('m');await gmail.full('m');assert.ok(calls[0].url.includes('/users/me/messages/m?format=metadata'));
- assert.equal(new URL(calls[0].url).searchParams.get('fields'),'id,threadId,internalDate,payload(headers)');
+ assert.equal(new URL(calls[0].url).searchParams.get('fields'),'id,threadId,labelIds,internalDate,payload(headers)');
  assert.ok(calls[1].url.includes('format=full'));assert.equal(calls[0].options.redirect,'error');
  const bad=createGmailClient({accessToken:async()=>'secret-token',fetchImpl:async()=>new Response('private diagnostic',{status:429})});
  await assert.rejects(bad.full('m'),error=>error.code==='GMAIL_RATE_LIMITED'&&!error.message.includes('private'));

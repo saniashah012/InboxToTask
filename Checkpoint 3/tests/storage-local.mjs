@@ -144,6 +144,7 @@ try {
   assert.equal((await rpc(owner,'gmail_scan_status')).data.running,true);
   assert.equal((await rpc(a,'gmail_scan_status')).data.running,false);
   assert.ok((await request('/rest/v1/rpc/gmail_scan_status',{method:'POST',body:{}})).status>=400);
+  assert.ok((await rpc(owner,'gmail_token_recheck',{p_user:owner.id})).status>=400,'gmail_token_recheck denied to browser roles');
   for(const name of ['gmail_task_context','gmail_process_claim','gmail_process_finish','gmail_process_assert','gmail_suppressed_messages']) {
     const denied=await rpc(owner,name,{p_user:owner.id,p_lease:work.lease});assert.ok(denied.status>=400,`${name} denied to browser roles`);
   }
@@ -182,6 +183,22 @@ try {
   const updated=(await userRequest(owner,`/rest/v1/tasks?id=eq.${taskId}&select=accepted_fields`)).data[0].accepted_fields;
   assert.equal(updated.deadline.date,'2026-11-09');assert.deepEqual(updated.requirements,['Keep my fictional edit']);
   check('deadline change is a targeted proposal, isolated by owner, stale over HTTP, rebased without losing the user edit');
+  const ambiguousGenerate=async({payload})=>{
+    modelCalls++;const evidence={messageId:payload.currentMessage.id,quote:payload.currentMessage.body};
+    return {attempts:1,usage:{totalTokens:10},latencyMs:1,value:{category:'Passive',confidence:60,summary:'Fictional.',explanation:'Fictional.',evidence,waitingFor:[],suggestedFollowUps:[],uncertainties:['Which task is this?'],tasks:[],
+      topicRelevance:{decision:'relevant',reason:'No topic limits.'},taskChanges:[{topicRelevance:'relevant',kind:'edit',targetTaskId:null,expectedRevision:null,changedFields:['deadline'],fields:null,reason:'Fictional ambiguous reference.',evidence}]}};
+  };
+  await createGmailProcessor({rpc:transport,user:owner,work,systemPrompt:'Fictional injected model.',generate:ambiguousGenerate,
+    settings:{contextLimits:gmailLimits,model:'local-gmail-test',version:'local',maxOutputTokens:8192,maxAttempts:1,timeoutMs:60000}})(email('fictional-ambiguous',0.5,'That deliverable is pushed back.'));
+  const ambiguous=(await userRequest(owner,'/rest/v1/gmail_task_changes?select=*&state=eq.pending&target_task_id=is.null')).data[0];
+  const resolveArgs={p_id:ambiguous.id,p_revision:0,p_task:taskId,p_task_revision:2,p_fields:{...updated,deadline:{date:'2026-11-20',time:null,timeZone:'America/Chicago',wording:'Entered by you.',boundary:'by'}}};
+  assert.equal((await rpc(owner,'gmail_change_review',{p_id:ambiguous.id,p_revision:0,p_action:'approve',p_task_revision:null})).status,409);
+  assert.equal((await rpc(a,'gmail_change_resolve',resolveArgs)).status,403);
+  assert.ok((await request('/rest/v1/rpc/gmail_change_resolve',{method:'POST',body:resolveArgs})).status>=400);
+  assert.equal((await rpc(owner,'gmail_change_resolve',{...resolveArgs,p_task_revision:1})).status,409);
+  assert.equal((await rpc(owner,'gmail_change_resolve',resolveArgs)).status,200);
+  assert.equal((await userRequest(owner,`/rest/v1/tasks?id=eq.${taskId}&select=accepted_fields`)).data[0].accepted_fields.deadline.date,'2026-11-20');
+  check('an ambiguous proposal cannot be approved directly; the owner can resolve it with entered values, over HTTP, and other users cannot');
   const gmailSource=(await userRequest(owner,'/rest/v1/storage_sources?select=id,message_id&message_id=eq.fictional-update')).data[0];
   await action(owner,'source',gmailSource.id,'delete',0);
   assert.ok((await service('gmail_suppressed_messages',{p_user:owner.id,p_lease:work.lease})).includes('fictional-update'));

@@ -50,6 +50,7 @@ export default function GoogleConnectionPanel() {
     <h2 id="google-connection-title">Google connection</h2>
     <p>Connect the Google account with the same email as your app account. Gmail read access supports permitted manual scans. Connecting does not enable scanning or send email to a model.</p>
     <p role="status">{busy ? "Checking Google connection…" : status ? `Status: ${status.state.replace(/_/g, " ")}${status.email ? ` · ${status.email}` : ""}` : "Connection status unavailable."}</p>
+    {notice && <p role="status">{notice}</p>}{error && <p className="storage-error" role="alert">{error}</p>}
     <div className="storage-actions">
       <button disabled={busy || !status || status.state === "disconnecting"} onClick={() => void run("connect")}>{status?.state === "connected" || status?.state === "reconnect_required" ? "Reconnect Google" : "Connect Google"}</button>
       <button disabled={busy || status?.state !== "connected"} onClick={() => void run("check")}>Check token availability</button>
@@ -57,6 +58,5 @@ export default function GoogleConnectionPanel() {
       <button disabled={busy} onClick={() => void run("reload")}>Reload connection status</button>
     </div>
     <p>Manual scanning requires separate saved consent, source permissions and an explicit scan request. Google Calendar is not connected. Signing out of the app does not disconnect Google.</p>
-    {notice && <p role="status">{notice}</p>}{error && <p role="alert">{error}</p>}
   </section>
 }

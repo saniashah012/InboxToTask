@@ -3,4 +3,10 @@
 .manual-workspace th,.manual-workspace td { border:1px solid #c7d5da; padding:.75rem; text-align:left; vertical-align:top; white-space:pre-wrap; overflow-wrap:anywhere; }
 .manual-workspace th { font-weight:650; }
 .manual-workspace h2 { overflow-wrap:anywhere; }
+.manual-source h3 { font-weight:650; margin:0 0 .25rem; }
+.manual-resolver { display:grid; gap:.75rem; margin-top:1rem; }
+.manual-resolver label { display:grid; gap:.25rem; font-weight:600; }
+.manual-resolver input,.manual-resolver select,.manual-resolver textarea { font:inherit; font-weight:400; padding:.5rem; border:1px solid #8ba3ab; border-radius:6px; background:#fff; min-width:0; }
+.manual-resolver textarea { min-height:5rem; }
+.manual-resolver-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(10rem,1fr)); gap:.75rem; }
 @media(max-width:600px){.manual-workspace th,.manual-workspace td{padding:.4rem;font-size:.85rem}}

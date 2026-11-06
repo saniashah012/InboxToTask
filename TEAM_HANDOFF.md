@@ -1,7 +1,7 @@
 # Manual Gmail Scan Handoff for Team Review
 
 ## Status
-Current status lives in [CURRENT_STATE.md](<Checkpoint 3/CURRENT_STATE.md>); sections below may lag it. The manual scan code is implemented and locally verified with fictional injected data. No real Gmail or Gemini call has been made, and live Gmail/Gemini processing stays disabled until the live acceptance gate passes.
+Current status lives in [CURRENT_STATE.md](<Checkpoint 3/CURRENT_STATE.md>); sections below may lag it. The manual scan has been tested locally with real Gmail and Gemini on fictional mail in a dedicated account. It stays disabled by default, and nothing here enables it on hosted.
 
 ## Database migrations for the Gmail scanner
 Apply these in filename order, together, after any earlier repository migrations:
@@ -12,8 +12,10 @@ Apply these in filename order, together, after any earlier repository migrations
 4. `20261105220000_gmail_persistence.sql`
 5. `20261105223000_gmail_scan_status.sql`
 6. `20261106000000_gmail_scan_hardening.sql`
+7. `20261106010000_gmail_manual_resolution.sql`, added after live testing, for manually resolving ambiguous updates.
+8. `20261106040000_gmail_token_recheck.sql`, for correcting the connection status when Google rejects access.
 
-Do not stop after step 5: step 6 fixes defects in steps 4 and 5. Applying these enables no scanning; `gmail_scan` stays a separate function and is disabled by default. Please report which versions were applied and to which environment.
+Do not stop after step 5: step 6 fixes defects in steps 4 and 5. Steps 7 and 8 are additive, but the product page calls their functions. Applying these enables no scanning; `gmail_scan` stays a separate function and is disabled by default. Please report which versions were applied and to which environment.
 
 ## What is already implemented
 - Source/semantic permission separation and filter handling are in place.
@@ -48,5 +50,5 @@ Live acceptance with a dedicated fictional mailbox remains: see the [Phase 6 run
 
 ## Validation status
 - Offline, local database, local API and seeded browser checks pass. See the [review report](<Checkpoint 3/docs/gmail-manual-scan-review-2026-11-05.md>).
-- No live Gmail or real-model execution has occurred.
+- Live local results on fictional mail are in `Checkpoint 3/docs/use-cases.md` under UC8.
 - These results do not establish live Gmail accuracy or hosted integration correctness. This branch is not production-ready until the live acceptance gate passes.

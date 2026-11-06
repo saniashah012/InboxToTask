@@ -153,6 +153,63 @@ test('repeat scans reuse results, re-extraction never duplicates review items, d
    await auth('storage_action',{p_kind:'task',p_id:slidesId,p_action:'complete',p_revision:slides.revision,p_fields:null});
    const before=modelCalls;assert.equal((await proc()(input(U))).reused,true);assert.equal(modelCalls,before);
   });
+  await t.test('an ambiguous edit saves as a review item that can be dismissed but never applied',async()=>{
+   const A2=message('m-ambiguous',3.5,'That deliverable is getting pushed back a few days.');
+   script['m-ambiguous']=(p,e)=>({taskChanges:[{topicRelevance:'relevant',kind:'edit',targetTaskId:null,expectedRevision:null,changedFields:['deadline'],fields:null,reason:'Target is ambiguous.',evidence:e}]});
+   assert.equal((await proc()(input(A2))).saved,true);
+   const ambiguous=(await q("select * from public.gmail_task_changes where state='pending' and target_task_id is null"))[0];
+   assert.equal(ambiguous.fields,null);
+   await assert.rejects(auth('gmail_change_review',{p_id:ambiguous.id,p_revision:ambiguous.revision,p_action:'approve'}),{code:'PT409'});
+   await auth('gmail_change_review',{p_id:ambiguous.id,p_revision:ambiguous.revision,p_action:'dismiss'});
+  });
+  await t.test('the user resolves an ambiguous edit by choosing the task and entering values',async()=>{
+   const M=message('m-ambiguous-2',3.4,'That one has moved, see the portal.');
+   script['m-ambiguous-2']=(p,e)=>({taskChanges:[{topicRelevance:'relevant',kind:'edit',targetTaskId:null,expectedRevision:null,changedFields:['deadline'],fields:null,reason:'Target is ambiguous.',evidence:e}]});
+   await proc()(input(M));
+   const item=(await q("select * from public.gmail_task_changes where state='pending' and target_task_id is null"))[0];
+   const before=(await q('select * from public.tasks where id=$1',[reportId]))[0];
+   const entered={...before.accepted_fields,deadline:{date:'2026-11-20',time:null,timeZone:'America/Chicago',wording:'Entered by you after reading the source email.',boundary:'by'}};
+   const resolve=args=>auth('gmail_change_resolve',{p_id:item.id,p_revision:item.revision,p_task:reportId,p_task_revision:before.revision,p_fields:entered,...args});
+   await assert.rejects(resolve({p_task_revision:before.revision+5}),{code:'PT409'});
+   await assert.rejects(resolve({p_fields:{action:'Missing fields'}}),{code:'22023'});
+   await assert.rejects(resolve({p_fields:before.accepted_fields}),{code:'22023'});
+   await assert.rejects(resolve({p_revision:item.revision+1}),{code:'PT409'});
+   assert.deepEqual((await q('select accepted_fields from public.tasks where id=$1',[reportId]))[0].accepted_fields,before.accepted_fields);
+   await resolve({});
+   const after=(await q('select * from public.tasks where id=$1',[reportId]))[0];
+   assert.equal(after.accepted_fields.deadline.date,'2026-11-20');assert.equal(after.revision,before.revision+1);
+   assert.deepEqual(after.accepted_fields.requirements,before.accepted_fields.requirements);
+   const saved=(await q('select * from public.gmail_task_changes where id=$1',[item.id]))[0];
+   assert.equal(saved.state,'approved');assert.equal(saved.target_task_id,reportId);assert.equal(saved.expected_revision,before.revision);
+   assert.deepEqual(saved.changed_fields,['deadline']);assert.deepEqual(saved.baseline,before.accepted_fields);
+   await assert.rejects(resolve({p_revision:saved.revision}),{code:'PT409'});
+  });
+  await t.test('a resolved ambiguous email is not raised again when it is re-extracted',async()=>{
+   const printed=await approveFor('Bring a printed copy');assert.ok(printed);
+   const calls=modelCalls;await proc()(input(message('m-ambiguous-2',3.4,'That one has moved, see the portal.')));
+   assert.equal(modelCalls,calls+1,'A newly approved earlier task forces one re-extraction');
+   assert.equal(await scalar("select count(*)::int from public.gmail_task_changes where state='pending' and target_task_id is null"),0);
+  });
+  await t.test('an ambiguous cancellation applies only to the chosen task and rejects entered values',async()=>{
+   const M=message('m-ambiguous-3',3.3,'That task is off now.');
+   script['m-ambiguous-3']=(p,e)=>({taskChanges:[{topicRelevance:'relevant',kind:'cancel',targetTaskId:null,expectedRevision:null,changedFields:[],fields:null,reason:'Target is ambiguous.',evidence:e}]});
+   await proc()(input(M));
+   const item=(await q("select * from public.gmail_task_changes where state='pending' and kind='cancel' and target_task_id is null"))[0];
+   const chosen=(await q("select * from public.tasks where accepted_fields->>'action'='Bring a printed copy'"))[0];
+   await assert.rejects(auth('gmail_change_resolve',{p_id:item.id,p_revision:item.revision,p_task:chosen.id,p_task_revision:chosen.revision,p_fields:chosen.accepted_fields}),{code:'22023'});
+   await auth('gmail_change_resolve',{p_id:item.id,p_revision:item.revision,p_task:chosen.id,p_task_revision:chosen.revision,p_fields:null});
+   assert.ok((await q('select cancelled_at from public.tasks where id=$1',[chosen.id]))[0].cancelled_at);
+   assert.equal((await q('select cancelled_at from public.tasks where id=$1',[reportId]))[0].cancelled_at,null);
+  });
+  await t.test('backend warnings repeated by the model are stored once',async()=>{
+   const W=message('m-warning',3.25,'A fictional note with no action needed.');
+   const warned={...input(W),retrievalWarnings:['Some thread history was excluded by current source permissions.']};
+   const proc2=createGmailProcessor({rpc,user:{id:A,email},work,settings:{contextLimits:limits,model:'test-model',version:'test',maxOutputTokens:8192,maxAttempts:1,timeoutMs:60000},systemPrompt:'Fictional injected model.',
+    generate:async args=>{const out=await generate(args);out.value.uncertainties=[...args.payload.contextWarnings,'A separate question?'];return out;}});
+   await proc2(warned);
+   const row=(await q("select e.warnings from public.storage_extractions e join public.storage_sources s on s.id=e.source_id where s.message_id='m-warning'"))[0];
+   assert.deepEqual(row.warnings,['Some thread history was excluded by current source permissions.','A separate question?']);
+  });
   await t.test('cancelled tasks only allow deletion, and deleting suppresses the approved change source',async()=>{
    const C=message('m-cancel',3,'The research report is cancelled.');
    script['m-cancel']=(p,e)=>({taskChanges:p.existingTaskContext.filter(c=>c.id===reportId).map(c=>({topicRelevance:'relevant',kind:'cancel',targetTaskId:c.id,expectedRevision:c.revision,changedFields:[],fields:null,reason:'Explicit cancellation.',evidence:e}))});
@@ -174,6 +231,13 @@ test('repeat scans reuse results, re-extraction never duplicates review items, d
    assert.equal(await scalar('select count(*)::int from private.gmail_result_cache where source_id=$1',[source.id]),0);
    assert.equal(await scalar('select count(*)::int from private.storage_jobs where source_id=$1 and gmail_guard is not null',[source.id]),0);
    assert.ok((await rpc('gmail_suppressed_messages',{p_user:A,p_lease:work.lease})).includes('m-reply'));
+  });
+  await t.test('a token recheck is service-only and leaves the status for Google to decide',async()=>{
+   await assert.rejects(auth('gmail_token_recheck',{p_user:A}),{code:'42501'});
+   const before=(await q('select state,generation from private.google_connections where user_id=$1',[A]))[0];
+   await rpc('gmail_token_recheck',{p_user:A});
+   const after=(await q('select state,generation,expires_at<=now() expired from private.google_connections where user_id=$1',[A]))[0];
+   assert.equal(after.expired,true);assert.equal(after.state,before.state);assert.equal(after.generation,before.generation);
   });
   await t.test('cleanup removes expired proposal text but keeps approved provenance',async()=>{
    await q("update public.gmail_task_changes set expires_at=now()-interval '1 day'");

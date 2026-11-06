@@ -38,6 +38,10 @@ Deno.serve(createGmailScanHandler({
     });
     const summary = {executionMode:persistent?'GMAIL_PERSISTENT_MANUAL':'GMAIL_RETRIEVAL_ONLY',counts:result.counts,error:result.error,backlog:result.backlog,failures:result.failures,unresolved:result.unresolved};
     await service('finish',{lease:work.lease,continuation:result.continuation,result:summary});
+    // After finish, because a confirmed revocation also fences this scan's lease.
+    if (result.error === 'GMAIL_RECONNECT_REQUIRED') {
+      try { await rpc('gmail_token_recheck',{p_user:user.id}); await connection.accessToken(user.id); } catch { /* Status now reflects Google's answer. */ }
+    }
     return {...summary,backlogCountKnown:false,requiresScanMoreApproval:result.backlog};
   },
 }));

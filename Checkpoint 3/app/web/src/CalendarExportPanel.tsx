@@ -2,7 +2,8 @@ import { useState } from "react"
 import type { StoredRow, TaskFields } from "./storageAdapter"
 import { createCalendarExport, type CalendarDraft } from "./calendarExport"
 
-export default function CalendarExport({ task, fields, close }: { task: StoredRow; fields: TaskFields; close: () => void }) {
+// onDownloaded is optional: when given, the caller owns the confirmation and this panel shows no notice of its own.
+export default function CalendarExport({ task, fields, close, onDownloaded }: { task: StoredRow; fields: TaskFields; close: () => void; onDownloaded?: () => void }) {
   const [draft, setDraft] = useState<CalendarDraft>(() => ({ taskId: task.id, title: fields.action,
     date: fields.deadline?.date ?? "", allDay: !fields.deadline?.time, time: fields.deadline?.time?.slice(0, 5) ?? "",
     timeZone: fields.deadline?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone, durationMinutes: 0 }))
@@ -23,7 +24,8 @@ export default function CalendarExport({ task, fields, close }: { task: StoredRo
       link.href = url; link.download = `inboxtotask-${task.id}.ics`
       document.body.appendChild(link); link.click(); link.remove()
       setTimeout(() => URL.revokeObjectURL(url), 1000)
-      setNotice("Calendar file prepared. Save it, then import it into your chosen calendar.")
+      if (onDownloaded) onDownloaded()
+      else setNotice("Calendar file prepared. Save it, then import it into your chosen calendar.")
     }}>
       <label>Calendar title<input required maxLength={350} value={draft.title} onChange={(e) => update({ title: e.target.value })} /></label>
       <label>Entry type<select value={draft.allDay ? "all-day" : "timed"} onChange={(e) => update({ allDay: e.target.value === "all-day" })}>

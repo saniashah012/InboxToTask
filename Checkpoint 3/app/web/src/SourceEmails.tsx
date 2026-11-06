@@ -26,10 +26,17 @@ export function OpenInGmail({email,messageId}:{email:string;messageId?:string|nu
 export function TaskSourceEmails({links,email}:{links:TaskSourceLink[]|null;email:string}){
  if(!links)return <p>Source emails could not be loaded. Reload to try again.</p>
  if(!links.length)return <p>No linked source email is available.</p>
- return <section aria-label="Source emails" className="manual-source">{links.map((link,i)=><div key={`${link.messageId}-${link.role}-${i}`}>
-  <h3>{roles[link.role]}{link.earlierMessage?' an earlier message in this thread':''}</h3>
-  <p>From {link.sender??'unknown sender'}{link.sentAt?` · ${new Date(link.sentAt).toLocaleString()}`:''}<br/>Subject: {link.subject||'(no subject)'}</p>
-  <blockquote>{link.quote??'The saved excerpt has expired.'}</blockquote>
-  <OpenInGmail email={email} messageId={link.messageId}/>
- </div>)}</section>
+ // Oldest first, so the list reads as the task's history. Undated links go last.
+ const time=(link:TaskSourceLink)=>link.sentAt?Date.parse(link.sentAt):Infinity
+ const ordered=[...links].sort((a,b)=>time(a)-time(b))
+ return <section aria-label="Source emails" className="manual-timeline">
+  <h3>Email history · {ordered.length} {ordered.length===1?'email':'emails'}</h3>
+  <ol>{ordered.map((link,i)=><li key={`${link.messageId}-${link.role}-${i}`} className={`is-${link.role}`}>
+   <div className="manual-timeline-head"><strong>{roles[link.role]}{link.earlierMessage?' an earlier message in this thread':''}</strong>{link.sentAt&&<time dateTime={link.sentAt}>{new Date(link.sentAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</time>}</div>
+   <p className="manual-timeline-subject">{link.subject||'(no subject)'}</p>
+   <p className="manual-timeline-sender">From {link.sender??'unknown sender'}</p>
+   <details><summary>Show saved excerpt</summary><blockquote>{link.quote??'The saved excerpt has expired.'}</blockquote></details>
+   <OpenInGmail email={email} messageId={link.messageId}/>
+  </li>)}</ol>
+ </section>
 }

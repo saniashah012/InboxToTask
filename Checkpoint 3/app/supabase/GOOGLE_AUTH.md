@@ -1,12 +1,16 @@
 # Google sign-in and backend connection
 
-This implements app sign-in and an account-bound Google connection. It does not
-retrieve Gmail messages, enable scanning, call a model, or connect Calendar.
-The prototype at `/` remains simulated; development controls are on `/storage`
-only through a localhost Vite development server with `VITE_STORAGE_ENABLED=true`.
-Production builds exclude the development dashboard regardless of that flag;
-`/storage` and its callback show Page not found. Normal users will use the designed
-Google-only onboarding/dashboard once that separate integration is implemented.
+This implements app sign-in and an account-bound Google connection. Connecting does not
+itself retrieve Gmail messages, enable scanning, call a model, or connect Calendar. Manual
+scanning is a separate, disabled-by-default feature; see [UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
+Signed-in users at `/` get the plain persistent workspace with Gmail connection controls;
+preview at `/` remains simulated. Development controls are on `/storage` only through a
+localhost Vite development server with `VITE_STORAGE_ENABLED=true`. Production builds exclude
+the development dashboard regardless of that flag; `/storage` and its callback show Page not
+found. Connecting real data to the designed onboarding/dashboard is still open.
+
+Some dated setup notes below describe earlier stages. [Current state](../../CURRENT_STATE.md)
+records which lifecycle checks have passed live.
 
 ## Architecture and decisions
 
@@ -266,7 +270,7 @@ to an ignored private file. Fill:
 | `ENABLE_GOOGLE_CONNECTION` | `true` after configuration |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Backend connection client's credentials |
 | `GOOGLE_CALLBACK_URL` | Exact registered backend callback |
-| `GOOGLE_RETURN_URL` | Fixed frontend return, e.g. `http://127.0.0.1:5173/storage` |
+| `GOOGLE_RETURN_URL` | Fixed frontend return, e.g. `http://127.0.0.1:5173/` |
 | `APP_ORIGINS` | Exact allowed frontend origins, including the return URL's origin |
 | `GOOGLE_TOKEN_ACTIVE_KEY` | Key ID, initially `v1` |
 | `GOOGLE_TOKEN_KEYS` | JSON map such as `{"v1":"<base64 of 32 random bytes>"}` |

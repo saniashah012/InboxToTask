@@ -1,34 +1,50 @@
 # InboxToTask use cases and acceptance scenarios
 
-Updated November 5, 2026. This document describes current local behavior and the remaining end-to-end acceptance work for [Checkpoint 3](../CP3_INSTRUCTIONS.md). Expected outcomes below are test criteria, not claims that every walkthrough has been executed.
+Updated November 5, 2026. Walkthrough scripts and test cases for the primary flows in [Checkpoint 3](../CP3_INSTRUCTIONS.md). Each status says what has actually been run. **Expected** lines are test criteria unless a status or evidence line says the case was run.
 
 ## Test surfaces and evidence
 
-- **Main product (`/`):** Google sign-in routes signed-in users to a plain persistent workspace with Gmail connection, saved scanning settings, manual scans and review. The designed onboarding and dashboard are not yet connected to real data; they appear only in preview mode, which uses fictional data and simulated actions.
-- **Development tester (`/storage`):** localhost-only Vite development route for Google connection controls and persistent suggestions, tasks, digest, waiting-for records, and manual calendar export. It is excluded from production builds. Its password sign-in option is development tooling, not the intended product onboarding.
-- **Canonical pipeline:** offline tests and the CLI use fictional messages. Live Gmail extraction is recorded in [UC8](#uc8-real-gmail-to-review-workflow). Hosted behavior is not established.
+- **Main product (`/`):** signed-in users reach a plain persistent workspace with Gmail connection, saved settings, manual scans and review. The designed onboarding and dashboard are **not connected to real data**. They appear only in preview mode, with fictional data and simulated actions.
+- **Development tester (`/storage`):** local Vite development route for fixture trials, activity totals, waiting-for records, ICS export and task deletion. It is excluded from production builds, and its password sign-in is development tooling.
+- **Canonical pipeline:** offline tests and the CLI use fictional messages.
 
-Use a dedicated Google account with fictional mail for provider tests. Never include credentials, callback codes, tokens, or personal mail in test reports. Local setup is described in [the backend guide](../app/supabase/README.md) and [Google setup](../app/supabase/GOOGLE_AUTH.md).
+**Evidence types:** *Automated* (offline tests with PGlite and injected responses), *Local API* (real local Auth, PostgREST, Edge, pgTAP), *Seeded browser* (fictional records, real local page), *Live local* (real Gmail and Gemini on fictional mail, cases L01 to L25 in [UC8](#uc8-real-gmail-to-review-workflow)), *Planned*. **Hosted behavior is not verified, and automatic scans are not implemented.**
 
-The latest [settings verification](scan-settings-verification-2026-11-05.md) records 107 offline tests, 67 local database assertions, frontend type/build checks, and authenticated local browser checks. Earlier [storage verification](local-storage-verification-2026-11-04.md), [Google verification](google-auth-verification-2026-11-05.md), and [extraction evaluation](extraction-review-verification-2026-11-04.md) have different scopes and dates. Do not add their counts or present provider simulations as live OAuth results.
+Latest recorded results: 168 offline tests, 71 pgTAP checks, 15 local API groups with scanning off, frontend type check and build, and CI on `cef7f06` ([current state](../CURRENT_STATE.md)). One tester and about 15 fictional emails show the workflow runs; they do not measure accuracy.
+
+Use a dedicated Google account with fictional mail. Never include credentials, callback codes, tokens or personal mail in test reports. Setup is in [the install guide](../app/INSTALL.md).
+
+## Walkthrough overview
+
+| Flow | State | Strongest evidence |
+| --- | --- | --- |
+| [UC1](#uc1-sign-in-and-authorize-gmail-separately) Sign in and connect Gmail | Implemented | Live local |
+| [UC2](#uc2-save-source-rules-consent-and-context-limits) Source rules and consent | Implemented | Live local, local API |
+| [UC3](#uc3-resolve-conflicting-inclusion-and-exclusion-rules) Rule conflicts | Implemented | Live local for one sender; domain rules automated only |
+| [UC4](#uc4-extract-a-fictional-message-and-review-its-evidence) Fixture extraction | Implemented, off by default | Automated, separate CLI evaluations |
+| [UC5](#uc5-correct-approve-dismiss-and-complete-a-task) Review and complete | Implemented, partly in the tester | Live local, seeded browser |
+| [UC6](#uc6-export-a-calendar-file-without-authorizing-calendar-writes) ICS export | Tester only | Automated, isolated browser check |
+| [UC7](#uc7-pause-disconnect-sign-out-and-handle-failures) Pause and failures | Implemented; no account deletion | Live local for several cases |
+| [UC8](#uc8-real-gmail-to-review-workflow) **Primary flow:** Gmail to review | Implemented, manual only | Live local |
+| [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle) Connected Calendar | Not in this branch | None |
 
 ## UC1: Sign in and authorize Gmail separately
 
-**Status:** Implemented locally; initial live Google connection is user-reported. Full live lifecycle verification and product Gmail controls remain pending.
+**Status:** Implemented. Live local passed for sign-in and Gmail connection, token refresh (L16), revocation (L17, L20), disconnect (L18), cancelled consent and reconnect (L19), reload (L24), and sign-out and back in (L25). **Not run live:** wrong-account connection and replayed OAuth state.
 
-1. Open the main app and select Google sign-in. On the development tester, use **Sign in with Google**.
-2. Complete sign-in with the test account. Confirm the app restores the same account after reload.
-3. In the development tester's connection panel, select **Connect Google** and authorize Gmail using the same email address.
-4. Reload the connection status and confirm the saved email and state.
-5. Repeat cancellation, wrong-account, disconnect/reconnect, and expired-token tests as separate cases.
+1. Open the main app and select Google sign-in with the test account. Reload, and confirm the same account is restored.
+2. Open **Connection and permissions**, select **Connect Google**, and authorize Gmail with the same address.
+3. Confirm the saved email and state, and that no scan ran.
+4. Cancel Google's consent screen once. Confirm the state stays disconnected, then reconnect after the 30-second cooldown.
+5. Sign out and back in. Gmail stays connected without new approval, and tasks remain.
 
-**Expected:** App identity and Gmail permission remain separate. Connection does not grant scanning consent, fetch messages, or call Gemini. Wrong-account or insufficient-scope responses cannot save a new successful connection. An existing connection must not be mistaken for proof that a failed new authorization succeeded.
+**Expected:** App identity and Gmail permission remain separate. Connection does not grant scanning consent, fetch messages or call Gemini. Wrong-account or insufficient-scope responses cannot save a successful connection.
 
-**Evidence:** [Google connection tests](../tests/google-connection.test.mjs) inject provider responses; [Google database tests](../tests/google-database.test.mjs) cover protected state and credential lifecycle. Real reload, refresh, denial, wrong-account, and revocation checks still need sanitized live evidence. Token availability with an unexpired token does not prove refresh or continued provider authorization.
+**Evidence:** [Google connection tests](../tests/google-connection.test.mjs) inject provider responses, including wrong-account and state cases. [Google database tests](../tests/google-database.test.mjs) cover protected state and the credential lifecycle. Live results are in [UC8](#live-test-cases).
 
 ## UC2: Save source rules, consent, and context limits
 
-**Status:** Implemented and locally tested in the signed-in workspace and the development tester. Saved rules control live Gmail retrieval; see [UC8](#uc8-real-gmail-to-review-workflow).
+**Status:** Implemented in the signed-in workspace. Saved rules controlled live Gmail retrieval ([UC8](#uc8-real-gmail-to-review-workflow)). Settings changed during a scan were **not run live**.
 
 1. Open **Connection and permissions**, then **Scanning permission and sources**.
 2. Enter exact sender/domain inclusions and exclusions, literal subject exclusions, and semantic topics. Topics never grant access.
@@ -39,7 +55,7 @@ The latest [settings verification](scan-settings-verification-2026-11-05.md) rec
 
 **Expected:** New accounts have no consent, empty inclusions, paused scanning, and defaults of five earlier context messages within 90 days. Invalid entries fail validation. Saving rules alone never starts scanning. Settings changes increment a revision and invalidate older storage work while preserving accepted tasks. Legacy onboarding choices do not automatically become scanning permission.
 
-**Evidence:** [Settings tests](../tests/scan-settings.test.mjs), [local pgTAP checks](../app/supabase/tests/scan_settings.test.sql), and [browser verification](scan-settings-verification-2026-11-05.md). Browser account switching, network-failure recovery, and full accessibility review remain to verify.
+**Evidence:** [Settings tests](../tests/scan-settings.test.mjs), [local pgTAP checks](../app/supabase/tests/scan_settings.test.sql), and a dated [browser check](scan-settings-verification-2026-11-05.md). Account switching passed in a seeded browser ([review](gmail-manual-scan-review-2026-11-05.md)). Network-failure recovery and a full accessibility review have not been verified.
 
 ### Context defaults
 
@@ -47,17 +63,17 @@ New accounts default to five earlier same-thread messages within 90 days, and 12
 
 ## UC3: Resolve conflicting inclusion and exclusion rules
 
-**Status:** Canonical filtering implemented and covered by offline tests. Live enforcement with one sender is recorded in [UC8](#uc8-real-gmail-to-review-workflow); subdomain and domain rules were not exercised live because that needs a second sending address.
+**Status:** Canonical filtering implemented and covered by offline tests. Live enforcement with one sender is recorded in [UC8](#uc8-real-gmail-to-review-workflow) (L09, L21, L22). Domain and subdomain rules were **not run live**, because that needs a second sending address. The table below is a test script, not a live result.
 
-Configure **included domain `illinois.edu`** and **excluded sender `email@illinois.edu`**, with no other inclusions:
+Configure **included domain `example.edu`** and **excluded sender `office@example.edu`**, with no other inclusions:
 
 | Message sender | Expected decision | Reason |
 | --- | --- | --- |
-| `email@illinois.edu` | Excluded | Sender exclusion overrides domain inclusion |
-| `EMAIL@ILLINOIS.EDU` | Excluded | Sender/domain comparison ignores case |
-| `professor@illinois.edu` | Permitted by metadata rules | Exact included domain, unless another exclusion matches |
-| `email@cs.illinois.edu` | Not allowed | Subdomains are not implicitly included |
-| `email@notillinois.edu` | Not allowed | Domain suffix/substring resemblance is not a match |
+| `office@example.edu` | Excluded | Sender exclusion overrides domain inclusion |
+| `OFFICE@EXAMPLE.EDU` | Excluded | Sender/domain comparison ignores case |
+| `professor@example.edu` | Permitted by metadata rules | Exact included domain, unless another exclusion matches |
+| `office@cs.example.edu` | Not allowed | Subdomains are not implicitly included |
+| `office@notexample.edu` | Not allowed | Domain suffix/substring resemblance is not a match |
 
 Additional acceptance cases:
 
@@ -71,9 +87,9 @@ See [canonical filtering](../app/pipeline/core.mjs) and [retrieval regression te
 
 ## UC4: Extract a fictional message and review its evidence
 
-**Status:** Pipeline and storage code implemented, with offline/synthetic integration evidence and separate live CLI evaluations. A complete live Edge-to-storage-to-product extraction remains unverified.
+**Status:** Implemented for bundled fictional cases, and disabled by default. Evidence is offline and synthetic integration tests plus separate live CLI evaluations ([CP2 evaluation](cp2-live-evaluation-2026-11-03.md), [review evaluation](extraction-review-verification-2026-11-04.md)). The live path through Edge to storage and review is covered by [UC8](#uc8-real-gmail-to-review-workflow), not by this fixture route. These small synthetic sets do not establish general accuracy.
 
-**Precondition:** A separately configured, explicitly enabled local fixture trial. Fixture extraction is disabled by default; ordinary connection/settings tests do not need it enabled.
+**Precondition:** A separately configured local fixture trial with `ENABLE_FIXTURE_EXTRACTION=true`, which uses quota. Other flows do not need it.
 
 1. Sign into the development tester and select a bundled case such as `E01`.
 2. Select **Process sample email**. The browser sends only the case ID; the backend supplies fictional input and derives the owner from the verified session.
@@ -86,22 +102,24 @@ See [canonical filtering](../app/pipeline/core.mjs) and [retrieval regression te
 
 ## UC5: Correct, approve, dismiss, and complete a task
 
-**Status:** Implemented in persistent storage and the development tester. Integration into the designed product dashboard remains pending.
+**Status:** Implemented in persistent storage. The workspace offers approve, dismiss, complete and undo. Field editing, restoring a dismissed item and task deletion are in the development tester only, except that ambiguous updates let the user enter values ([UC8](#uc8-real-gmail-to-review-workflow)). Not available in the designed dashboard, which is not connected to real data.
 
 1. Open a pending suggestion and compare it with the supporting excerpt.
-2. Edit fields if needed, then approve. Alternatively dismiss and restore an eligible suggestion.
+2. Approve or dismiss it. In the development tester, you can edit fields first, or restore an eligible dismissed suggestion.
 3. Reload and verify the decision persists. The original proposal remains separate from accepted/user-edited values.
 4. Complete the accepted task, undo completion, and complete it again.
 
 **Expected:** Review actions use stored fields and controlled RPCs without another model call. Stale revisions cannot overwrite newer edits. Completion starts the 30-day eligibility period; undo clears it, and recompletion starts a new period. Source deletion and task deletion have different effects, described in [the storage contract](../app/supabase/STORAGE.md).
 
-Waiting-for entries support user-confirmed resolution and dashboard reminders. These reminders send no email or notification. Incoming task changes are proposed for review as described in [UC8](#uc8-real-gmail-to-review-workflow).
+**Evidence:** Seeded browser (approve, reload, complete, undo, stale rebase, [review](gmail-manual-scan-review-2026-11-05.md)), automated ([storage database tests](../tests/storage-database.test.mjs)), and live local approvals (L10, L11, L12).
+
+Waiting-for entries are saved from real scans (L04), but the workspace does not display them yet; they appear in the development tester with user-confirmed resolution and reminders. Reminders send no email or notification.
 
 ## UC6: Export a calendar file without authorizing Calendar writes
 
-**Status:** ICS serializer and development preview implemented; actual file saving/import still requires verification. Connected Calendar authorization/execution is planned.
+**Status:** ICS export is implemented in the `/storage` development tester, and is not offered in the signed-in workspace. Automated tests and an isolated browser check pass; saving a file and importing it into a real calendar has not been verified. Connected Calendar writes are covered in [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle).
 
-1. On an accepted task, open **Export calendar file**.
+1. In the development tester, on an accepted task, open **Export calendar file**.
 2. Review the title and choose an all-day or timed schedule. Supply a date if no task deadline exists; timed entries require a time zone and explicit duration.
 3. Export and manually import the file into a test calendar, checking date/time behavior and duplicate-import behavior.
 
@@ -109,18 +127,20 @@ Waiting-for entries support user-confirmed resolution and dashboard reminders. T
 
 ## UC7: Pause, disconnect, sign out, and handle failures
 
-**Status:** Individual local controls exist; live Google lifecycle and a unified account-deletion/disconnect-all flow remain incomplete.
+**Status:** Individual controls exist, and several ran live. A complete account-deletion flow is **not implemented**.
 
-| Action or failure | Expected behavior |
-| --- | --- |
-| Withdraw consent or save pause | Save permission state and fence older work; do not claim that Gmail access was revoked |
-| Disconnect Gmail | Block backend connection use immediately; attempt provider revocation; retain a retryable disconnecting state on revocation failure |
-| Sign out | Clear protected UI state and end the app session; keep Gmail connection and saved data separate |
-| Processing busy/budget/provider limit | Show a fixed error or deferral; do not claim a saved extraction |
-| Invalid/truncated model output | Reject the result; preserve failure accounting and do not create accepted tasks |
-| Deleted source or stale lease | Prevent late results from recreating deleted content |
+| Action or failure | Expected behavior | Evidence |
+| --- | --- | --- |
+| Save pause or withdraw consent | Save permission state and fence older work; do not claim that Gmail access was revoked | Live local: L23 for a scan while paused. Automated |
+| Disconnect Gmail | Block backend connection use immediately; attempt provider revocation; retain a retryable disconnecting state on revocation failure | Live local: L18. Failed revocation is automated only |
+| Access removed on Google's page | Scan stops, saved results stay, reconnect offered | Live local: L17, L20 |
+| Sign out | Clear protected UI state and end the app session; keep Gmail connection and saved data | Live local: L25. Seeded browser for account switching |
+| Processing busy, budget or provider limit | Show a fixed error or deferral; keep progress for **Scan more** | Automated only. **Rate limits not run live** |
+| Invalid or truncated model output | Reject the result, keep failure accounting, create no task | Automated. Live local: F1 before its fix |
+| Settings changed during a scan | Late results are refused | Automated only. **Not run live** |
+| Deleted source or stale lease | Prevent late results from recreating deleted content | Automated |
 
-The **Disconnect Gmail** label is a local development UI wording change at this writing; earlier versions say **Disconnect Google**. It does not remove the separate Google sign-in grant or delete account data. A complete delete-account action is not implemented. See [Google setup and lifecycle](../app/supabase/GOOGLE_AUTH.md), [storage tests](../tests/storage.test.mjs), and [storage database checks](../tests/storage-database.test.mjs).
+Disconnecting does not remove the separate Google sign-in grant or delete account data. See [Google setup and lifecycle](../app/supabase/GOOGLE_AUTH.md), [storage tests](../tests/storage.test.mjs), and [storage database checks](../tests/storage-database.test.mjs).
 
 ## UC8: Real Gmail-to-review workflow
 
@@ -139,7 +159,7 @@ This is the primary CP3 workflow. Demonstrating fixtures, a simulated preview, o
 7. A later reply can propose an edit or cancellation of an accepted task. It shows a before/after comparison, and the accepted value does not change until approved. If the task changed in the meantime, the proposal must be refreshed against the current revision first.
 8. If an email seems to change a task but does not make clear which one or what the new values are, the app applies nothing and asks **Which task changed?** It shows the saved sender, subject, date and excerpt with a link to the full email in Gmail. The user chooses the task and enters the values, or dismisses the item. Full bodies are not stored, so the complete message stays in Gmail.
 
-Budgets per account: 20 model requests and 200,000 tokens per UTC day, both project-set trial values. Failed attempts keep their conservative token reservation.
+Budgets per account: 20 model requests and 200,000 tokens per UTC day, both project-set trial values. Failed attempts keep their conservative token reservation ([accounting](observability.md#token-usage-and-cost)).
 
 ### Live test cases
 
@@ -175,7 +195,7 @@ Budgets per account: 20 model requests and 200,000 tokens per UTC day, both proj
 | L24 | Reload the page | Still signed in and connected | Still signed in and connected (tester-reported) | Pass |
 | L25 | Sign out and back in with Google | Gmail stays connected without new approval; tasks kept | Connected, no new Gmail approval, tasks kept (tester-reported) | Pass |
 
-A scan after unpausing was not repeated live. Not run live: settings changed during a scan, rate limits, and the rest of the OAuth lifecycle in [the setup guide](../app/supabase/GOOGLE_AUTH.md). Subdomain and domain rules need a second sender and are covered offline only for subdomains. One tester and 15 messages show the workflow runs; they do not measure extraction accuracy.
+A scan after the final unpause was not repeated live. Not run live: settings changed during a scan, rate limits, wrong-account connection, replayed OAuth state, and domain and subdomain rules (which need a second sender, and whose coverage is offline only). One tester and 15 messages show the workflow runs; they do not measure extraction accuracy.
 
 ### Findings from the live run
 
@@ -198,11 +218,11 @@ Automated coverage for this workflow: [retrieval](../tests/gmail-retrieval.test.
 
 ### Remaining acceptance
 
-Verify incremental scheduled scans with the dashboard closed using the plan's selected **15-minute default interval**, after manual acceptance passes. This is a scheduled check, not an exact arrival-to-processing guarantee; a check with no eligible changes should make zero model calls. Remaining criteria are maintained in [the implementation plan](../IMPLEMENTATION_PLAN.md).
+Two items remain, and neither has started: real data in the designed dashboard, and automatic scheduled scans. Automatic scans are **not implemented**, and no schedule is installed. The plan's **15-minute default interval** is a target for that future work, not current behavior. Remaining criteria are in [the implementation plan](../IMPLEMENTATION_PLAN.md).
 
 ## UC9: Future optional Calendar connection and approved event lifecycle
 
-**Status: Planned; connected authorization and Calendar API execution are not implemented.** Existing calendar approval records and ICS export do not establish this workflow. Destination model and least necessary scopes must be selected before implementation.
+**Status: Not in this branch.** No Calendar connection or Calendar API call exists here, and scans and task approval create no events. Calendar approval records and ICS export do not establish this workflow. A separate team branch (`agents/proceed-with-the-minimal-google-calendar-integra`, `b6f84e6`) adds event creation; it is unmerged and unreviewed, and its behavior is not claimed here. The script below is the acceptance target for whatever is eventually merged.
 
 1. During onboarding, offer **Connect Google Calendar** and **Skip for now**. Skipping or denying access must leave app sign-in, permitted Gmail processing, and task review usable. Offer connection later from Settings or Add to Calendar.
 2. If the user connects, verify actual granted capabilities and show real connection status. Do not infer Calendar authorization from Gmail access or app sign-in.

@@ -6,10 +6,9 @@ This implements local fixture extraction, persistent suggestions, and user revie
 
 Read [current state](../../CURRENT_STATE.md) and [the storage contract](STORAGE.md).
 Source/semantic settings, bounded Gmail retrieval, canonical Gmail extraction,
-persistence/change review, and product workspace wiring exist in the working tree.
-The newest persistence/status migrations are pending application to the actual local
-database. Offline fictional/PGlite checks pass; actual new persistence/API/browser
-acceptance and live Gmail/model/OAuth lifecycle checks remain incomplete.
+persistence/change review, and product workspace wiring are implemented. Offline, local API
+and live local checks on fictional mail are recorded in [UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
+Scanning stays disabled by default, and hosted behavior is not verified.
 
 The original `analysis_email` endpoint remains E01-E20 fixture-only and disabled.
 The separate `gmail_scan` endpoint verifies Auth and accepts only initial/more mode:

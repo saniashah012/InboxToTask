@@ -10,13 +10,15 @@ This plan defines requirements and acceptance gates, not a code-absence inventor
 
 As of the November 5 [review](docs/gmail-manual-scan-review-2026-11-05.md): Phases 1-5
 have implementation with fictional injected-model verification through PGlite, actual
-local Auth/PostgREST and a seeded browser check of the signed-in workspace. Phases 6-7
-are not complete: no real Gmail or Gemini call has been made.
+local Auth/PostgREST and a seeded browser check of the signed-in workspace. Phase 5 is
+not complete: real data is not wired into the designed dashboard. Phase 6 ran locally with
+real Gmail and Gemini calls on fictional mail, with results and cases not run live in
+[UC8](docs/use-cases.md#uc8-real-gmail-to-review-workflow). Phase 7 has not started.
 
 All Gmail migrations, including the
 [hardening migration](app/supabase/migrations/20261106000000_gmail_scan_hardening.sql),
-are applied locally. Recheck runtime state before resumption; no hosted changes or
-feature enablement occurred.
+are applied locally. Hosted has the migrations through that hardening file, without scanning
+deployed or enabled; see [current state](CURRENT_STATE.md). Recheck runtime state before resumption.
 
 The user accepted empty semantic inclusions as no topic inclusion restriction
 within source-permitted email; semantic exclusions still apply. Source access is

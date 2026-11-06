@@ -58,7 +58,8 @@ Auth and accepts only `{ "mode": "initial" }` or `{ "mode": "more" }`. It is dis
 unless the Google connection feature is configured and one mode is on:
 `ENABLE_GMAIL_RETRIEVAL=true` runs retrieval only, with zero inference and no saved
 extraction; `ENABLE_GMAIL_SCAN=true` also needs `GEMINI_API_KEY` and saves reviewable
-results. Live acceptance of persistent mode is still outstanding.
+results. Persistent mode has run locally on fictional mail; see
+[UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow). Hosted is not verified.
 
 Proposed edits and cancellations are stored in `gmail_task_changes` with states
 `pending`, `approved`, `dismissed` and `superseded`. A source can be re-extracted after

@@ -135,7 +135,7 @@ This is the primary CP3 workflow. Demonstrating fixtures, a simulated preview, o
 3. Under **Check Gmail**, click **Scan past seven days**. Sender and subject rules are checked on metadata before any body is fetched, and again for each earlier message in the thread.
 4. Permitted email goes to Gemini with permitted thread history and existing same-thread tasks. Output is validated before it is saved.
 5. Each batch makes at most two model calls. When work remains, wait for the 60-second cooldown and click **Scan more**.
-6. Under **Review**, approve or dismiss suggestions. Approval makes no model call and no Calendar event.
+6. Under **Review**, approve or dismiss suggestions. Approval makes no model call and no Calendar event. Each task shows the emails that created or changed it, with a link to the conversation in Gmail. Full bodies are not stored or fetched here.
 7. A later reply can propose an edit or cancellation of an accepted task. It shows a before/after comparison, and the accepted value does not change until approved. If the task changed in the meantime, the proposal must be refreshed against the current revision first.
 8. If an email seems to change a task but does not make clear which one or what the new values are, the app applies nothing and asks **Which task changed?** It shows the saved sender, subject, date and excerpt with a link to the full email in Gmail. The user chooses the task and enters the values, or dismisses the item. Full bodies are not stored, so the complete message stays in Gmail.
 

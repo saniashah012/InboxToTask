@@ -13,9 +13,10 @@ Apply these in filename order, together, after any earlier repository migrations
 5. `20261105223000_gmail_scan_status.sql`
 6. `20261106000000_gmail_scan_hardening.sql`
 7. `20261106010000_gmail_manual_resolution.sql`, added after live testing, for manually resolving ambiguous updates.
-8. `20261106040000_gmail_token_recheck.sql`, for correcting the connection status when Google rejects access.
+8. `20261106030000_gmail_task_source_links.sql`, for showing each task's source emails.
+9. `20261106040000_gmail_token_recheck.sql`, for correcting the connection status when Google rejects access.
 
-Do not stop after step 5: step 6 fixes defects in steps 4 and 5. Steps 7 and 8 are additive, but the product page calls their functions. Applying these enables no scanning; `gmail_scan` stays a separate function and is disabled by default. Please report which versions were applied and to which environment.
+Do not stop after step 5: step 6 fixes defects in steps 4 and 5. Steps 7 to 9 are additive, but the product page calls their functions. Applying these enables no scanning; `gmail_scan` stays a separate function and is disabled by default. Please report which versions were applied and to which environment.
 
 ## What is already implemented
 - Source/semantic permission separation and filter handling are in place.

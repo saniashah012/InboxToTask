@@ -1,5 +1,6 @@
 import {useId,useState,type FormEvent} from 'react'
 import type {Deadline,StoredRow,TaskFields} from './storageAdapter'
+import {gmailConversationUrl} from './SourceEmails'
 
 type Props={change:StoredRow;source?:StoredRow;quote?:string|null;tasks:StoredRow[];email:string;busy:boolean;
  onResolve:(taskId:string,taskRevision:number,fields:TaskFields|null)=>void;onDismiss:()=>void}
@@ -21,7 +22,7 @@ export function fieldsFromDraft(d:Draft,current:TaskFields,timeZone=zone()):Task
 export default function ManualChangeResolver({change,source,quote,tasks,email,busy,onResolve,onDismiss}:Props){
  const id=useId(),[taskId,setTaskId]=useState(''),[draft,setDraft]=useState<Draft|null>(null),[error,setError]=useState('')
  const task=tasks.find(t=>t.id===taskId),cancel=change.kind==='cancel'
- const link=source&&`https://mail.google.com/mail/?authuser=${encodeURIComponent(email)}#all/${encodeURIComponent(source.message_id)}`
+ const link=source&&gmailConversationUrl(email,source.message_id)
  const set=(patch:Partial<Draft>)=>{setDraft(d=>d&&{...d,...patch});setError('')}
  function choose(next:string){const chosen=tasks.find(t=>t.id===next);setTaskId(next);setError('');setDraft(chosen?draftFrom(chosen.accepted_fields):null)}
  function submit(event:FormEvent){

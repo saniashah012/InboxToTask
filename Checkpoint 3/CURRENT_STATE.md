@@ -37,9 +37,27 @@ recommended option and was not separately confirmed by the user. **The user expl
 decided** that ambiguous updates show the source and let the user enter what is correct. No source inclusions
 means no processing, regardless of semantic topics.
 
+## Source email access: naive implementation
+
+**This is deliberately a naive implementation for now, chosen by the user.** Users see a
+saved excerpt and metadata in InboxToTask and open the full email through a Gmail link.
+The app does not fetch or display email bodies on demand.
+
+- [`gmail_task_source_links`](app/supabase/migrations/20261106030000_gmail_task_source_links.sql)
+  returns each task's sources (created, updated or cancelled by), including after the
+  30-day expiry of excerpts and proposals. [SourceEmails](app/web/src/SourceEmails.tsx)
+  renders them in `ManualWorkspace`. The designed dashboard does not use them yet.
+- **Known limitations:** the `#all/<message_id>` URL is not a documented Google contract
+  and could stop working; it opened the right conversation on real mail in one tester-reported check. Gmail opens the whole conversation, including excluded
+  messages and later replies. Deleting a source here does not affect Gmail. A deleted or
+  moved email gives a Gmail error. Details of a cited earlier message come from
+  `permission_metadata`, which a re-scan overwrites; the link then falls back to the
+  scanned message. Lookups cover the 200 tasks the workspace loads.
+- **Verification:** PGlite and actual local Auth/PostgREST pass, and a browser check with seeded fictional data shows task sources. Source lists on real tasks were not checked live.
+
 ## Local migration and feature state last observed
 
-- All migrations here through [gmail_token_recheck](app/supabase/migrations/20261106040000_gmail_token_recheck.sql)
+- All migrations through [gmail_token_recheck](app/supabase/migrations/20261106040000_gmail_token_recheck.sql)
   are applied to the local database, without reset. **Check with the team what is applied to hosted.**
 - A hosted rollout of the Gmail migrations must apply them in filename order and include
   the hardening migration, which fixes defects in the two before it. The later migrations are

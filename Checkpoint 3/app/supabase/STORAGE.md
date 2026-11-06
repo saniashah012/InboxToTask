@@ -82,6 +82,16 @@ current access rules before body retrieval. The endpoint returns no bodies or
 provider diagnostics, and stores only coordination IDs, cursor and sanitized counts.
 See [the review, limitations and live runbook](../../docs/gmail-manual-scan-review-2026-11-05.md).
 
+## Source email links (naive implementation)
+
+Viewing a source email is intentionally naive for now: the browser links to Gmail, and no
+body is fetched or stored. Authenticated `gmail_task_source_links(p_tasks)` takes up to 200
+task IDs and returns the caller's Gmail sources with role, message and thread IDs, sender,
+subject, sent time and any unexpired quote. It runs as definer because provenance outlives
+the 30-day read limits, so it derives ownership from `auth.uid()` and omits deleted tasks
+and sources, fixture rows and expired quotes. Limitations and verification status are in
+[current state](../../CURRENT_STATE.md#source-email-access-naive-implementation).
+
 ## Trial limits and lifecycle
 
 - Per-user defaults: 20 requests and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.

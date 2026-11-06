@@ -6,6 +6,7 @@ import ManualChangeResolver from './ManualChangeResolver'
 import GoogleConnectionPanel from './GoogleConnectionPanel'
 import ScanSettingsPanel from './ScanSettingsPanel'
 import ExtractionReview from './ExtractionReview'
+import {loadTaskSourceLinks,OpenInGmail,TaskSourceEmails,type TaskSourceLink} from './SourceEmails'
 import './storage.css'
 import './manual-workspace.css'
 
@@ -22,13 +23,15 @@ function Fields({fields}:{fields:TaskFields}){
 export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;email:string;onSignOut:()=>void}){
  const [snapshot,setSnapshot]=useState<Snapshot>(empty),[status,setStatus]=useState<ScanStatus|null>(null)
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
- const [tab,setTab]=useState('review'),[refresh,setRefresh]=useState(0)
+ const [tab,setTab]=useState('review'),[refresh,setRefresh]=useState(0),[sourceLinks,setSourceLinks]=useState<TaskSourceLink[]|null>([])
  const epoch=useRef(0),sequence=useRef(0)
  const reload=useCallback(async()=>{
   const current=epoch.current,request=++sequence.current
   try{
    const [records,progress]=await Promise.all([loadStorageSnapshot(supabase),manualScanStatus()])
-   if(current===epoch.current&&request===sequence.current){setSnapshot(records);setStatus(progress)}
+   // A failed link lookup must not hide saved tasks, so it has its own visible state.
+   const links=await loadTaskSourceLinks(records.tasks.map(t=>t.id)).catch(()=>null)
+   if(current===epoch.current&&request===sequence.current){setSnapshot(records);setStatus(progress);setSourceLinks(links)}
   }catch(err){if(current===epoch.current&&request===sequence.current)setError((err as Error).message)}
   finally{if(current===epoch.current&&request===sequence.current)setLoading(false)}
  },[])
@@ -63,6 +66,7 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
  const tasks=snapshot.tasks.filter(t=>!t.deleted_at&&t.accepted_fields&&['approved','completed'].includes(t.status))
  const counts=status?.result?.counts
  const needsReconnect=status?.result?.error==='GMAIL_RECONNECT_REQUIRED'
+ const sourceMessage=(extractionId:string)=>snapshot.sources.find(s=>s.id===extractions.get(extractionId)?.source_id)?.message_id
  return <main className="storage-page manual-workspace">
   <header><div><p className="storage-eyebrow">InboxToTask</p><h1>Your inbox, ready for review</h1><p>{email}</p></div><button onClick={onSignOut}>Sign out</button></header>
   <section className="storage-panel" aria-labelledby="manual-scan-title"><h2 id="manual-scan-title">Check Gmail</h2>
@@ -84,7 +88,7 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
   {tab==='review'&&<section aria-label="Saved proposals">
    {!suggestions.length&&!changes.length&&!loading&&<p>No pending suggestions or task changes. Connect Gmail and review saved permission under Connection and permissions before scanning.</p>}
    {suggestions.map(s=>{const quote=evidence.get(s.evidence_id);const fields=s.review_fields??s.fields;return <article className="storage-panel" key={s.id}><h2>{fields.action}</h2><Fields fields={fields}/><ExtractionReview extraction={extractions.get(s.extraction_id)}/>
-    <blockquote>{quote?.quote??'Supporting evidence has expired.'}</blockquote><div className="storage-actions"><button disabled={busy||!quote?.quote} onClick={()=>void perform(()=>reviewStoredRecord('suggestion',s.id,'approve',s.revision),'Task approved. No Calendar event was created.')}>Approve task</button><button disabled={busy} onClick={()=>void perform(()=>reviewStoredRecord('suggestion',s.id,'dismiss',s.revision),'Suggestion dismissed.')}>Dismiss</button></div></article>})}
+    <blockquote>{quote?.quote??'Supporting evidence has expired.'}</blockquote><OpenInGmail email={email} messageId={quote?.message_id??sourceMessage(s.extraction_id)}/><div className="storage-actions"><button disabled={busy||!quote?.quote} onClick={()=>void perform(()=>reviewStoredRecord('suggestion',s.id,'approve',s.revision),'Task approved. No Calendar event was created.')}>Approve task</button><button disabled={busy} onClick={()=>void perform(()=>reviewStoredRecord('suggestion',s.id,'dismiss',s.revision),'Suggestion dismissed.')}>Dismiss</button></div></article>})}
    {changes.map(c=>{const target=tasks.find(t=>t.id===c.target_task_id),open=target?.status==='approved'&&!target.cancelled_at,stale=open&&target.revision!==c.expected_revision,quote=evidence.get(c.evidence_id);
     if(!c.target_task_id)return <ManualChangeResolver key={`${c.id}-${c.revision}`} change={c} source={snapshot.sources.find(s=>s.id===extractions.get(c.extraction_id)?.source_id)} quote={quote?.quote} tasks={tasks.filter(t=>t.status==='approved'&&!t.cancelled_at)} email={email} busy={busy}
      onResolve={(taskId,taskRevision,fields)=>void perform(()=>resolveTaskChange(c.id,c.revision,taskId,taskRevision,fields),fields?'Your values were saved to the task. No Calendar write was authorized.':'The task was marked cancelled. No Calendar write was authorized.')}
@@ -93,13 +97,13 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
     <h2>{c.kind==='cancel'?'Proposed cancellation':'Proposed task edit'}: {c.baseline?.action??'Target needs review'}</h2><p>{c.reason}</p><p>Target: {target?.accepted_fields.action??'No eligible task selected'} · expected revision {c.expected_revision??'unresolved'}</p>
     {c.kind==='edit'&&<table><thead><tr><th>Field</th><th>Accepted at inference</th><th>Proposed</th></tr></thead><tbody>{c.changed_fields.map((field:string)=><tr key={field}><th scope="row">{field}</th><td>{display(c.baseline?.[field])}</td><td>{display(c.fields?.[field])}</td></tr>)}</tbody></table>}
     {c.kind==='cancel'&&c.baseline&&<><p>Accepted values are retained if cancellation is approved.</p><Fields fields={c.baseline}/></>}
-    <ExtractionReview extraction={extractions.get(c.extraction_id)}/><blockquote>{quote?.quote??'Supporting evidence has expired.'}</blockquote>
+    <ExtractionReview extraction={extractions.get(c.extraction_id)}/><blockquote>{quote?.quote??'Supporting evidence has expired.'}</blockquote><OpenInGmail email={email} messageId={quote?.message_id??sourceMessage(c.extraction_id)}/>
     {!open&&<p>The task is no longer open, so this proposal cannot be applied. You can dismiss it.</p>}
     {stale&&<><p>The task changed since this proposal. Current accepted values:</p><Fields fields={target.accepted_fields}/><button disabled={busy} onClick={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'rebase',target.revision),'Proposal refreshed against the current task. Review the new comparison before approving.')}>Review against current revision</button></>}
     <div className="storage-actions"><button disabled={busy||!open||!!stale||!quote?.quote} onClick={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'approve'),'Task change approved. No Calendar write was authorized.')}>{c.kind==='cancel'?'Approve cancellation':'Approve edit'}</button><button disabled={busy} onClick={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'dismiss'),'Proposal dismissed.')}>Dismiss</button></div>
    </article>})}
   </section>}
-  {tab==='tasks'&&<section aria-label="Accepted tasks">{!tasks.length&&<p>No accepted tasks yet.</p>}{tasks.map(t=><article className="storage-panel" key={t.id}><h2>{t.accepted_fields.action}</h2><p>{t.cancelled_at?'Cancelled':t.status} · revision {t.revision}</p><Fields fields={t.accepted_fields}/>{!t.cancelled_at&&<button disabled={busy} onClick={()=>void perform(()=>reviewStoredRecord('task',t.id,t.status==='completed'?'undo':'complete',t.revision),'Task status saved.')}>{t.status==='completed'?'Undo completion':'Complete task'}</button>}</article>)}</section>}
+  {tab==='tasks'&&<section aria-label="Accepted tasks">{!tasks.length&&<p>No accepted tasks yet.</p>}{tasks.map(t=><article className="storage-panel" key={t.id}><h2>{t.accepted_fields.action}</h2><p>{t.cancelled_at?'Cancelled':t.status} · revision {t.revision}</p><Fields fields={t.accepted_fields}/><TaskSourceEmails email={email} links={sourceLinks&&sourceLinks.filter(l=>l.taskId===t.id)}/>{!t.cancelled_at&&<button disabled={busy} onClick={()=>void perform(()=>reviewStoredRecord('task',t.id,t.status==='completed'?'undo':'complete',t.revision),'Task status saved.')}>{t.status==='completed'?'Undo completion':'Complete task'}</button>}</article>)}</section>}
   {tab==='information'&&<section aria-label="Informational results">{!information.length&&!loading&&<p>No informational summaries are saved.</p>}{information.map(e=><article className="storage-panel" key={e.id}><h2>{e.category}</h2><p>{e.summary}</p><ExtractionReview extraction={e}/></article>)}</section>}
  </main>
 }

@@ -199,6 +199,13 @@ try {
   assert.equal((await rpc(owner,'gmail_change_resolve',resolveArgs)).status,200);
   assert.equal((await userRequest(owner,`/rest/v1/tasks?id=eq.${taskId}&select=accepted_fields`)).data[0].accepted_fields.deadline.date,'2026-11-20');
   check('an ambiguous proposal cannot be approved directly; the owner can resolve it with entered values, over HTTP, and other users cannot');
+  const taskLinks=await rpc(owner,'gmail_task_source_links',{p_tasks:[taskId]});assert.equal(taskLinks.status,200);
+  assert.deepEqual(new Set(taskLinks.data.map(l=>l.messageId)),new Set(['fictional-original','fictional-update','fictional-ambiguous']));
+  assert.equal(taskLinks.data.find(l=>l.messageId==='fictional-original').role,'created');
+  assert.equal(JSON.stringify(taskLinks.data).includes('fictional-ciphertext'),false);
+  assert.deepEqual((await rpc(a,'gmail_task_source_links',{p_tasks:[taskId]})).data,[]);
+  assert.ok((await request('/rest/v1/rpc/gmail_task_source_links',{method:'POST',body:{p_tasks:[taskId]}})).status>=400);
+  check('task source links work over HTTP, return only the owner\'s sources, and reject anonymous callers');
   const gmailSource=(await userRequest(owner,'/rest/v1/storage_sources?select=id,message_id&message_id=eq.fictional-update')).data[0];
   await action(owner,'source',gmailSource.id,'delete',0);
   assert.ok((await service('gmail_suppressed_messages',{p_user:owner.id,p_lease:work.lease})).includes('fictional-update'));

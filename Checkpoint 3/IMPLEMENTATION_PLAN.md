@@ -8,18 +8,15 @@ Use [CURRENT_STATE.md](CURRENT_STATE.md) as the current implementation/verificat
 index and [the phase report](docs/gmail-manual-scan-phases-2026-11-05.md) for evidence.
 This plan defines requirements and acceptance gates, not a code-absence inventory.
 
-As of the November 5 working-tree handoff: Phases 1-2 have implementation plus
-scoped offline/local checks. Phases 3-4 have Gmail extraction, task context,
-persistence and review code with fictional injected-model/PGlite verification.
-Phase 5 has the normal signed-in workspace wiring with type/build checks, but
-no authenticated browser acceptance yet. Phases 6-7 are not complete. The full
-offline suite passed 134 tests; it made no real Gmail or Gemini calls.
+As of the November 5 [review](docs/gmail-manual-scan-review-2026-11-05.md): Phases 1-5
+have implementation with fictional injected-model verification through PGlite, actual
+local Auth/PostgREST and a seeded browser check of the signed-in workspace. Phases 6-7
+are not complete: no real Gmail or Gemini call has been made.
 
-Two draft migrations remain unapplied to the actual local database:
-[Gmail persistence](app/supabase/migrations/20261105220000_gmail_persistence.sql) and
-[scan status](app/supabase/migrations/20261105223000_gmail_scan_status.sql).
-The source/semantic, retrieval and pause migrations were applied locally. Recheck
-runtime state before resumption; no hosted changes or feature enablement occurred.
+All Gmail migrations, including the
+[hardening migration](app/supabase/migrations/20261106000000_gmail_scan_hardening.sql),
+are applied locally. Recheck runtime state before resumption; no hosted changes or
+feature enablement occurred.
 
 The user accepted empty semantic inclusions as no topic inclusion restriction
 within source-permitted email; semantic exclusions still apply. Source access is
@@ -28,10 +25,9 @@ Categories never expand into access keywords. New users default to five earlier
 messages within 90 days; existing saved context is preserved. Incompatible phrase
 rules require explicit review and renewed consent.
 
-Next: review/apply the pending migrations locally, verify actual persistence/status/
-review RPCs and the authenticated product UI, then use a dedicated fictional-mail
-account for live OAuth/Gmail/Gemini acceptance. Scheduling stays deferred until
-manual acceptance passes. See [the detailed handoff](../CLAUDE_HANDOFF.md).
+Next: use a dedicated fictional-mail account for live OAuth/Gmail/Gemini acceptance,
+following the [Phase 6 runbook](docs/gmail-manual-scan-review-2026-11-05.md#phase-6-live-acceptance-runbook).
+Scheduling stays deferred until manual acceptance passes.
 
 Earlier setup evidence remains in [Google Auth verification](docs/google-auth-verification-2026-11-05.md),
 [settings verification](docs/scan-settings-verification-2026-11-05.md), and
@@ -91,10 +87,8 @@ execution remain milestone 5 work.
 
 Milestones 1 and 2 can proceed together. The optional Calendar onboarding UI can be designed with milestone 1, but its live connection action must ship with working authorization in milestone 5. Do not show simulated success while that backend is missing.
 
-Immediate resumption order: follow [current state](CURRENT_STATE.md) and
-[the current handoff](../CLAUDE_HANDOFF.md). Preserve private configuration and
-uncommitted work; apply/verify pending local migrations before testing the new
-product workspace. Existing Google projects need not be recreated. A missing shared
+Immediate resumption order: follow [current state](CURRENT_STATE.md). Preserve private
+configuration and uncommitted work. Existing Google projects need not be recreated. A missing shared
 authenticated browser limits live acceptance, not independent offline work.
 
 Delivery constraint: keep work local and do not push until setup is ready for Vercel testing and the user explicitly authorizes the push. Hosted Supabase migrations/functions and Vercel deployment also require a separate rollout instruction; this plan update does not authorize them.

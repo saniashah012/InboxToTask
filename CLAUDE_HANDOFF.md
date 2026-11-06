@@ -1,9 +1,15 @@
 # InboxToTask Gmail scanning handoff
 
+**Status note, November 5 review:** the migration, Git and "next work" details below
+predate the [code review and fixes](<Checkpoint 3/docs/gmail-manual-scan-review-2026-11-05.md>).
+Phases 1-5 are committed in `7d4ee6a` plus the review changes, all migrations are applied
+locally, and steps 1-3 of "Next work" are done. Use
+[current state](<Checkpoint 3/CURRENT_STATE.md>) first. The remaining work is the Phase 6
+runbook in the review report. The product decisions below still apply.
+
 Continue the user's authorized local implementation through the manual Gmail scan
-milestone. They stopped because of usage limits, not because implementation was
-complete. Read root AGENTS.md and scoped Supabase/web instructions first, then
-check Git status. Preserve the current uncommitted work. Do not push, deploy,
+milestone. Read root AGENTS.md and scoped Supabase/web instructions first, then
+check Git status. Preserve uncommitted work. Do not push, deploy,
 reset databases, enable broad email processing, or print secrets/provider prose.
 
 Repository: `C:/Users/mzhen/Desktop/School/IS492/IS-492-Project`.

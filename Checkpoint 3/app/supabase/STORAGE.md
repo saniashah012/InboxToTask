@@ -51,13 +51,20 @@ to the analyzed message. Zero disables earlier context. Accepted tasks are uncha
 Consent remains explicitly saved under `gmail-scan-v1`; saving filters or connecting
 Google alone never grants it. Settings saves fence older storage work.
 
-## Manual Gmail retrieval milestone
+## Manual Gmail scan
 
 The separate [gmail_scan](functions/gmail_scan/index.ts) function verifies Supabase
 Auth and accepts only `{ "mode": "initial" }` or `{ "mode": "more" }`. It is disabled
-unless `ENABLE_GMAIL_RETRIEVAL=true` and the Google connection feature is configured.
-It currently performs **retrieval only**, with zero inference, no saved extraction,
-and count-only responses. Do not present it as a completed manual scan.
+unless the Google connection feature is configured and one mode is on:
+`ENABLE_GMAIL_RETRIEVAL=true` runs retrieval only, with zero inference and no saved
+extraction; `ENABLE_GMAIL_SCAN=true` also needs `GEMINI_API_KEY` and saves reviewable
+results. Live acceptance of persistent mode is still outstanding.
+
+Proposed edits and cancellations are stored in `gmail_task_changes` with states
+`pending`, `approved`, `dismissed` and `superseded`. A source can be re-extracted after
+task or settings changes; earlier review decisions win, so repeats are dropped and open
+proposals are superseded. Cancelled tasks allow only deletion. Deleting a source purges
+its retained metadata and stops later scans from fetching it as mail or context.
 
 Service-only `gmail_scan_service` coordinates one four-minute lease per owner,
 with a 60-second request cooldown, seven-day snapshot window, private continuation
@@ -71,7 +78,7 @@ The canonical [retriever](../pipeline/gmail-retrieval.mjs) fetches candidate IDs
 then metadata, then permitted bodies. Each earlier context message passes the same
 current access rules before body retrieval. The endpoint returns no bodies or
 provider diagnostics, and stores only coordination IDs, cursor and sanitized counts.
-See [phase evidence and limitations](../../docs/gmail-manual-scan-phases-2026-11-05.md).
+See [the review, limitations and live runbook](../../docs/gmail-manual-scan-review-2026-11-05.md).
 
 ## Trial limits and lifecycle
 

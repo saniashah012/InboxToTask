@@ -21,7 +21,20 @@ Checked afterward with read-only queries and anonymous REST requests:
 - Preferences 3 (none changed since the backup), tasks 0, legacy suggestions 0, Auth users 5.
 - Only `analysis_email` v6 is deployed. `ENABLE_GMAIL_SCAN`, `ENABLE_GMAIL_RETRIEVAL` and `ENABLE_GOOGLE_CONNECTION` are not set.
 
-**Not yet verified:** signed-in owner isolation, and settings save/reload through the real workspace. Both need the plan's dedicated test accounts and Vercel preview access. These checks also do not establish that the production sign-in flow now works.
+These checks do not establish that the production sign-in flow works. Hosted later received a [second rollout](hosted-rollout-2-manifest-2026-11-06.md).
+
+### Signed-in checks reported by Sania
+
+Reported by Sania at 10:31 PM Central on November 5, on an immutable preview serving `ffa915a`, which is older than the current branch tip. These results were not independently repeated.
+
+- **Settings:** save/reload and sign-out/in persisted for account A.
+- **Stale tab:** a stale save returned 409 with `PT409` and did not overwrite.
+- **Isolation:** accounts A and B were isolated in the tested workspace flows.
+- **Safety:** consent stayed false, paused stayed true, no inbox was connected, and no scan ran.
+- **Test rows remain:** values were restored, with account A at revision 3 and account B at revision 2. These rows were not removed.
+- **Aggregates she reported:** 20 ledger versions through `20261106040000`, 3 legacy preference rows, 2 settings rows, none with nonempty rules, none consented or unpaused, and no connections, sources or jobs. A separate read-only query matched the ledger, preference, settings, consent, connection and source counts; it did not check rules or jobs.
+
+**Limits:** these were not RLS penetration tests and did not cover onboarding or chip screens. Review, manual resolution and source links remain unverified on hosted because there is no Gmail data. Sign-in silently reuses the current Google account. Sania used a one-request `prompt=select_account` override to reach account B, so unassisted account switching is not established.
 
 Unchanged and worth reviewing separately: the legacy `task_suggestions` table is still selectable by `anon` at the grant level, as the plan required (RLS still applies), and `anon` holds execute on `rls_auto_enable`, which was present before this rollout.
 
@@ -97,6 +110,8 @@ other than the nine above.
 | Physical backups and point-in-time recovery | None listed; PITR disabled | This logical backup is the only verified restore point found |
 
 ## Limits of this verification
+
+- **Later finding:** a plain restore can over-grant through Supabase's default privileges, which count comparisons here could not detect. See the [recovery hazard](hosted-rollout-2-manifest-2026-11-06.md#recovery-hazard-restores-can-silently-over-grant) before restoring.
 
 - The restore proved these files load and that the counts above match. It compared counts, not every row, and not each table grant. The dump does contain 11 `GRANT` statements. Effective privileges must be rechecked in the pre-write preflight, as the rollout plan requires.
 - The Auth service did not run against the restored data, so sign-in after a restore is unverified.

@@ -443,7 +443,7 @@ The CP4 instructions have not been supplied. This is a provisional plan based on
 
 - [ ] Obtain CP4 requirements; select Track A user study or Track B algorithmic benchmark and set success thresholds before final testing.
 - [ ] Unify the workspace's **Scan past seven days** and **Scan more** into one scan button. Keep the existing behavior behind it: a bounded batch, visible backlog, the cooldown, and permission checks. Decide how the user approves continuing a backlog, since the plan currently requires a separate "Scan more" approval.
-- [ ] Evaluate adding two or three full few-shot examples to the system prompt against the labeled set, comparing accuracy and token cost.
+- [ ] Evaluate the stored few-shot examples in `app/prompts/few-shot/` against the labeled set, comparing accuracy and token cost, before any of them are added to the system prompt.
 - [ ] Expand the CP3 labeled cases with varied senders/domains, ambiguous dates, multiple responsibilities, changed deadlines, mixed-topic content, and adversarial instructions.
 - [ ] Reserve a held-out set; freeze prompts/settings before final evaluation and avoid tuning on held-out cases.
 - [ ] Compare human-alone, AI-alone, and combined workflows; specify identical inputs, timing rules, and how each workflow's outputs are scored.

@@ -154,7 +154,7 @@ Details and tests are in [safety and privacy](safety_privacy.md).
 
 ## Model configuration
 
-The system prompt uses one-line rule examples rather than full input-output few-shot examples. [Model settings](../app/prompts/model-settings.json) select `gemini-3.8-flash`, LOW thinking, an 8,192 output-token cap and a 60-second timeout. Gmail processing forces one provider attempt per claim. A server-side `GEMINI_MODEL` setting can override the model, and there is no silent fallback. Prompts and schema are canonical in [prompts](../app/prompts/); `npm.cmd run supabase:prepare` copies them into the ignored Edge bundle.
+The system prompt uses one-line rule examples. Reference few-shot examples are stored in `app/prompts/few-shot/`, but the running app does not load them, and they have not been evaluated for accuracy. [Model settings](../app/prompts/model-settings.json) select `gemini-3.8-flash`, LOW thinking, an 8,192 output-token cap and a 60-second timeout. Gmail processing forces one provider attempt per claim. A server-side `GEMINI_MODEL` setting can override the model, and there is no silent fallback. Prompts and schema are canonical in [prompts](../app/prompts/); `npm.cmd run supabase:prepare` copies them into the ignored Edge bundle.
 
 ## Design decisions
 

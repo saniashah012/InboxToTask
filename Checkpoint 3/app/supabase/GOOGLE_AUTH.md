@@ -1,12 +1,16 @@
 # Google sign-in and backend connection
 
-This implements app sign-in and an account-bound Google connection. It does not
-retrieve Gmail messages, enable scanning, call a model, or connect Calendar.
-The prototype at `/` remains simulated; development controls are on `/storage`
-only through a localhost Vite development server with `VITE_STORAGE_ENABLED=true`.
-Production builds exclude the development dashboard regardless of that flag;
-`/storage` and its callback show Page not found. Normal users will use the designed
-Google-only onboarding/dashboard once that separate integration is implemented.
+This implements app sign-in and an account-bound Google connection. Connecting does not
+itself retrieve Gmail messages, enable scanning, call a model, or connect Calendar. Manual
+scanning is a separate, disabled-by-default feature; see [UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
+Signed-in users at `/` get the persistent workspace with Gmail connection controls;
+preview at `/` remains simulated. Development controls are on `/storage` only through a
+localhost Vite development server with `VITE_STORAGE_ENABLED=true`. Production builds exclude
+the development dashboard regardless of that flag; `/storage` and its callback show Page not
+found. Connecting real data to the designed onboarding/dashboard is still open.
+
+Some dated setup notes below describe earlier stages. [Current state](../../CURRENT_STATE.md)
+records which lifecycle checks have passed live.
 
 ## Architecture and decisions
 
@@ -60,6 +64,8 @@ by itself. See the [current handoff](../../docs/frontend-integration-handoff-202
 for the frontend integration priorities and no-push/Vercel constraint.
 
 ## Hosted inspection, November 5, 2026
+
+This section is dated. Later migration rollouts are recorded in [current state](../../CURRENT_STATE.md).
 
 Read-only inspection of the linked `IS492_c3` project found:
 
@@ -165,7 +171,7 @@ written above, even if an external tutorial uses `_CLIENT_SECRET`.
    `GOOGLE_CLIENT_SECRET` in the private Functions file. These must be the Gmail
    client's values, not the sign-in client's values.
 4. Leave `GOOGLE_CALLBACK_URL` and `GOOGLE_RETURN_URL` at their local defaults.
-   The return URL is `http://127.0.0.1:5173/storage`; it is the backend's final
+   The return URL is `http://127.0.0.1:5173/`; it is the backend's final
    destination, not the redirect URI to register with Google.
 5. Leave `ENABLE_GOOGLE_CONNECTION=false` and `GOOGLE_TOKEN_KEYS` blank for the
    handoff. Keep `ENABLE_FIXTURE_EXTRACTION=false`. Gemini credentials are not
@@ -190,7 +196,7 @@ and the encryption key can be configured during this handoff. The agent should:
 3. Configure the frontend's local public URL/key, enable the local Auth provider
    and relevant frontend/backend flags, and reload services while preserving data.
 4. Apply pending local migrations if needed, serve both Google functions, and
-   open `http://127.0.0.1:5173/storage` through Vite development.
+   open `http://127.0.0.1:5173/` through Vite development.
 5. Have you complete Google login/consent in the browser using the same test
    account for both steps, then verify reload and disconnect/reconnect behavior.
 
@@ -266,7 +272,7 @@ to an ignored private file. Fill:
 | `ENABLE_GOOGLE_CONNECTION` | `true` after configuration |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Backend connection client's credentials |
 | `GOOGLE_CALLBACK_URL` | Exact registered backend callback |
-| `GOOGLE_RETURN_URL` | Fixed frontend return, e.g. `http://127.0.0.1:5173/storage` |
+| `GOOGLE_RETURN_URL` | Fixed frontend return, e.g. `http://127.0.0.1:5173/` |
 | `APP_ORIGINS` | Exact allowed frontend origins, including the return URL's origin |
 | `GOOGLE_TOKEN_ACTIVE_KEY` | Key ID, initially `v1` |
 | `GOOGLE_TOKEN_KEYS` | JSON map such as `{"v1":"<base64 of 32 random bytes>"}` |

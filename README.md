@@ -1,5 +1,20 @@
 > **Working-tree navigation (November 5, 2026):** Start with [current implementation state](<Checkpoint 3/CURRENT_STATE.md>) and [repository instructions](AGENTS.md). Active code is under Checkpoint 3; earlier checkpoints and the project proposal below are historical requirements/context. For continuation, see [the Claude handoff](CLAUDE_HANDOFF.md). Code present does not imply local migrations are applied or live acceptance has passed.
 
+**Checkpoint 3 deliverables** are under `Checkpoint 3/`. The demo runs locally.
+
+| Required | Location |
+| --- | --- |
+| `/app/` source and run scripts | [Checkpoint 3/app](<Checkpoint 3/app/>) |
+| `INSTALL.md`, `.env.example` | [INSTALL.md](<Checkpoint 3/app/INSTALL.md>), [.env.example](<Checkpoint 3/app/.env.example>) |
+| Teammate setup and use guide | [local-setup-and-use.md](<Checkpoint 3/docs/local-setup-and-use.md>) |
+| `/prompts/` | [Checkpoint 3/app/prompts](<Checkpoint 3/app/prompts/>) |
+| Architecture | [architecture.md](<Checkpoint 3/docs/architecture.md>) |
+| Use cases | [use-cases.md](<Checkpoint 3/docs/use-cases.md>) |
+| Observability | [observability.md](<Checkpoint 3/docs/observability.md>) |
+| Safety and privacy | [safety_privacy.md](<Checkpoint 3/docs/safety_privacy.md>) |
+| `/tests/` | [Checkpoint 3/tests](<Checkpoint 3/tests/>) |
+| Demo script and slides | [demo-script.md](<Checkpoint 3/docs/demo-script.md>), [draft slides](<Checkpoint 3/docs/InboxToTask-CP3-presentation-draft.pptx>) |
+
 # 1. Project Title & Tagline
 
 ## **InboxToTask**

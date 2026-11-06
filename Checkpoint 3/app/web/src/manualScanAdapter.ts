@@ -1,5 +1,22 @@
 import {supabase} from './supabase'
+import type {TaskFields} from './storageAdapter'
 export type ScanStatus={running:boolean;backlog:boolean;lastStarted:string|null;lastFinished:string|null;lastSuccessful:string|null;cooldownUntil:string|null;result:any}
+const stopMessages:Record<string,string>={
+ SCAN_INFERENCE_LIMIT:'This batch reached its model-call limit. Use Scan more to continue.',
+ SCAN_TIME_LIMIT:'This batch reached its time limit. Use Scan more to continue.',
+ SCAN_RETRIEVAL_LIMIT:'This batch reached its Gmail request limit. Use Scan more to continue.',
+ SCAN_FAILURE_LIMIT:'Too many messages could not be processed, so the batch stopped. Check the Gmail connection and backend configuration.',
+ GMAIL_RATE_LIMITED:'Gmail asked the app to slow down. Wait, then use Scan more.',
+ GMAIL_RECONNECT_REQUIRED:'Gmail access is no longer valid. Reconnect Gmail under Connection and permissions.',
+ GMAIL_UNAVAILABLE:'Gmail could not be reached. Use Scan more to try again.',
+ PROVIDER_HTTP_429:'The AI service is rate limited. Wait, then use Scan more.',
+ STORAGE_BUDGET:'Your daily processing allowance is used up. Scan more after it resets.',
+ STORAGE_PROVIDER_LIMIT:'The per-minute AI request limit was reached. Wait a minute, then use Scan more.',
+ STORAGE_PAUSED:'Processing is paused.',
+ STORAGE_BUSY:'Another extraction is still running. Wait, then use Scan more.',
+ STORAGE_STALE:'Saved permissions or task state changed during the batch. Use Scan more to continue under current settings.',
+}
+export const scanStopMessage=(code:string)=>stopMessages[code]??'The batch stopped with unfinished work. Use Scan more to continue.'
 export async function manualScanStatus():Promise<ScanStatus>{
  if(!supabase)throw new Error('Account connection is not configured.')
  const {data,error}=await supabase.rpc('gmail_scan_status')
@@ -17,6 +34,12 @@ export async function manualScan(mode:'initial'|'more'){
    GMAIL_SCAN_UNAVAILABLE:'Scanning could not start. Check backend configuration and Gmail connection.'}
   throw new Error(messages[code]??'No successful scan was confirmed. Reload status before retrying.')
  }
+ return data
+}
+export async function resolveTaskChange(id:string,revision:number,taskId:string,taskRevision:number,fields:TaskFields|null){
+ if(!supabase)throw new Error('Account connection is not configured.')
+ const {data,error}=await supabase.rpc('gmail_change_resolve',{p_id:id,p_revision:revision,p_task:taskId,p_task_revision:taskRevision,p_fields:fields})
+ if(error)throw new Error(error.code==='PT409'?'The task or this item changed. Reload and choose again.':error.code==='22023'?'Those values could not be saved. Check them and that something changed.':'Your values could not be saved. Reload and try again.')
  return data
 }
 export async function reviewTaskChange(id:string,revision:number,action:'approve'|'dismiss'|'rebase',taskRevision?:number){

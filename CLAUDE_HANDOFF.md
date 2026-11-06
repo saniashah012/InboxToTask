@@ -1,234 +1,129 @@
 # InboxToTask Gmail scanning handoff
 
-Continue the user's authorized local implementation through the manual Gmail scan
-milestone. They stopped because of usage limits, not because implementation was
-complete. Read root AGENTS.md and scoped Supabase/web instructions first, then
-check Git status. Preserve the current uncommitted work. Do not push, deploy,
-reset databases, enable broad email processing, or print secrets/provider prose.
+Updated November 5, 2026 (Central), after live local manual-scan testing. Recheck Git,
+PR and runtime state before acting; this describes that moment, not today. Read
+[AGENTS.md](AGENTS.md), then [current state](<Checkpoint 3/CURRENT_STATE.md>), then this.
 
-Repository: `C:/Users/mzhen/Desktop/School/IS492/IS-492-Project`.
+**Repository:** `C:/Users/mzhen/Desktop/School/IS492/IS-492-Project`
 
-## Product decisions and remaining ambiguity
+## Boundaries
+Do not push, merge, deploy, apply anything to hosted, reset a database, or enable scanning
+without the user's explicit go-ahead for that step. Phase 7 (automatic scans) has not started.
+Never print environment values, tokens or real email. Scripts that read private files must
+suppress raw errors: a parser error once printed a secret (see Security below).
 
-- Exact sender/domain inclusions combine with OR; exclusions and optional literal,
-  case-insensitive subject exclusions win. Domains exclude subdomains unless
-  explicitly listed. Empty source allowlists permit nothing. No Gmail labels or
-  secret-pattern detector. Semantic topics never grant access.
-- **User explicitly accepted:** empty semantic inclusions mean no topic inclusion
-  restriction within source-permitted content. Semantic exclusions still apply.
-  Topic filtering happens after Gemini receives permitted content. Selected topics
-  filter both tasks and informational results, separately from Actionable/Passive.
-- The implementation uses conservative reviewable edit/cancellation proposals:
-  target ID + revision; preserve accepted values until approval; ambiguous targets
-  remain untargeted review items; stale targets require explicit rebase and renewed
-  review. This was the recommended second decision, and was stated when the user
-  said continue. They did not separately answer that second multiple-choice prompt.
-  Do not describe it as independently explicitly confirmed.
-- Five earlier messages / 90 days default; 0–10 and 1–365 configurable. Existing
-  saved context must remain unchanged. 12,000 characters/message and 24,000 total
-  defaults, existing configurable caps retained. Age is relative to analyzed mail.
-- Connecting Google or saving filters is not consent. Calendar writes require
-  separate authorization. All bodies transient, excerpts expire separately.
+## Where things stand
 
-## Current Git/runtime state
+| Item | State |
+| --- | --- |
+| `main` | `e2b0009`, does not have this work |
+| [PR #22](https://github.com/saniashah012/InboxToTask/pull/22) `mzheng/gmail-scan-hardening` | Open and **not merged** when last checked; recheck its head and CI |
+| `feadf66` | Live-test fixes, manual resolution of ambiguous updates, test log |
+| `cef7f06` | Source-email links from another session, kept as a separate commit by user request |
+| PR #20 (Sania, chips) | Open, separate. Both it and PR #22 change `STORAGE.md` |
+| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is local-only at `da4417d`, with its migration renamed `20261106050000`; offline tests reported passing, no live test |
 
-Everything in this session is **uncommitted**. Git was clean initially. Do not
-discard changes. No dependencies were installed; npm/pinned pnpm roots preserved.
+**Ownership right now:** the "Gmail features in Figma prototype" session coordinates hosted changes and owns
+`CURRENT_STATE.md` and the hosted records. The "CP3 progress check" session owns `docs/demo-script.md` and tonight's
+order of commits. Several sessions share this checkout, so follow their rules: no stash, reset, restore, clean,
+checkout, rebase or merge; stage named files only; no installs in `Checkpoint 3/app`; leave others' processes running.
 
-Local Docker/Supabase are available. Access through Docker/named pipes and cached
-tools needed elevated sandbox execution in Codex; this was permission isolation,
-not an unavailable daemon. CLI commands use `--agent no`, no `--remote`.
-
-The following new migrations were applied locally, without reset:
+## Hosted rollout
+Per the session coordinating hosted (reported, not checked here), hosted has all nine migrations below,
+through `20261106040000`, applied by 03:50 UTC on November 6. The Gmail functions are not deployed there, so
+connecting Gmail and scanning work only locally. Sania reports hosted preview checks passed on `ffa915a` for settings
+save/reload, sign-out/in, stale-tab rejection and two-account isolation in the tested flows; they do not cover
+onboarding, chips, RLS penetration, review, manual resolution or source links. Recheck before relying on this. Merging does not apply migrations, and Vercel production deploys
+from `main` per Sania. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy `gmail_scan` as part of this.
 
 1. `20261105200000_source_semantic_contract.sql`
 2. `20261105210000_manual_gmail_retrieval.sql`
 3. `20261105212000_manual_gmail_pause_gate.sql`
-
-The following migrations are **NOT YET APPLIED to the actual local database**:
-
 4. `20261105220000_gmail_persistence.sql`
 5. `20261105223000_gmail_scan_status.sql`
+6. `20261106000000_gmail_scan_hardening.sql` (fixes defects in 4 and 5, do not stop before it)
+7. `20261106010000_gmail_manual_resolution.sql`
+8. `20261106030000_gmail_task_source_links.sql`
+9. `20261106040000_gmail_token_recheck.sql`
 
-Both unapplied migrations have been exercised in PGlite by the full offline suite.
-They are still draft files and need review before local application. Do not edit
-the first three applied files; use additional ordered migrations for fixes.
+Calendar's migration is not on hosted or in this branch. It redefines `google_connection_service`, so
+review that against the Gmail flow when Calendar resumes in CP4.
 
-Vite is running at `http://127.0.0.1:5173/`. Shared browser was in fictional preview
-onboarding, not an independently authenticated dedicated Gmail account. Earlier
-user-reported successful connection is dated evidence, not current verification.
+## Local runtime
+- All nine migrations above are applied locally without reset. Calendar's is not.
+- `ENABLE_GMAIL_SCAN=false`. A Gemini key remains in private `app/supabase/functions/.env`.
+  `GOOGLE_RETURN_URL` points at the product root.
+- Vite and `functions serve` were started from the previous session as background tasks. They
+  may be gone; check ports 5173 and 54321 before starting duplicates.
+- `npm.cmd run test:local` expects the flag off. With it on, its disabled-endpoint step fails.
+- Local users: `inboxtotask@gmail.com` (dedicated test mailbox, fictional mail) and two others.
+  One other account has a **real mailbox**: never save consent or scan on it.
 
-Local Edge functions were refreshed using existing private configuration:
+## Security
+- The local `GOOGLE_TOKEN_KEYS` value was printed into a session transcript by a script error,
+  then rotated to `v2`. Stored local Gmail connections were cleared, so accounts show
+  `reconnect_required` and must reconnect.
+- **Open:** check whether hosted uses the same value. If so, rotate it there too.
+- Clearing credentials could not revoke the test account's Google grant. The user can remove it
+  on Google's permissions page.
 
-```powershell
-npx.cmd supabase --agent no functions serve --env-file supabase/functions/.env
-```
+## Product decisions
+- Exact sender/domain inclusions combine with OR. Sender/domain and literal subject exclusions
+  win. Domains exclude subdomains. Empty allowlist permits nothing. Topics never grant access.
+- Empty topic inclusions mean no topic restriction (explicitly accepted by the user).
+- **Ambiguous updates (explicit user decision):** apply nothing. Show the source and let the user
+  choose the task and enter the values, or dismiss. Full bodies are not stored, so the source view
+  is the saved sender, subject, date, excerpt and a Gmail link (explicitly chosen as naive for now).
+- Targeted edits and cancellations stay reviewable proposals, with stale targets needing an explicit
+  rebase. That was recommended, not separately confirmed.
+- Five earlier messages within 90 days by default. Existing saved context is unchanged. Consent is
+  separate from connecting. Task approval never authorizes Calendar writes.
 
-Codex background exec session was `68871`; it may still run. Do not launch duplicate
-servers without checking processes/ports. Existing runtime recognized gmail_scan;
-anonymous 401 and authenticated `GMAIL_SCAN_DISABLED` were verified before the
-latest persistence changes. Those latest changes still need real Edge checks.
+## Evidence
+Live results are the table in [UC8](<Checkpoint 3/docs/use-cases.md>), cases L01–L25, with the
+[labeled email set](<Checkpoint 3/tests/fixtures/gmail-live-cases.json>). Latest automated results:
+168 offline at `92b882a`; 71 pgTAP and 15 local API groups unmodified with scanning off, run at `cef7f06`.
+Check GitHub for CI at the current branch tip.
 
-No private flags/credentials were modified. `ENABLE_GMAIL_RETRIEVAL` is absent or
-false in the runtime; new `ENABLE_GMAIL_SCAN` is absent/false. Fixture inference and
-cleanup remain disabled. Never print actual environment files or CLI status keys.
+**Not run live:** settings changed during a scan, Gmail or Gemini rate limits, wrong-account
+connection, replayed OAuth state, domain and subdomain rules (needs a second sender). The Spam/Trash
+context fix and the status recheck have automated coverage only. No scan ran after the final unpause.
+One tester and about 15 emails do not measure extraction accuracy.
 
-**OAuth return route unfinished:** the checked-in function environment template
-now uses `GOOGLE_RETURN_URL=http://127.0.0.1:5173/`, but the existing private runtime
-configuration likely still returns to `/storage`. Resolve this locally before
-product OAuth acceptance, preserving credentials and the existing registered
-Google callback. Do not claim the product connection flow was verified.
+## Open findings
+None block PR #22. Only the first two need SQL.
+- "Last successful batch" does not update when a batch stops at the model-call limit.
+- New-task option for an ambiguous update whose task is not listed (suggested, not requested).
+- Every normal reply is marked for review, because quote removal adds a warning.
+- A Gmail 403 from quota would show as "reconnect". Found by reading code, not observed.
+- Clearer task labels in the resolver (due date and source email).
+- The prompt says edits carry complete values while validation allows empty ones when untargeted.
+  The prompt is in the cache key, so editing it invalidates saved results.
+- Two calls per batch and 20 requests per day are too low for real use.
 
-## Implemented changes
+## Next work, in order
+1. Merge PR #22 when the team is ready. Vercel production is `main` per Sania, and Instant Rollback does not undo migrations.
+2. In CP4, resume Calendar from `mzheng/calendar-rebase`: review the shared OAuth changes, then after
+   reconnecting, retest revocation (L17), refused refresh (L20) and a normal scan.
+3. A separate session may land onboarding work. Until confirmed merged, treat onboarding as not connected.
+4. **Phase 5:** connect real data to the designed dashboard. `App.tsx` line 565 sends every signed-in
+   user to the plain `ManualWorkspace`, so the designed onboarding and PR #20's chips cannot be reached.
+   Their save path already uses `scan_settings_save`. Coordinate with PR #20 and Calendar, which both
+   touch these files. Do not start until the user says so.
+5. Finish the presentation: `docs/InboxToTask-CP3-presentation-draft.pptx` is a draft. Remove DRAFT, assign
+   speakers, rehearse, and reconcile it with `docs/demo-script.md` (another session's file). Graded docs were
+   updated in `fe4a654`; INSTALL has not been run on a clean machine.
 
-### Phase 1 — implemented and locally verified
+## Deadline and demo
+Repo reported due Nov 5 at 11:30 PM Central, demo Friday morning. `main` lacks this work until PR #22 merges. The test account's local daily limit was raised from 20 to 50 for the demo (16 used at last check for UTC day
+2026-11-06, which resets at 6 PM Central Friday and is shared by rehearsal and demo). Demo setup needs `ENABLE_GMAIL_SCAN=true`, a functions
+restart and a Gmail reconnect on the test account; turn the flag off afterward. A scan after unpausing has not
+been run. The tester's personal address can appear on screen as the allowed sender.
 
-- Separate `semantic_preferences` from exact source rules in SQL, pipeline inputs,
-  onboarding and settings. Category presets add one topic, never expanded keywords.
-- Incompatible old phrase rules retained verbatim in `legacy_phrase_rules`; consent
-  revoked, paused, revisions/generation fenced; explicit replacement review required.
-- Old subject-only exclusions retain scope. Accepted tasks unchanged.
-- New-account context defaults 5/90; existing users' saved values preserved.
-- Old save clients fail closed because `p_semantic` is required.
-- Root/web instructions and related contracts updated to supersede phrase access.
-
-### Phase 2 — retrieval implementation and synthetic/local gates verified
-
-Canonical `app/pipeline/gmail-retrieval.mjs`, separate `gmail_scan` Edge endpoint,
-handler and private work coordination. Verified Supabase owner; encrypted backend
-Google token/refresh reuse; metadata field masks omit snippets/bodies; each current
-and earlier message independently source-filtered before `format=full`.
-
-Seven-day snapshot, explicit initial/more requests, private cursor/pending IDs,
-four-minute lease, 60-second cooldown. At most 100 permitted / 200 candidate
-messages, separate checked-boundary/metadata/time limits, ten IDs/page. MIME/HTML,
-recursion/part/response/text caps. UTF-8 only; oversized/malformed current messages
-currently stop at a pending ID rather than silently losing coverage. Backlog exact
-count unknown. No automatic schedule or incremental checkpoint.
-
-### Phases 3–4 — new implementation, offline tested; local integration unfinished
-
-- `app/prompts/extraction.schema.mjs` keeps the original fixture default schema and
-  exports a versioned `gmailSchema` with per-item relevance and edit/cancel changes.
-- Canonical prompt adds Gmail-only rules. `core.mjs` validates grounded current-mail
-  change evidence, candidate IDs/revisions, untouched accepted fields, topic output,
-  separate task-state/full-input bounds. Fixture E01–E20 boundary remains unchanged.
-- `task-context.mjs` selects bounded accepted task candidates using permitted
-  provenance, same thread AND meaningful action-word overlap. Thread alone cannot
-  identify a target. This is candidate selection, not source permission. It can miss
-  semantically related messages without lexical overlap; disclose/test this limit.
-- `gmail-processor.mjs` joins trusted settings, task state, canonical model call,
-  semantic filtering and service-only SQL persistence. Max two inference calls per
-  batch; existing daily/provider budgets and retry/lease machinery reused.
-- Gmail storage uses stable connection subject + Gmail IDs. SQL rechecks settings,
-  connection, source suppression and task state before inference and persistence.
-- `gmail_task_changes` stores independent edit/cancellation proposals with baseline,
-  expected revision, changed fields and evidence. Review RPC supports approve,
-  dismiss and explicit rebase (apply only changed fields to current task, then review
-  again). Cancellation sets `tasks.cancelled_at`, preserving accepted fields/status.
-- Cache base identity covers content/context/config/topics/access rules/day; task
-  dependencies invalidate stale reuse. Approval of this extraction's own changes
-  is handled to avoid unnecessary repeat inference. Tests cover repeat new tasks,
-  repeat cancellation, user edits and stale rebase. More cache adversarial checks
-  are still warranted.
-- Source deletion purges change proposal fields/baselines/reason; expired/deleted
-  evidence cannot authorize proposal approval. Review code never calls the model.
-
-### Phase 5 — product wiring drafted; browser validation unfinished
-
-- New `ManualWorkspace.tsx`, `manualScanAdapter.ts`, CSS. The normal signed-in root
-  now routes to this persistent workspace, keyed by user ID. Demo remains separate;
-  `/storage` remains local development tooling.
-- Connection + saved permission form, manual initial/more requests, status/counts,
-  backlog, last successful batch, reload, proposal approve/dismiss, task completion,
-  before/after edit comparison and explicit stale rebase.
-- Safe `gmail_scan_status` RPC in unapplied migration. Actual runtime flags remain
-  disabled; UI reports backend disabled/retrieval-only mode explicitly.
-- Shared client reused; async account/state fencing added. Raw console errors in
-  App were removed. Type checking/build pass, but actual browser interactions,
-  reload/account switching and authenticated review still require verification.
-
-## Validation already completed — do not rerun without a reason
-
-Latest full offline `npm.cmd test`: **134/134 pass**, including all new migrations
-in PGlite, schema/task-context tests, and a fictional injected model → canonical
-pipeline → SQL persistence/review flow. No Gmail/Gemini provider calls.
-
-The new end-to-end synthetic storage test is
-`Checkpoint 3/tests/gmail-persistence.test.mjs`. It verifies new task persistence,
-repeat reuse before/after approval, correct deadline target, preserved user values,
-owner isolation, stale approval denial, explicit rebase then approval, cancellation
-and repeat reuse. `gmail-extraction.test.mjs` covers mismatches, ambiguity, untouched
-fields, new tasks and mixed-topic filtering.
-
-Actual local checks before latest draft migrations:
-
-- pgTAP **71 checks** pass across four files.
-- **Nine local Auth/PostgREST/Edge groups** pass, with temporary users removed and
-  zero model calls. Includes private coordination, owner/role denial, consent,
-  serialization, stale settings, actual disabled scan endpoint.
-- Frontend `corepack pnpm exec tsc --noEmit` and `corepack pnpm build` passed **after
-  the new ManualWorkspace wiring**. Build warns that the main chunk exceeds 500 KB;
-  this is a warning, not a failing build. Consider lazy-loading workspace if useful.
-- Cached Deno check of `supabase/functions/gmail_scan/index.ts` passed after the
-  persistent processor was wired. Cached executable:
-  `C:/Users/mzhen/AppData/Local/npm-cache/_npx/05b6ef7b13673c57/node_modules/deno/deno.exe`.
-- `npm.cmd run supabase:prepare` completed after canonical changes. Generated
-  extraction files are ignored and must not be maintained separately.
-- Earlier browser preview check proved School adds a single semantic topic without
-  granting access; Continue stayed disabled until an exact sender/domain was added.
-  This is not validation of the new authenticated workspace.
-
-## Next work in order
-
-1. Review current diffs and the two unapplied migrations/processor. Pay special
-   attention to atomic permission/deletion/task revision fencing, idempotent finish,
-   cache dependency rules, expired/source-deleted proposals, and retention. Add
-   meaningful missing regression cases instead of rerunning unchanged suites.
-2. Apply **local only** pending migrations with `npx.cmd supabase --agent no migration up`
-   from `Checkpoint 3/app`; no reset. Run relevant pgTAP and extend `test:local` for
-   Gmail persistence/status/change RPCs against actual Auth/PostgREST, with fictional
-   temporary data and no provider calls. Existing `storage-local.mjs` has fictional
-   connection scaffolding; never send its dummy ciphertext through token decryption.
-3. Browser-check normal signed-in root, connection/permission settings, scan disabled
-   state, saved review/approval/reload/stale proposals and account switching. Use
-   temporary fictional local accounts/seeded inference and label evidence honestly.
-   The current shared browser is not authenticated to a dedicated mailbox.
-4. Resolve local Google return destination. Confirm private Gemini configuration
-   presence without printing values. Explicit live acceptance needs a dedicated
-   Gmail test account containing fictional mail and explicit saved source/consent
-   settings. Do not turn on broad scanning as a side effect of setup/tests.
-5. Finish Phase 6 actual lifecycle tests: reload, real refresh, denial/revocation,
-   disconnect/reconnect, permitted/excluded bodies/context, semantic results,
-   correct multi-task deadline change, repeat zero inference, changed settings,
-   rate limits and partial recovery. Explain any tests blocked by user sign-in,
-   mailbox setup, missing private model configuration or quota. Never claim mocks
-   establish real Gmail/model accuracy or hosted behavior.
-6. Update phase report/plan/setup/storage docs. Existing
-   `Checkpoint 3/docs/gmail-manual-scan-phases-2026-11-05.md` and the top plan summary
-   are **STALE after this continuation**: they still say Phases 3–6 are unimplemented
-   and product decisions pending. Preserve dated evidence, add current state.
-   Finish `git diff --check` and link/path checks.
-7. Phase 7 automatic scanning is forbidden until the manual acceptance gate passes.
-   No 15-minute schedule, hosted rollout, push or deployment is authorized.
-
-## Known rough edges to assess
-
-- Product workspace is functional draft styling reusing existing storage styles;
-  no Carbon compliance claim. It currently shows summary information, but does not
-  yet expose all waiting-for/follow-up details or a product task-field editor.
-- Progress updates counts after each batch; it shows running state while pending,
-  not real per-message live counters. `prepared` means successfully consumed in the
-  retrieval coordinator; persistent mode saves, retrieval-only mode does not.
-- Metadata/body failure can leave a continuation blocked on one ID. Explicit
-  skip/retry controls are not implemented. No content silently discarded.
-- Task candidate provenance is bounded conservatively; >30 provenance records or
-  oversized task context can defer an email. Candidate overlap can miss implicit
-  references; these need review/live fictional acceptance, not stronger claims.
-- Provider model default remains existing configured default; explicit local
-  `GEMINI_MODEL` override is honored. Do not silently switch models. New Gmail
-  structured schema has not yet been evaluated with a real model.
-- Stored scan settings disclosure still uses existing `gmail-scan-v1`. Verify the
-  updated UI accurately describes actual stored content/retention before live use.
-- The phase report is registered as an artifact in the previous tool session;
-  this handoff is the newest implementation status.
+## Testing notes
+- Offline fixtures must use thread context and different days. Fixtures with neither hid real bugs here.
+- Scan more stays in the saved time window, so new mail needs **Scan past seven days**.
+- Gmail can file test mail as spam, and Google's account notices count as blocked candidates.
+- Connection attempts have a 30-second cooldown, scans 60 seconds.
+- The processor hides raw validation errors by design. To diagnose one, replay that fictional message
+  against the model in a throwaway script without touching the database.

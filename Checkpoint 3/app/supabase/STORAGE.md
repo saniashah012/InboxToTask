@@ -51,13 +51,23 @@ to the analyzed message. Zero disables earlier context. Accepted tasks are uncha
 Consent remains explicitly saved under `gmail-scan-v1`; saving filters or connecting
 Google alone never grants it. Settings saves fence older storage work.
 
-## Manual Gmail retrieval milestone
+## Manual Gmail scan
 
 The separate [gmail_scan](functions/gmail_scan/index.ts) function verifies Supabase
 Auth and accepts only `{ "mode": "initial" }` or `{ "mode": "more" }`. It is disabled
-unless `ENABLE_GMAIL_RETRIEVAL=true` and the Google connection feature is configured.
-It currently performs **retrieval only**, with zero inference, no saved extraction,
-and count-only responses. Do not present it as a completed manual scan.
+unless the Google connection feature is configured and one mode is on:
+`ENABLE_GMAIL_RETRIEVAL=true` runs retrieval only, with zero inference and no saved
+extraction; `ENABLE_GMAIL_SCAN=true` also needs `GEMINI_API_KEY` and saves reviewable
+results. Persistent mode has run locally on fictional mail; see
+[UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow). Hosted Gmail scanning is not verified.
+
+Proposed edits and cancellations are stored in `gmail_task_changes` with states
+`pending`, `approved`, `dismissed` and `superseded`. A source can be re-extracted after
+task or settings changes; earlier review decisions win, so repeats are dropped and open
+proposals are superseded. A proposal with no identifiable target can only be dismissed or
+resolved through `gmail_change_resolve`, where the user chooses the task and enters the
+values; once resolved, re-extraction does not raise it again. Cancelled tasks allow only deletion. Deleting a source purges
+its retained metadata and stops later scans from fetching it as mail or context.
 
 Service-only `gmail_scan_service` coordinates one four-minute lease per owner,
 with a 60-second request cooldown, seven-day snapshot window, private continuation
@@ -71,7 +81,17 @@ The canonical [retriever](../pipeline/gmail-retrieval.mjs) fetches candidate IDs
 then metadata, then permitted bodies. Each earlier context message passes the same
 current access rules before body retrieval. The endpoint returns no bodies or
 provider diagnostics, and stores only coordination IDs, cursor and sanitized counts.
-See [phase evidence and limitations](../../docs/gmail-manual-scan-phases-2026-11-05.md).
+See [the review, limitations and live runbook](../../docs/gmail-manual-scan-review-2026-11-05.md).
+
+## Source email links (naive implementation)
+
+Viewing a source email is intentionally naive for now: the browser links to Gmail, and no
+body is fetched or stored. Authenticated `gmail_task_source_links(p_tasks)` takes up to 200
+task IDs and returns the caller's Gmail sources with role, message and thread IDs, sender,
+subject, sent time and any unexpired quote. It runs as definer because provenance outlives
+the 30-day read limits, so it derives ownership from `auth.uid()` and omits deleted tasks
+and sources, fixture rows and expired quotes. Limitations and verification status are in
+[current state](../../CURRENT_STATE.md#source-email-access-naive-implementation).
 
 ## Trial limits and lifecycle
 
@@ -94,14 +114,14 @@ implied by a connection. Existing fixture processing controls remain independent
 
 [Cleanup](functions/storage_cleanup/index.ts) is disabled by default. Enable it only with a separately configured scheduler secret of at least 32 characters. The optional [schedule installer](operations/install_cleanup_schedule.sql) references Vault secrets and is not applied by migrations. Confirm schedule/time-zone behavior and configure secrets privately before installing it. Cleanup currently locks preference rows across users; batch it before public-scale use.
 
-Remaining integration: private Google/provider configuration and live OAuth/refresh/revocation verification, Google-only product onboarding, persisted consent/source rules and permitted Gmail retrieval, incremental/manual/scheduled scans, semantic task matching, optional Calendar authorization plus approved writes/reconciliation/undo, final retention policies, and hosted rollout. Protected token and lifecycle code exist locally; they do not enable scanning. Preserve the [custom filter requirements](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan) while implementing source rules. Dashboard reminders do not send email or notifications.
+Remaining integration: real data in the designed onboarding and dashboard, scheduled scans, semantic task matching, final retention policies, hosted Gmail functions and the signed-in hosted checks not yet covered. Calendar authorization and approved writes are postponed to CP4. Protected token and lifecycle code exist locally; they do not enable scanning. Preserve the [custom filter requirements](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan) while implementing source rules. Dashboard reminders do not send email or notifications.
 
 ## Manual calendar export
 
-The storage dashboard offers **Export calendar file** on accepted approved/completed tasks. The separate preview lets the user edit the calendar title, choose an all-day or timed entry, and supply a date. Timed entries require a start time, valid IANA time zone, and explicit duration (1–1440 minutes). An explicit task deadline can prepopulate the start; it does not imply duration or authorize a connected Calendar write. Missing task deadlines stay empty until the user chooses a calendar date. Export does not change accepted task values or call a model/backend.
+The signed-in workspace and the storage dashboard offer **Export calendar file** on accepted approved/completed tasks. The separate preview lets the user edit the calendar title, choose an all-day or timed entry, and supply a date. Timed entries require a start time, valid IANA time zone, and explicit duration (1–1440 minutes). An explicit task deadline can prepopulate the start; it does not imply duration or authorize a connected Calendar write. Missing task deadlines stay empty until the user chooses a calendar date. Export does not change accepted task values or call a model/backend.
 
-[The ICS serializer](../web/src/calendarExport.ts) emits RFC 5545 text with stable task UIDs, CRLF line endings, escaped text, UTF-8 folding, exclusive all-day end dates, and UTC timed entries. Skipped/repeated daylight-saving wall times require another user choice. Files include only the chosen title and schedule, without evidence excerpts or attendees. Users choose the destination during manual import and manage imported entries there; exports provide no synchronization or remote undo, and repeated imports can create duplicates.
+[The ICS serializer](../web/src/calendarExport.ts) emits RFC 5545 text with stable task UIDs, CRLF line endings, escaped text, UTF-8 folding, exclusive all-day end dates, and UTC timed entries. Skipped/repeated daylight-saving wall times require another user choice. Files include only the chosen title and schedule, without evidence excerpts or attendees. Users choose the destination during manual import and manage imported entries there; exports provide no synchronization or remote undo. Duplicate-import behavior is untested.
 
-Run `npm.cmd run test:calendar` from the app directory with Node 22.6+ (verified on Node 24). Five offline tests cover date boundaries, time zones/DST, duration validation, text injection, and UTF-8 folding. TypeScript and the production frontend build passed on November 4, 2026. An isolated browser component check with synthetic task fields verified all-day preview, required timed duration, and ambiguous-time rejection. The browser tool did not deliver a download event; saving the file and importing into a destination calendar remain unverified. The authenticated task-to-export flow was not repeated in this check.
+Run `npm.cmd run test:calendar` from the app directory with Node 22.6+ (verified on Node 24). Five offline tests cover date boundaries, time zones/DST, duration validation, text injection, and UTF-8 folding. TypeScript and the production frontend build passed on November 4, 2026. An isolated browser component check with synthetic task fields verified all-day preview, required timed duration, and ambiguous-time rejection. The browser tool did not deliver a download event in that check. Later, one all-day and one timed import from the workspace were tester-reported as checked in Google Calendar (27 minutes, 1:43-2:10 PM).
 
 Read [the verification report](../../docs/local-storage-verification-2026-11-04.md) for actual tested behavior and limitations.

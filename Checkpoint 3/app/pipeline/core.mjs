@@ -11,7 +11,14 @@ const same = (a,b) => JSON.stringify(canonical(a))===JSON.stringify(canonical(b)
 const bounded = (n, min, max) => Number.isInteger(n) && n >= min && n <= max;
 export function address(value) {
   if (typeof value !== 'string') fail('INVALID_ADDRESS');
-  const email = (value.match(/<([^<>]+)>/)?.[1] ?? value).trim().toLowerCase();
+  // Quoted display names and comments never supply the address. Anything naming
+  // more than one address grants nothing, because access rules test one sender.
+  // An unquoted comma in a display name is common and harmless without a second address.
+  const bare = value.replace(/"(?:[^"\\]|\\.)*"/g, ' ').replace(/\((?:[^()\\]|\\.)*\)/g, ' ');
+  const angle = bare.match(/<[^<>]*>/g) ?? [];
+  const outside = bare.replace(/<[^<>]*>/g, '');
+  if (angle.length > 1 || /[<>]/.test(outside) || (angle.length && outside.includes('@'))) fail('INVALID_ADDRESS');
+  const email = (angle[0]?.slice(1, -1) ?? bare).trim().toLowerCase();
   if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) fail('INVALID_ADDRESS');
   return email;
 }
@@ -180,7 +187,11 @@ export function validateExtraction(value, payload) {
   };
   verifyEvidence(value.evidence);
   if (value.evidence.messageId !== payload.currentMessage.id) fail('WRONG_CLASSIFICATION_SOURCE');
-  if ((value.category === 'Actionable') !== (value.tasks.length > 0 || (gmail && value.taskChanges.some(c=>c.kind==='edit')))) fail('CATEGORY_TASK_MISMATCH');
+  // An edit with no identified target may or may not leave the owner an obligation,
+  // so it permits either category. A new task or a targeted edit requires Actionable.
+  const requiresActionable = value.tasks.length > 0 || (gmail && value.taskChanges.some(c=>c.kind==='edit'&&c.targetTaskId!==null));
+  const permitsActionable = requiresActionable || (gmail && value.taskChanges.some(c=>c.kind==='edit'));
+  if (value.category === 'Actionable' ? !permitsActionable : requiresActionable) fail('CATEGORY_TASK_MISMATCH');
   if (gmail) {
     const seen=new Set();
     for (const change of value.taskChanges) {
@@ -189,7 +200,10 @@ export function validateExtraction(value, payload) {
       if ((change.targetTaskId===null)!==(change.expectedRevision===null)) fail('INVALID_CHANGE_TARGET');
       if (new Set(change.changedFields).size!==change.changedFields.length) fail('INVALID_CHANGE_FIELDS');
       if (change.kind==='cancel' && (change.fields!==null || change.changedFields.length)) fail('INVALID_CHANGE_FIELDS');
-      if (change.kind==='edit' && (!change.fields || !change.changedFields.length)) fail('INVALID_CHANGE_FIELDS');
+      // Complete proposed values need a target to copy from. Without one, a review item
+      // can state what seems to have changed while leaving the values empty.
+      if (change.kind==='edit' && !change.changedFields.length) fail('INVALID_CHANGE_FIELDS');
+      if (change.kind==='edit' && change.targetTaskId!==null && !change.fields) fail('INVALID_CHANGE_FIELDS');
       if (change.fields) validateDeadline(change.fields.deadline);
       if (change.targetTaskId!==null) {
         const target=payload.existingTaskContext.find(t=>t.id===change.targetTaskId && t.revision===change.expectedRevision);

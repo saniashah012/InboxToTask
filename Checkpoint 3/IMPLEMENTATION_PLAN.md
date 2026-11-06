@@ -8,18 +8,18 @@ Use [CURRENT_STATE.md](CURRENT_STATE.md) as the current implementation/verificat
 index and [the phase report](docs/gmail-manual-scan-phases-2026-11-05.md) for evidence.
 This plan defines requirements and acceptance gates, not a code-absence inventory.
 
-As of the November 5 working-tree handoff: Phases 1-2 have implementation plus
-scoped offline/local checks. Phases 3-4 have Gmail extraction, task context,
-persistence and review code with fictional injected-model/PGlite verification.
-Phase 5 has the normal signed-in workspace wiring with type/build checks, but
-no authenticated browser acceptance yet. Phases 6-7 are not complete. The full
-offline suite passed 134 tests; it made no real Gmail or Gemini calls.
+As of the November 5 [review](docs/gmail-manual-scan-review-2026-11-05.md): Phases 1-5
+have implementation with fictional injected-model verification through PGlite, actual
+local Auth/PostgREST and a seeded browser check of the signed-in workspace. Phase 5 is
+not complete: real data is not wired into the designed dashboard. Phase 6 ran locally with
+real Gmail and Gemini calls on fictional mail, with results and cases not run live in
+[UC8](docs/use-cases.md#uc8-real-gmail-to-review-workflow). Phase 7 has not started.
 
-Two draft migrations remain unapplied to the actual local database:
-[Gmail persistence](app/supabase/migrations/20261105220000_gmail_persistence.sql) and
-[scan status](app/supabase/migrations/20261105223000_gmail_scan_status.sql).
-The source/semantic, retrieval and pause migrations were applied locally. Recheck
-runtime state before resumption; no hosted changes or feature enablement occurred.
+All Gmail migrations, including the
+[hardening migration](app/supabase/migrations/20261106000000_gmail_scan_hardening.sql),
+are applied locally. The hosted session reports 20 ledger versions through `20261106040000`,
+applied 03:50 UTC November 6, with Gmail functions not deployed, so connecting and scanning work
+only locally; see [current state](CURRENT_STATE.md). Recheck runtime state before resumption.
 
 The user accepted empty semantic inclusions as no topic inclusion restriction
 within source-permitted email; semantic exclusions still apply. Source access is
@@ -28,10 +28,9 @@ Categories never expand into access keywords. New users default to five earlier
 messages within 90 days; existing saved context is preserved. Incompatible phrase
 rules require explicit review and renewed consent.
 
-Next: review/apply the pending migrations locally, verify actual persistence/status/
-review RPCs and the authenticated product UI, then use a dedicated fictional-mail
-account for live OAuth/Gmail/Gemini acceptance. Scheduling stays deferred until
-manual acceptance passes. See [the detailed handoff](../CLAUDE_HANDOFF.md).
+Next: connect real data to the designed dashboard and onboarding, and extend signed-in hosted
+checks. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip.
+Automatic scans are not implemented. Calendar events are postponed to CP4 by user decision.
 
 Earlier setup evidence remains in [Google Auth verification](docs/google-auth-verification-2026-11-05.md),
 [settings verification](docs/scan-settings-verification-2026-11-05.md), and
@@ -76,9 +75,8 @@ when integrating upstream; `/storage` returns remain local-development-only.
 Calendar can later share the Gmail Cloud project; an additional project is not a
 prerequisite. Sharing means Gmail and Calendar Google grants share project-wide
 revocation. Independent Calendar revocation would require a separate project.
-This is an available design option, not a confirmed Calendar topology or a
-completed integration. Destination, scopes, optional consent, and approved
-execution remain milestone 5 work.
+This is a design note, not a completed integration. Calendar events are postponed
+to CP4 by user decision.
 
 | Order | Work | Completion check |
 |---|---|---|
@@ -86,15 +84,13 @@ execution remain milestone 5 work.
 | 2 | Local credentials/services are configured and initial connection is user-reported successful. Finish the remaining live OAuth checklist in [the setup guide](app/supabase/GOOGLE_AUTH.md); record evidence and fix failures. | A dedicated account signs in with Google, connects Gmail, reloads, refreshes authorization, and disconnects/reconnects. Wrong account, denied consent, replayed state, and revoked access are handled; zero scans/model calls occur on connection. |
 | 3 | Adapt saved consent/settings to the [revised filter contract](#custom-sender-domain-and-subject-filters-implementation-plan): sender/domain access, optional subject exclusions, separate semantic preferences, and agreed context limits. Preserve accessible controls and revision/pause/deletion fencing. | Empty source allowlists or absent consent block retrieval; topics never grant access; obsolete phrase permissions require review; settings isolate users and fence stale work. |
 | 4 | Implement one bounded manual Gmail-to-extraction-to-review flow, then incremental scheduled scans, cooldown, retries, and visible progress. | Permitted fictional test mail produces saved reviewable results; exclusions apply before body/context retrieval; unchanged/empty scans use zero inference; automatic scans work with the dashboard closed. |
-| 5 | Implement optional Calendar connection in onboarding, with Skip for now and later connection from Add to Calendar/settings. Choose destination/scopes, then build approved create/update/undo execution. | Skipping/denying Calendar leaves Gmail/task features usable. Connected status reflects real authorization; no event is written until its preview is approved; retries and undo avoid duplicate/unintended writes. |
+| 5 | **Postponed to CP4 by user decision.** Implement optional Calendar connection in onboarding, with Skip for now and later connection from Add to Calendar/settings, with approved create/update/undo execution. | Skipping/denying Calendar leaves Gmail/task features usable. Connected status reflects real authorization; no event is written until its preview is approved; retries and undo avoid duplicate/unintended writes. |
 | 6 | Prepare hosted Supabase and Vercel integration, verify configuration and compatibility, then perform a separately authorized rollout and live demo trial. | Vercel build/routing/redirect settings and hosted migration/function/secret plan are reviewable; after rollout, the complete test-account workflow works on the hosted origin. |
 
 Milestones 1 and 2 can proceed together. The optional Calendar onboarding UI can be designed with milestone 1, but its live connection action must ship with working authorization in milestone 5. Do not show simulated success while that backend is missing.
 
-Immediate resumption order: follow [current state](CURRENT_STATE.md) and
-[the current handoff](../CLAUDE_HANDOFF.md). Preserve private configuration and
-uncommitted work; apply/verify pending local migrations before testing the new
-product workspace. Existing Google projects need not be recreated. A missing shared
+Immediate resumption order: follow [current state](CURRENT_STATE.md). Preserve private
+configuration and uncommitted work. Existing Google projects need not be recreated. A missing shared
 authenticated browser limits live acceptance, not independent offline work.
 
 Delivery constraint: keep work local and do not push until setup is ready for Vercel testing and the user explicitly authorizes the push. Hosted Supabase migrations/functions and Vercel deployment also require a separate rollout instruction; this plan update does not authorize them.
@@ -133,7 +129,7 @@ Flow: scheduled/manual trigger -> verify account, consent, and saved source perm
 - Request Calendar access only when the user chooses its optional onboarding step or later uses Add to Calendar. Users can skip or deny it and still use tasks/Gmail. Show actual granted capabilities rather than a single assumed all-services connection state.
 - Google sign-in, Gmail authorization, scanning consent, Calendar authorization, and individual event approval are distinct decisions. They may appear in one coherent onboarding journey without granting each other implicitly.
 - The implemented Gmail connection currently requires the same verified email as the app account and checks Google subject on reconnect. Supporting a different mailbox would need an explicit account-linking design; it is not part of the current implementation.
-- Calendar destination and scope selection remain open: choose between an app-created calendar and supported existing calendars before implementing its authorization/execution contract. Do not assume broad calendar access is required or already granted.
+- Calendar events are postponed to CP4 by user decision; destination and scopes are set in that work. Do not assume broad calendar access is required or already granted.
 
 ### Scanning and filtering
 
@@ -356,7 +352,7 @@ The current frontend does not yet accommodate the complete CP3 product. Preserve
 - [ ] Implement the [custom filter frontend](#custom-sender-domain-and-subject-filters-implementation-plan): semantic category/custom-topic preferences, exact sender/domain permissions, optional literal subject exclusions, accessible hover/focus/tap info icon, saved-settings states, and accurate effective-scope copy.
 - [ ] Add optional Calendar onboarding with Connect / Skip for now, later connection from Add to Calendar/settings, and independent permission/error states. Wire connected status only after Calendar authorization exists.
 - [ ] Add real scan controls/status: manual refresh and cooldown, running scan, processed/excluded/failed/pending counts, backlog/Scan more, retry/deferred work, and budget/reset feedback.
-- [ ] Complete task filters/sorting, deadline/condition labels, source links and evidence inspection, uncertainty/missing-context/expired-excerpt states, and separate proposed updates from accepted edits.
+- [ ] Complete task filters/sorting, deadline/condition labels, source links and evidence inspection, uncertainty/missing-context/expired-excerpt states, and separate proposed updates from accepted edits. Source viewing is currently a [naive open-in-Gmail implementation](CURRENT_STATE.md#source-email-access-naive-implementation), not in-app reading, and is not yet in the designed dashboard.
 - [ ] Add separate Calendar destination/title/schedule approval, operation status, failure recovery, and explicit undo; retain the manual-import limitations on ICS exports.
 - [ ] Add account/privacy settings for pause/resume, reconnect, disconnect/revocation, deletion, and retention controls; reflect actual backend availability.
 - [ ] Verify keyboard navigation, visible focus, accessible labels/status announcements, responsive layouts, and the CP2 Carbon conventions across the integrated workflows; run authenticated browser checks after wiring persistence.
@@ -401,13 +397,15 @@ successful by the user; the remaining live checklist and hosted setup remain.
 
 ### CP3.5 Approval, calendars, and lifecycle
 
-- [ ] Select the supported Calendar destination model and least necessary scopes; implement optional onboarding connection and later connection from Add to Calendar/settings. Calendar connection may not be required for sign-in, Gmail processing, or task approval.
+Connected Calendar items below are postponed to CP4 by user decision. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is local only, with offline tests reported passing and no live test. Sania's original branch is on origin.
+
+- [ ] CP4: set the supported Calendar destination model and least necessary scopes; implement optional onboarding connection and later connection from Add to Calendar/settings. Calendar connection may not be required for sign-in, Gmail processing, or task approval.
 - [ ] Keep task approval separate from calendar authorization; enforce approval server-side. Review RPCs and separate calendar approval records exist; the future Calendar executor must enforce these approvals before external writes.
 - [ ] Preview Google Calendar destination, title, all-day/timed choice, time zone, and duration; prepopulate explicit times and avoid private excerpts/attendees by default.
 - [ ] Create real Google Calendar entries, record event IDs, handle ambiguous retry outcomes, and prevent duplicate creation.
 - [ ] Implement approved event updates and explicit undo of app-created entries, with visible failure recovery.
-- [x] Generate valid ICS exports and label them as manual import, without claiming synchronized updates or remote undo. Implemented on the opt-in storage dashboard; serializer tests and isolated preview browser check pass. File saving and destination-calendar import remain to verify; see [storage contract](app/supabase/STORAGE.md#manual-calendar-export).
-- [ ] Verify ICS file saving and import into a destination calendar from the authenticated task flow; verify all-day and timed schedules and document duplicate-import behavior.
+- [x] Generate valid ICS exports and label them as manual import, without claiming synchronized updates or remote undo. Implemented in the signed-in workspace and the opt-in storage dashboard; serializer tests and an isolated preview browser check pass; see [storage contract](app/supabase/STORAGE.md#manual-calendar-export).
+- [ ] Verify ICS file saving and import into a destination calendar from the authenticated task flow; verify all-day and timed schedules and document duplicate-import behavior. Tester-reported: one all-day and one timed import checked in Google Calendar (27 minutes, 1:43-2:10 PM). Exports use a stable per-task UID; duplicate-import behavior is untested.
 - [x] Add dashboard waiting-for reminders, recipients/rationale, and user-confirmed resolution. Implemented in storage and the opt-in dashboard; reminders do not send email or notifications.
 - [ ] Propose deadline/commitment changes for approval; retain prior approved values until accepted. Explicitly targeted task-update RPCs preserve accepted fields; automatic matching, commitment-change workflow, and integrated review UI remain.
 - [x] Implement completion undo and reset the 30-day countdown on recompletion. Database semantics and local completion/undo behavior verified.

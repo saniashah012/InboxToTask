@@ -11,7 +11,11 @@ const limitFields = [
 ] as const
 
 // The parent must key this component by verified user ID to discard account state.
-export default function ScanSettingsPanel() {
+export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: { onSaved?: () => void; collapseOnSave?: boolean } = {}) {
+  const [collapsed, setCollapsed] = useState(false)
+  const editButton = useRef<HTMLButtonElement>(null)
+  // The submit button disappears on collapse, so keep keyboard focus in the panel.
+  useEffect(() => { if (collapsed) editButton.current?.focus() }, [collapsed])
   const [settings, setSettings] = useState<ScanSettings | null>(null)
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState("")
@@ -44,9 +48,24 @@ export default function ScanSettingsPanel() {
     for (const group of ["include", "exclude"] as const) normalized.semantic_preferences[group] = normalized.semantic_preferences[group].map(v => v.trim()).filter(Boolean)
     try {
       const result = await saveScanSettings(normalized)
-      if (live.current) { setSettings(result); setNotice(`Saved revision ${result.revision}. No email was read. Scanning requires a separate manual request.`) }
+      if (live.current) { setSettings(result); setNotice(`Saved revision ${result.revision}. No email was read. Scanning requires a separate manual request.`); if (collapseOnSave) setCollapsed(true); onSaved?.() }
     } catch (err) { if (live.current) setError((err as Error).message) }
     finally { if (live.current) setBusy(false) }
+  }
+  if (collapsed && settings) {
+    const sources = [...settings.rules.allow.senders, ...settings.rules.allow.domains]
+    const excluded = [...settings.rules.block.senders, ...settings.rules.block.domains, ...settings.rules.block.subjectKeywords]
+    return <section className="scan-settings scan-settings-summary" aria-labelledby={`${helpId}-title`}>
+      <h2 id={`${helpId}-title`}>Scanning permission and sources</h2>
+      {notice && <p role="status">{notice}</p>}
+      <dl>
+        <div><dt>Permitted sources</dt><dd>{sources.join(", ") || "None, so nothing is permitted"}</dd></div>
+        <div><dt>Exclusions</dt><dd>{excluded.join(", ") || "None"}</dd></div>
+        <div><dt>Consent</dt><dd>{settings.consent ? "Given" : "Not given"}</dd></div>
+        <div><dt>Scanning</dt><dd>{settings.paused ? "Paused" : "Not paused"}</dd></div>
+      </dl>
+      <button type="button" ref={editButton} onClick={() => { setNotice(""); setCollapsed(false) }}>Edit settings</button>
+    </section>
   }
   return <section className="scan-settings" aria-labelledby={`${helpId}-title`}>
     <h2 id={`${helpId}-title`}>Scanning permission and sources</h2>

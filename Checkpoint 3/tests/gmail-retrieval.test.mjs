@@ -58,11 +58,99 @@ test('permitted limit preserves IDs and requires Scan more rather than losing a 
  // Independent request budget can stop before the 100-message ceiling.
  assert.ok(r.counts.permitted<=100);assert.equal(r.backlog,true);assert.ok(r.continuation.next);
 });
-test('rate limits and oversized bodies preserve pending coverage without consuming content',async()=>{
- for(const code of ['GMAIL_RATE_LIMITED','GMAIL_BODY_LIMIT']){
-  const s=setup([message('current')]);s.options.gmail.full=async()=>{throw Object.assign(new Error('provider secret'),{code});};
-  const r=await retrieveGmail(s.options);assert.equal(r.error,code);assert.deepEqual(r.continuation.pending,['current']);assert.equal(s.inputs.length,0);
+test('rate limits preserve pending coverage without consuming content',async()=>{
+ const s=setup([message('current')]);s.options.gmail.full=async()=>{throw Object.assign(new Error('provider secret'),{code:'GMAIL_RATE_LIMITED'});};
+ const r=await retrieveGmail(s.options);assert.equal(r.error,'GMAIL_RATE_LIMITED');assert.deepEqual(r.continuation.pending,['current']);assert.equal(s.inputs.length,0);
+});
+test('a display name cannot supply the sender and ambiguous From headers grant nothing',async()=>{
+ const s=setup([message('spoof','"<teacher@example.org>" <evil@outside.test>'),message('multi','teacher@example.org, evil@outside.test'),message('multi2','evil@outside.test, <teacher@example.org>'),message('real','"Teacher, Example" <teacher@example.org> (office)')]);
+ const r=await retrieveGmail(s.options);
+ assert.deepEqual(s.calls.filter(c=>c.startsWith('body:')),['body:real']);assert.equal(r.counts.blocked,3);assert.equal(r.error,null);
+});
+test('missing subjects are processed; unverifiable senders are blocked without stopping the scan',async()=>{
+ const noSubject=message('nosubject');noSubject.payload.headers=noSubject.payload.headers.filter(h=>h.name!=='Subject');
+ const noFrom=message('nofrom');noFrom.payload.headers=noFrom.payload.headers.filter(h=>h.name!=='From');
+ const s=setup([noFrom,noSubject,message('after')]);
+ const r=await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs.map(i=>i.message.id),['nosubject','after']);assert.equal(s.inputs[0].message.subject,'');
+ assert.equal(r.counts.blocked,1);assert.equal(r.error,null);assert.ok(!s.calls.includes('body:nofrom'));
+});
+test('an unverifiable thread message is excluded from context without losing the current message',async()=>{
+ const bad=message('badcontext','not an address','2026-11-04T12:00:00Z');
+ const s=setup([message('current')],[bad,message('older','teacher@example.org','2026-11-03T12:00:00Z')]);
+ const r=await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs[0].threadContext.map(m=>m.id),['older']);assert.ok(!s.calls.includes('body:badcontext'));assert.equal(r.error,null);
+ assert.ok(s.inputs[0].retrievalWarnings.some(w=>/excluded/.test(w)));
+});
+test('thread messages in Spam or Trash are never fetched as context, with a visible warning',async()=>{
+ const hidden=(id,label,sentAt)=>({...message(id,'teacher@example.org',sentAt),labelIds:[label]});
+ const s=setup([message('current')],[hidden('trashed','TRASH','2026-11-04T12:00:00Z'),hidden('spam','SPAM','2026-11-03T12:00:00Z'),{...message('kept','teacher@example.org','2026-11-02T12:00:00Z'),labelIds:['INBOX']}]);
+ await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs[0].threadContext.map(m=>m.id),['kept']);
+ assert.ok(!s.calls.includes('body:trashed'));assert.ok(!s.calls.includes('body:spam'));
+ assert.ok(s.inputs[0].retrievalWarnings.some(w=>/excluded/.test(w)));
+});
+test('a later trashed reply does not warn, and a continuation message now in Trash is skipped unread',async()=>{
+ const later={...message('latertrash','teacher@example.org','2026-11-06T12:00:00Z'),labelIds:['TRASH']};
+ const s=setup([message('current')],[later]);await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs[0].retrievalWarnings,[]);
+ const moved=setup([{...message('moved'),labelIds:['TRASH']},message('next')]);
+ const r=await retrieveGmail(moved.options);
+ assert.ok(!moved.calls.includes('body:moved'));assert.equal(r.counts.skipped,1);assert.deepEqual(moved.inputs.map(i=>i.message.id),['next']);
+});
+test('an excluded later reply does not warn about history on an earlier message',async()=>{
+ const s=setup([message('current')],[message('laterblocked','blocked@example.org','2026-11-06T12:00:00Z')]);
+ await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs[0].retrievalWarnings,[]);
+});
+test('waiting out a retry window does not use up the bounded retry attempts',async()=>{
+ const s=setup([message('waiting')]);
+ s.options.consume=async()=>{throw Object.assign(new Error(),{code:'STORAGE_RETRY_LATER'});};
+ let r=await retrieveGmail(s.options);
+ for(let attempt=0;attempt<5;attempt++){s.options.work.continuation=r.continuation;r=await retrieveGmail(s.options);}
+ assert.equal(r.unresolved,0);assert.equal(r.continuation.failed[0].attempts,0);assert.equal(r.backlog,true);
+});
+test('one unprocessable message is recorded and later mail still scans; retries are bounded',async()=>{
+ const s=setup([message('bad'),message('good')]);const full=s.options.gmail.full;
+ s.options.gmail.full=async id=>{if(id==='bad')throw Object.assign(new Error(),{code:'GMAIL_BODY_ENCODING'});return full(id);};
+ let r=await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs.map(i=>i.message.id),['good']);assert.equal(r.counts.failed,1);assert.equal(r.error,null);assert.equal(r.backlog,true);
+ assert.deepEqual(r.failures,{GMAIL_BODY_ENCODING:1});assert.deepEqual(r.continuation.pending,[]);
+ for(let attempt=2;attempt<=3;attempt++){
+  s.options.work.continuation=r.continuation;r=await retrieveGmail(s.options);assert.equal(r.counts.failed,1);
  }
+ assert.equal(r.continuation,null);assert.equal(r.backlog,false);assert.equal(r.unresolved,1);
+});
+test('model and suppression outcomes for one message do not stop the rest of the scan',async()=>{
+ const s=setup([message('deleted'),message('invalid'),message('limit'),message('ok')]);
+ const codes={deleted:'STORAGE_SUPPRESSED',invalid:'GMAIL_EXTRACTION_FAILED',limit:'STORAGE_ATTEMPT_LIMIT'};
+ s.options.consume=async input=>{if(codes[input.message.id])throw Object.assign(new Error(),{code:codes[input.message.id]});s.inputs.push(input);return {modelCalls:0,reused:true};};
+ const r=await retrieveGmail(s.options);
+ assert.deepEqual(s.inputs.map(i=>i.message.id),['ok']);assert.equal(r.counts.skipped,1);assert.equal(r.counts.failed,2);assert.equal(r.counts.reused,1);assert.equal(r.error,null);
+});
+test('scan-wide limits still stop with coverage preserved',async()=>{
+ for(const code of ['SCAN_INFERENCE_LIMIT','STORAGE_BUDGET','GMAIL_RECONNECT_REQUIRED']){
+  const s=setup([message('one'),message('two')]);s.options.consume=async()=>{throw Object.assign(new Error(),{code});};
+  const r=await retrieveGmail(s.options);assert.equal(r.error,code);assert.deepEqual(r.continuation.pending,['one','two']);assert.equal(r.counts.failed,0);
+ }
+});
+test('user-deleted messages are never fetched as current mail or context',async()=>{
+ const s=setup([message('gone'),message('current')],[message('deletedcontext','teacher@example.org','2026-11-04T12:00:00Z')]);
+ s.options.work.suppressed=['gone','deletedcontext'];
+ const r=await retrieveGmail(s.options);
+ assert.ok(!s.calls.includes('body:gone'));assert.ok(!s.calls.includes('body:deletedcontext'));assert.equal(r.counts.skipped,1);
+ assert.deepEqual(s.inputs[0].threadContext,[]);
+});
+test('long quoted history does not count against the cleaned message limit',async()=>{
+ const body=`Please submit the report.\n${'> quoted line of earlier text\n'.repeat(1000)}`;
+ const long=message('long');long.payload.body={data:base64url(body)};
+ const s=setup([long]);const r=await retrieveGmail(s.options);
+ assert.equal(s.inputs.length,1);assert.equal(r.counts.failed,0);
+});
+test('a message with only quoted text is recorded as unprocessable, not sent onward',async()=>{
+ const quoted=message('quoted');quoted.payload.body={data:base64url('> only quoted text')};
+ const s=setup([quoted]);const r=await retrieveGmail(s.options);
+ assert.equal(s.inputs.length,0);assert.deepEqual(r.failures,{GMAIL_BODY_EMPTY:1});
 });
 test('MIME prefers plain text, strips HTML scripts and skips attachments; oversize/unsupported encodings fail',()=>{
  const data=message('m');data.payload={mimeType:'multipart/alternative',parts:[{mimeType:'text/html',body:{data:base64url('<p>HTML</p>')}},message('plain').payload]};
@@ -76,7 +164,7 @@ test('HTTP adapter fixes mailbox to me, uses metadata before full and sanitizes 
   calls.push({url,options});return new Response(JSON.stringify(message('m')));
  }});
  await gmail.metadata('m');await gmail.full('m');assert.ok(calls[0].url.includes('/users/me/messages/m?format=metadata'));
- assert.equal(new URL(calls[0].url).searchParams.get('fields'),'id,threadId,internalDate,payload(headers)');
+ assert.equal(new URL(calls[0].url).searchParams.get('fields'),'id,threadId,labelIds,internalDate,payload(headers)');
  assert.ok(calls[1].url.includes('format=full'));assert.equal(calls[0].options.redirect,'error');
  const bad=createGmailClient({accessToken:async()=>'secret-token',fetchImpl:async()=>new Response('private diagnostic',{status:429})});
  await assert.rejects(bad.full('m'),error=>error.code==='GMAIL_RATE_LIMITED'&&!error.message.includes('private'));

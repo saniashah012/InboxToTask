@@ -1,140 +1,172 @@
 # InboxToTask architecture
 
-Updated November 5, 2026. This is the current local implementation and its remaining integration boundaries. It does not establish that this architecture is deployed or that real Gmail scanning works. See [use cases](use-cases.md), [observability](observability.md), and [the implementation plan](../IMPLEMENTATION_PLAN.md).
+Updated November 5, 2026. This describes the code in this repository as of this update and how it has been verified. Results are in [use cases](use-cases.md); limits are in [safety and privacy](safety_privacy.md) and [observability](observability.md).
 
-## Components and data flow
+## Status at a glance
 
-Solid arrows show implemented code paths; extraction still requires an explicitly enabled fixture trial. Dashed arrows show planned integration. The diagram describes component responsibilities, not proof of live provider verification.
+| Part | State | Evidence |
+| --- | --- | --- |
+| Manual Gmail scan → Gemini → storage → review | Works locally | Live local on fictional mail ([UC8](use-cases.md#uc8-real-gmail-to-review-workflow)) and automated tests |
+| Signed-in product page | Separate `ManualWorkspace` page ([App.tsx line 565](../app/web/src/App.tsx)) | Seeded local browser and live local |
+| Designed dashboard and onboarding | **Not yet connected to real data.** Reachable only as a fictional preview | Code |
+| Automatic scheduled scans | **Not implemented** | Code: no schedule exists |
+| Hosted (Vercel and hosted Supabase) | **Gmail scanning not deployed; signed-in checks partial** | Reported by the hosted session: 20 ledger versions through `20261106040000`, applied 03:50 UTC November 6. Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip. Vercel's production branch is `main`, per Sania. See also [current state](../CURRENT_STATE.md) |
+| Google Calendar event creation | **Postponed to CP4** by user decision, and not in this branch. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is local only; Sania's original branch is on origin | Offline tests passed per the rebase session (reported); no live test |
+| ICS file export | Implemented on accepted tasks in the workspace and in the `/storage` development tester | Automated tests and an isolated browser check of the form. Tester-reported: one all-day and one timed import checked in Google Calendar. Duplicate imports untested |
+
+## End-to-end diagram
+
+Solid lines exist in this branch. Dotted lines are off by default or, where labeled, not in this branch. There is **no vector store**, embedding index or autonomous agent.
 
 ```mermaid
-flowchart TD
-  subgraph Browser[Browser - React and Vite]
-    Product["Main product /\nGoogle sign-in and saved settings\nPreview mode uses simulated data"]
-    Dev["Development tester /storage\nLocalhost development only\nConnection controls and saved review"]
-    Shared[Shared Supabase client and session]
-    ICS[Local ICS preview and serializer]
-    Product --> Shared
-    Dev --> Shared
-    Dev --> ICS
+flowchart LR
+  subgraph Client["Client UI: React and Vite"]
+    Product["Product page /<br/>Signed in: ManualWorkspace<br/>Signed out: sign-in or fictional preview"]
+    Dev["/storage development tester<br/>Local Vite only, not in production builds"]
   end
-  Auth[Supabase Auth]
-  GoogleID[Google sign-in project]
-  GoogleMail[Google Gmail project OAuth]
-  API[PostgREST - owner RLS and controlled RPCs]
-  DB[(PostgreSQL)]
-  OAuth[Google connection and callback Edge Functions]
-  Fixture[analysis_email Edge Function - E01 to E20 only]
-  Pipeline[Canonical pipeline - prepare and validate]
-  Coordinator[Storage coordinator - cache, budget and lease]
-  Gemini[Gemini generateContent]
-  Scan[Planned Gmail scan dispatcher and scheduler]
-  Gmail[Gmail API message retrieval]
-  Calendar[Planned approved Calendar executor]
-  CalendarAPI[Google Calendar API]
 
-  Shared --> Auth
-  Auth --> GoogleID
-  Shared --> API
-  API --> DB
-  Shared --> OAuth
-  OAuth --> Auth
-  OAuth --> GoogleMail
-  OAuth --> API
-  Shared --> Fixture
-  Fixture --> Auth
-  Fixture --> Coordinator
-  Coordinator --> Pipeline
-  Coordinator --> API
-  Pipeline --> Gemini
-  Shared -.-> Scan
-  Scan -.-> API
-  Scan -.-> OAuth
-  Scan -.-> Gmail
-  Scan -.-> Coordinator
-  API -.-> Calendar
-  Calendar -.-> CalendarAPI
+  subgraph Backend["Backend: Supabase, run locally"]
+    Auth["Supabase Auth"]
+    Rest["PostgREST<br/>Owner RLS and review RPCs"]
+    Connect["Edge: google_connection<br/>and google_callback"]
+    Scan["Edge: gmail_scan<br/>Off unless ENABLE_GMAIL_SCAN=true"]
+    Pipeline["Canonical pipeline<br/>Filter, clean, prompt, validate"]
+    Fixture["Edge: analysis_email<br/>Cases E01-E20 only, off by default"]
+    Cleanup["Edge: storage_cleanup<br/>Off, not scheduled"]
+    DB[("PostgreSQL<br/>Public tables with RLS<br/>Private jobs, usage, credentials")]
+  end
+
+  subgraph External["API connectors and model endpoint"]
+    SignIn["Google sign-in client<br/>openid, email, profile"]
+    GmailOAuth["Gmail OAuth client<br/>gmail.readonly, separate project"]
+    GmailAPI["Gmail API<br/>Read-only"]
+    Gemini["Gemini generateContent<br/>gemini-3.8-flash by default"]
+  end
+
+  subgraph Absent["Not in this branch"]
+    Scheduler["PLANNED: scan scheduler<br/>Not implemented"]
+    Calendar["CP4, UNMERGED: Google Calendar events<br/>Separate branches, no live test"]
+  end
+
+  Product --> Auth
+  Dev --> Auth
+  Auth --> SignIn
+  Product --> Rest
+  Dev --> Rest
+  Rest --> DB
+  Product --> Connect
+  Connect --> GmailOAuth
+  Connect --> DB
+  Product -- "mode: initial or more" --> Scan
+  Scan --> DB
+  Scan -- "metadata first, then permitted bodies" --> GmailAPI
+  Scan --> Pipeline
+  Pipeline -- "permitted text as data, JSON schema, no tools" --> Gemini
+  Dev -.-> Fixture
+  Fixture -.-> Pipeline
+  Cleanup -.-> DB
+  Scheduler -. "planned" .-> Scan
+  Product -. "unmerged" .-> Calendar
 ```
 
-There is no vector database, embedding index, or autonomous tool-using agent in the current implementation. PostgreSQL stores structured application state; Gemini performs bounded structured extraction. The model cannot send email or execute calendar operations.
+## The manual Gmail flow
 
-| Component | Implementation responsibility and limits |
-| --- | --- |
-| [React entry](../app/web/src/main.tsx) and [product UI](../app/web/src/App.tsx) | Product authentication/onboarding, saved scanning settings, and a separate simulated preview. Product persistent review and Gmail connection integration remain unfinished |
-| [Development dashboard](../app/web/src/StorageDashboard.tsx) | Authenticated storage review, fixture trials, Google connection controls, and local ICS export; excluded from production builds |
-| [Shared client](../app/web/src/supabase.ts) and [storage adapter](../app/web/src/storageAdapter.ts) | Shared session, owner reads, RPC requests, and fixed user-facing error mapping |
-| [Google connection module](../app/supabase/functions/_shared/google-connection.mjs) | Separate Gmail OAuth, single-use state/PKCE, same-account checks, encrypted credentials, refresh leases, and disconnect/revocation handling |
-| [Fixture endpoint](../app/supabase/functions/analysis_email/index.ts) | Verified-user, default-disabled fictional extraction boundary; accepts case IDs, not caller-selected bodies, rules, prompts, or owners |
-| [Canonical pipeline](../app/pipeline/core.mjs) and [Gemini adapter](../app/pipeline/gemini.mjs) | Filtering of supplied fixtures/context, bounded preparation, one structured extraction request by default, schema/evidence/ownership validation |
-| [Storage coordinator](../app/supabase/functions/_shared/storage.mjs) and [migrations](../app/supabase/migrations/) | Cache identities, budget reservations, leases, atomic persistence, user review, lifecycle fencing, and owner isolation |
+```mermaid
+sequenceDiagram
+  actor User
+  participant UI as ManualWorkspace
+  participant Scan as gmail_scan
+  participant DB as PostgreSQL
+  participant Gmail as Gmail API
+  participant Model as Gemini
 
-## Identity, permissions, and trust boundaries
+  User->>UI: Scan past seven days
+  UI->>Scan: POST mode with session token
+  Scan->>DB: Claim: consent, not paused, sources, connection, cooldown
+  DB-->>Scan: Lease, rules and limits, or refusal
+  loop Each message, until a batch limit
+    Scan->>Gmail: List IDs, then From and Subject only
+    Scan->>Scan: Apply sender, domain and subject rules
+    alt Not permitted
+      Scan->>Scan: Count as blocked, fetch no body
+    else Permitted
+      Scan->>Gmail: Fetch body and thread metadata
+      Scan->>Gmail: Fetch bodies only for permitted earlier messages
+      Scan->>DB: Recheck permission, look for a reusable result, reserve budget
+      alt Reusable result
+        DB-->>Scan: Cached, 0 model calls
+      else At most 2 model calls in a batch
+        Scan->>Model: Structured extraction
+        Model-->>Scan: JSON
+        Scan->>Scan: Validate schema, evidence, owner and targets
+        Scan->>DB: Recheck permission, save results and reconcile tokens
+      end
+    end
+  end
+  Scan->>DB: Finish: counts and continuation, no content
+  Scan-->>UI: Counts and stop reason
+  User->>UI: Approve, dismiss or resolve
+  UI->>DB: Review RPC with revision check, no model call
+```
 
-Google sign-in establishes app identity through Supabase Auth. Its root-origin product return is separate from the development callback. The browser reuses one shared Supabase client; requests do not gain authority from caller-supplied user IDs.
+The handler rechecks the scan lease and saved permission before each external request ([retrieval](../app/pipeline/gmail-retrieval.mjs), [processor](../app/pipeline/gmail-processor.mjs), [endpoint](../app/supabase/functions/gmail_scan/index.ts)). If work remains, the user clicks **Scan more** after the 60-second cooldown. Nothing continues on its own, and results appear when a batch finishes: there is no streaming.
 
-Gmail authorization uses a separate Google Cloud project/client from sign-in. The Edge Functions verify the app session and derive the owner server-side. OAuth state is single-use and time-limited; callbacks check the granted scopes and same-account identity before saving encrypted Gmail credentials. Gmail access/refresh tokens stay in the backend credential boundary, with AES-GCM keys supplied through private runtime configuration. The safe status RPC returns connection metadata, not credentials.
+## Components
 
-Connecting Gmail is not scanning consent. Owner-scoped saved settings use authenticated get/save RPCs, validation, an explicit consent disclosure version, pause state, bounded context limits, and revision checks. Legacy onboarding selections are a separate record and do not authorize processing. Saves invalidate older storage jobs; the future Gmail dispatcher must also enforce current settings and connection generations at each external boundary.
+| Layer | Component | Responsibility |
+| --- | --- | --- |
+| Client UI | [ManualWorkspace](../app/web/src/ManualWorkspace.tsx), [manual scan adapter](../app/web/src/manualScanAdapter.ts), [source emails](../app/web/src/SourceEmails.tsx) | Scan status and counts, review, before/after changes, manual resolution, email history with Gmail links, ICS export, [Information tab](../app/web/src/InformationTab.tsx) |
+| Client UI | [App](../app/web/src/App.tsx) and preview adapter | Sign-in, routing, fictional preview with simulated actions |
+| Client UI | [StorageDashboard](../app/web/src/StorageDashboard.tsx) | Development only: fixture trials, activity totals, ICS export, task deletion |
+| Backend | [gmail_scan](../app/supabase/functions/gmail_scan/index.ts) | Authenticated manual scan, disabled by default |
+| Backend | [Google connection](../app/supabase/functions/_shared/google-connection.mjs) | Separate Gmail OAuth, encrypted tokens, refresh and revocation |
+| Backend | [Pipeline](../app/pipeline/) | Rules, body cleanup, prompt input, Gemini adapter, validation |
+| Database | [Migrations](../app/supabase/migrations/) | Tables, RLS, service-only scan and storage functions, deletion triggers |
+| Prompts | [Prompts](../app/prompts/) | System prompt with rule examples, output schemas, model settings |
+| Connector | Gmail API | `list`, `metadata`, `full` and thread metadata, read-only, with Spam and Trash excluded |
+| Model | Gemini `generateContent` | Structured JSON only; no tools, no conversation history |
 
-RLS protects browser table reads; controlled review/settings RPCs govern mutations. Privileged service RPCs handle extraction jobs and persistence. Credentials and private jobs are not exposed as browser-readable tables. Fixed search paths, scoped grants, ownership foreign keys, revision checks, and generation/lease checks supplement RLS.
+## Trust boundaries
 
-## Current fictional extraction transaction
+- **Identity:** every Edge call verifies the Supabase session and derives the owner on the server. The browser cannot name a user, prompt, rule or message.
+- **Two Google permissions:** sign-in uses identity scopes only. Gmail uses a separate client and project with `gmail.readonly`. The verified Google address must match the signed-in user.
+- **Consent is separate from connecting:** connecting reads no mail. A scan also needs saved consent, an exact sender or domain, and scanning unpaused.
+- **Tokens stay in the backend:** Google tokens are AES-256-GCM encrypted in private tables. Keys are private function settings. `VITE_*` variables hold only public values.
+- **The database is the final check:** service-only SQL rechecks rules, revision, generation and lease before reuse and before saving, so a late result cannot override a pause, permission change or deletion.
 
-1. The browser submits a bundled case ID with a bearer session. The endpoint verifies the session, enabled flag, origin, method, request size, and fixed request contract.
-2. The backend selects fictional input and adapts its inbox owner to the verified account. Canonical preparation applies inclusion/exclusion rules to the current message and each supplied context message, removes common quoted history conservatively, and enforces size limits.
-3. The coordinator hashes the effective prepared payload and configuration for a user-scoped extraction identity. It claims a budget and lease before inference; a valid existing result can return a receipt without a model call.
-4. Gemini returns structured output through the provider adapter. Canonical validation checks schema, evidence grounding, responsibility, and date/condition semantics. Uncertainty remains visible rather than becoming an automatic accepted task.
-5. A service-only transaction rechecks ownership, generation, lease, and suppression state, then saves normalized suggestions, digest/waiting-for records, and bounded evidence. Failed child writes roll back the extraction transaction.
-6. Authenticated review RPCs separately approve/edit/dismiss/complete records. Accepted/user-edited fields remain distinct from original proposals. Review operations do not require another inference request.
+Details and tests are in [safety and privacy](safety_privacy.md).
 
-The pipeline receives fixture bodies already supplied in memory. It is not a Gmail retrieval boundary. The current fixture namespace remains restricted even though the storage schema reserves a Gmail namespace.
+## What is stored
 
-## Storage and lifecycle
+| Stored | Where | Notes |
+| --- | --- | --- |
+| Rules, consent, pause, context limits | `scan_settings` | Revisioned; saving invalidates older work. New accounts default to 5 earlier messages within 90 days ([migration](../app/supabase/migrations/20261105200000_source_semantic_contract.sql)); existing users keep saved values |
+| Sender, subject, date, Gmail IDs | `storage_sources`, including `permission_metadata` | Sensitive application data |
+| Summaries and supporting excerpts | `storage_extractions`, `storage_evidence` | Default 30-day expiry, enforced only when cleanup runs |
+| Suggestions, accepted tasks, proposed changes | `storage_suggestions`, `tasks`, `gmail_task_changes` | Model proposals stay separate from accepted values |
+| Waiting-for records | `storage_waiting_for`, `storage_followups` | Saved; displayed only in the development tester |
+| Information read markers | Browser `localStorage`, keyed by user and source ID, not the database | Source IDs only; persist across re-extraction, in that browser only |
+| Jobs, attempts, usage, scan work | `private.storage_*`, `private.gmail_scan_work` | No browser access; see [observability](observability.md) |
+| Reuse index | `private.gmail_result_cache` | Links a source and content hash to its extraction, with task fingerprints instead of accepted values. No browser access |
+| Encrypted Google credentials | `private.google_connections` | No browser access |
 
-| Storage group | Purpose |
-| --- | --- |
-| Onboarding preferences and `scan_settings` | Separate onboarding choices and explicit saved scanning permission/context/revision |
-| `storage_sources`, `storage_extractions`, `storage_evidence` | Minimal source identity, validated classification/summary, and expiring supporting excerpts |
-| `storage_suggestions`, `tasks`, task-source relations | Original proposals, review edits, accepted values, and provenance |
-| Waiting-for/follow-up records | External commitments and dashboard reminders; no outgoing messages |
-| Calendar operation records | Separate preview/approval state; no connected Calendar execution |
-| Private jobs, attempts, usage, limits, and suppressions | Concurrency, budgets, retries, and prevention of stale/deleted-source recreation |
-| Private Google connections and OAuth state | Encrypted backend Gmail credentials and protected connection lifecycle |
+**Not stored:** full email bodies, the prompt or request sent to Gemini, and raw model or provider errors.
 
-Full email bodies are transient in the processing design; evidence and summaries are still sensitive stored content. The current storage contract defaults supporting content to 30 days and completed-task deletion eligibility to 30 days after completion; undo resets eligibility. Cleanup code exists but scheduling is not enabled. Eligibility is not a promise of deletion at an exact time. Minimal suppression/source identifiers remain until account deletion; final retention choices and a complete user-facing account-deletion flow remain unfinished. See [the storage contract](../app/supabase/STORAGE.md) for precise semantics.
+## Model configuration
 
-## Model configuration and reproducibility
+[Model settings](../app/prompts/model-settings.json) select `gemini-3.8-flash`, LOW thinking, an 8,192 output-token cap and a 60-second timeout. Gmail processing forces one provider attempt per claim. A server-side `GEMINI_MODEL` setting can override the model, and there is no silent fallback. Prompts and schema are canonical in [prompts](../app/prompts/); `npm.cmd run supabase:prepare` copies them into the ignored Edge bundle.
 
-The canonical [settings](../app/prompts/model-settings.json) select `gemini-3.8-flash`, LOW thinking, OpenAPI-style provider schema conversion, an 8,192 output-token cap, a 60-second timeout, and one provider attempt by default. The Edge endpoint permits an explicit server-side `GEMINI_MODEL` override and forces one attempt. The previously evaluated live candidate explicitly used `gemini-3.6-flash`; this did not change the canonical default. There is no silent fallback model.
+## Design decisions
 
-Context configuration also has separate scopes: the canonical fixture/CLI pipeline defaults to at most **five** earlier messages within 30 days, while saved scanning settings start at **zero** earlier messages. The plan's proposal to use up to five as the real-scan starting default still requires confirmation. Current saved settings are not connected to Gmail retrieval; their values must not be described as the effective settings of a running scan. See [the context-default comparison](use-cases.md#context-defaults-current-configuration-versus-proposal) for bounds and starting character limits.
+| Decision | Reason | Cost |
+| --- | --- | --- |
+| No vector store | Context comes from the same Gmail thread plus accepted tasks found by thread, so retrieval is exact and permission-checked | No cross-thread matching; separate emails about one task stay separate |
+| Metadata before bodies | Excluded mail is never read | More Gmail requests per message |
+| Manual, bounded batches | Controls cost and keeps consent explicit during the trial | At most two model calls per batch, so a large backlog needs many clicks |
+| Reuse results by content hash | Repeat scans make no model call (L14) | A prompt or settings change invalidates saved results |
+| Backend-owned, code-only review | The model never changes accepted values; review costs no tokens | A person must review each item |
+| Excerpts and a Gmail link, not stored bodies | Less sensitive data kept (chosen as a naive first version) | The full message stays in Gmail, and the link opens the whole conversation |
 
-Prompts, schema, and settings live in [canonical sources](../app/prompts/). `npm.cmd run supabase:prepare` stages those sources and fixtures into the ignored Edge bundle. Generated bundles are not maintained as an independent implementation. Record effective settings when evaluating; a source default alone does not prove what a running service used.
+## Not yet built
 
-## Proposed class-project abuse-control boundary
-
-The [safety/privacy plan](safety_privacy.md#proposed-class-project-implementation)
-adds planned private approved-tester access, an inference kill switch, and global
-daily request/token accounting to existing per-user claims. These are not
-implemented components or hosted guarantees. Reserve user/global allowance in
-one transaction, deny browser writes to operator controls, and fail closed when
-authorization/accounting cannot be verified. Check the switch before dispatch
-and preserve accounting for requests already sent.
-
-Manual, scheduled, backlog, and retry work must share this boundary. Add a
-separate per-user scan lease/cooldown and resumable deferred-item state; existing
-extraction leases alone do not coordinate an entire scan. Permission and
-connection generations fence stale work. An inference switch must not disable
-code-only review or Calendar undo; scan suspension must also gate Gmail
-retrieval. Owner status exposes allowance/reset and safe deferral reasons, not
-operator configuration. Token limits do not guarantee a currency cap. A dedicated
-Redis service and security dashboard are deferred for CP3.
-
-## Remaining end-to-end integration
-
-The planned Gmail path must retrieve metadata first, enforce current consent/rules before every body/context fetch, and recheck permissions before inference and saving. Empty inclusions or absent consent must process nothing. Subject inclusion semantics remain undecided; existing label/sender/domain OR inclusions and overriding exclusions must be preserved.
-
-After a bounded manual path works, add incremental state, backlog approval, cooldowns, retry dispatch, progressive counts, and scheduled scans with the dashboard closed. The plan selects a **15-minute default scan interval**; this is not an exact arrival-time guarantee and does not imply a model call on every check. A **60-second manual-refresh cooldown is a proposal still awaiting confirmation**, not an implemented setting. An existing running scan should be reused rather than overlapped.
-
-Product persistent review must use real saved records and clear account state on session changes. Optional Calendar onboarding must offer Connect / Skip for now, with later connection from Settings or Add to Calendar. Denial must leave Gmail/task features usable. The future Calendar executor requires separate event approval, retry-safe operation tracking, approved updates, and explicit undo of app-created events. Destination/scopes and whether Calendar shares the Gmail project remain open decisions; manual ICS export does not supply those capabilities. See [the planned Calendar walkthrough](use-cases.md#uc9-future-optional-calendar-connection-and-approved-event-lifecycle).
-
-Vercel is the intended frontend host, with Supabase as backend. Current local verification and any separately inspected legacy hosted services do not establish a deployed version of this architecture. Hosted configuration, compatibility, migrations, functions, and end-to-end testing require a separately authorized rollout.
+Each item below is planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes (postponed to CP4), a complete account-deletion flow, and a verified hosted rollout.

@@ -1,6 +1,18 @@
-import { address, filterMessage } from './core.mjs';
+import { address, cleanBody, filterMessage } from './core.mjs';
 
 const problem = code => Object.assign(new Error(code), { code });
+// Raw decoded text before quote cleanup; configured caps apply to the cleaned text.
+const RAW_BODY_CHARS = 200000;
+const MAX_RETRY_ATTEMPTS = 3;
+const MAX_TRACKED_FAILURES = 50;
+// This message cannot proceed now, but later mail can. Everything else stops the
+// scan with the current ID pending: rate limits, budgets, auth and permission changes.
+const MESSAGE_FAILURES = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_BODY_EMPTY','GMAIL_CONTEXT_LIMIT','GMAIL_INVALID_RESPONSE',
+  'GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_MESSAGE_REVIEW_REQUIRED','MODEL_INPUT_TOO_LARGE','INVALID_TASK_CONTEXT',
+  'GMAIL_EXTRACTION_FAILED','STORAGE_RETRY_LATER','STORAGE_ATTEMPT_LIMIT']);
+// The message list skips Spam and Trash, but thread and single-message reads do not.
+const hiddenFromScans = data => Array.isArray(data?.labelIds) && data.labelIds.some(label => label === 'SPAM' || label === 'TRASH');
+const CONTEXT_OMISSIONS = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_INVALID_RESPONSE','GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_METADATA_UNVERIFIABLE']);
 const id = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
 async function boundedJson(response, cap) {
   if (!response.body) throw problem('GMAIL_UNAVAILABLE');
@@ -37,7 +49,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
   };
   const message = async (messageId, format) => {
     if (!id(messageId)) throw problem('GMAIL_INVALID_RESPONSE');
-    const params = new URLSearchParams({ format, fields: format === 'metadata' ? 'id,threadId,internalDate,payload(headers)' : 'id,threadId,internalDate,payload' });
+    const params = new URLSearchParams({ format, fields: format === 'metadata' ? 'id,threadId,labelIds,internalDate,payload(headers)' : 'id,threadId,internalDate,payload' });
     if (format === 'metadata') for (const header of ['From','Subject']) params.append('metadataHeaders',header);
     return get(`messages/${messageId}`, params, format === 'full' ? 2000000 : 16000);
   };
@@ -55,7 +67,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
     full: messageId => message(messageId, 'full'),
     async thread(threadId) {
       if (!id(threadId)) throw problem('GMAIL_INVALID_RESPONSE');
-      const params = new URLSearchParams({ format: 'metadata',fields:'id,messages(id,threadId,internalDate,payload(headers))' });
+      const params = new URLSearchParams({ format: 'metadata',fields:'id,messages(id,threadId,labelIds,internalDate,payload(headers))' });
       for (const header of ['From','Subject']) params.append('metadataHeaders',header);
       const data = await get(`threads/${threadId}`,params,100000);
       if (!Array.isArray(data.messages) || data.messages.length > 100) throw problem('GMAIL_CONTEXT_LIMIT');
@@ -68,15 +80,19 @@ export function gmailMetadata(data) {
   if (!id(data?.id) || !id(data.threadId) || !/^\d{1,16}$/.test(String(data.internalDate))) throw problem('GMAIL_INVALID_RESPONSE');
   const headers = data.payload?.headers;
   if (!Array.isArray(headers) || headers.length > 200) throw problem('GMAIL_INVALID_RESPONSE');
-  const header = name => {
-    const found = headers.filter(h => typeof h.name === 'string' && h.name.toLowerCase() === name);
-    if (found.length !== 1 || typeof found[0].value !== 'string') throw problem('GMAIL_INVALID_RESPONSE');
-    return found[0].value;
+  const matching = name => headers.filter(h => typeof h.name === 'string' && h.name.toLowerCase() === name);
+  const single = rows => {
+    if (rows.length !== 1 || typeof rows[0].value !== 'string') throw problem('GMAIL_METADATA_UNVERIFIABLE');
+    return rows[0].value;
   };
-  let from; try { from = address(header('from')); } catch { throw problem('GMAIL_INVALID_RESPONSE'); }
-  const subject = header('subject');
+  // Rules cannot be evaluated without one sender and one subject, so this is treated
+  // as not permitted. A message with no Subject header has an empty subject.
+  let from; try { from = address(single(matching('from'))); } catch { throw problem('GMAIL_METADATA_UNVERIFIABLE'); }
+  const subjects = matching('subject');
+  const subject = subjects.length ? single(subjects) : '';
   const sentAt = new Date(Number(data.internalDate));
-  if (subject.length > 1000 || !Number.isFinite(sentAt.valueOf())) throw problem('GMAIL_INVALID_RESPONSE');
+  if (subject.length > 1000) throw problem('GMAIL_METADATA_UNVERIFIABLE');
+  if (!Number.isFinite(sentAt.valueOf())) throw problem('GMAIL_INVALID_RESPONSE');
   return { id: data.id, threadId: data.threadId, from, subject, sentAt: sentAt.toISOString(), labels: [] };
 }
 
@@ -124,9 +140,14 @@ export function gmailBody(data, maxChars) {
 // consume is backend-only; the retrieval endpoint supplies a no-model consumer.
 export async function retrieveGmail({ gmail, work, check, consume, now = Date.now }) {
   const started = now(); const limits = work.contextLimits;
-  const counts = { candidates:0, permitted:0, blocked:0, prepared:0, failed:0, contextBodies:0, modelCalls:0 };
+  const counts = { candidates:0, permitted:0, blocked:0, skipped:0, prepared:0, reused:0, failed:0, contextBodies:0, modelCalls:0 };
   let pending = [...(work.continuation?.pending ?? [])]; let next = work.continuation?.next ?? null;
   let listed = !!work.continuation && !work.continuation.unlisted; let lastError = null; let requests = 0; let metadataRecords = 0;
+  // Failed IDs stay retryable on the next explicit request, up to a fixed attempt count.
+  const retry = new Map((work.continuation?.failed ?? []).map(entry => [entry.id, entry]));
+  for (const failedId of retry.keys()) if (!pending.includes(failedId)) pending.push(failedId);
+  const suppressed = new Set(work.suppressed ?? []);
+  const failures = {}; let unresolved = 0;
   const boundary = async () => { await check(); if (++requests > 300 || metadataRecords >= 500) throw problem('SCAN_RETRIEVAL_LIMIT'); if (now()-started > 90000) throw problem('SCAN_TIME_LIMIT'); };
   while (counts.candidates < 200 && counts.permitted < 100) {
     try { await boundary(); } catch (error) { lastError = error.code; break; }
@@ -137,49 +158,92 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       if (!pending.length) { if (!next) break; continue; }
     }
     const messageId = pending[0];
+    if (suppressed.has(messageId)) { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
     try {
-      await boundary(); const current = gmailMetadata(await gmail.metadata(messageId)); counts.candidates++; metadataRecords++;
-      if (filterMessage(current,work.rules) !== 'PERMITTED') { counts.blocked++; pending.shift(); continue; }
-      if (Date.parse(current.sentAt)<Date.parse(work.start) || Date.parse(current.sentAt)>Date.parse(work.end)) { pending.shift(); continue; }
+      await boundary();
+      let current;
+      try {
+        const listed = await gmail.metadata(messageId);
+        // A saved continuation can name a message that has since moved to Spam or Trash.
+        if (hiddenFromScans(listed)) { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
+        current = gmailMetadata(listed);
+      } catch (error) {
+        if (error?.code !== 'GMAIL_METADATA_UNVERIFIABLE') throw error;
+        counts.candidates++; metadataRecords++; counts.blocked++; retry.delete(messageId); pending.shift(); continue;
+      }
+      counts.candidates++; metadataRecords++;
+      if (filterMessage(current,work.rules) !== 'PERMITTED') { counts.blocked++; retry.delete(messageId); pending.shift(); continue; }
+      if (Date.parse(current.sentAt)<Date.parse(work.start) || Date.parse(current.sentAt)>Date.parse(work.end)) { retry.delete(messageId); pending.shift(); continue; }
       counts.permitted++;
       await boundary(); const full = await gmail.full(messageId);
       if (JSON.stringify(gmailMetadata(full)) !== JSON.stringify(current)) throw problem('GMAIL_METADATA_CHANGED');
-      const body = gmailBody(full,limits.maxMessageChars);
-      let used = body.length; const context = []; const retrievalWarnings=[];
+      const body = gmailBody(full,RAW_BODY_CHARS);
+      const cleanedChars = cleanBody(body).body.length;
+      if (!cleanedChars) throw problem('GMAIL_BODY_EMPTY');
+      if (cleanedChars > limits.maxMessageChars || cleanedChars > limits.maxTotalChars) throw problem('GMAIL_BODY_LIMIT');
+      let used = cleanedChars; const context = []; const retrievalWarnings=[];
       if (!limits.maxMessages) retrievalWarnings.push('Earlier email context is disabled; verify references to previous requests.');
-      if (used > limits.maxTotalChars || !body) throw problem('GMAIL_BODY_LIMIT');
       if (limits.maxMessages) {
         await boundary(); const thread = await gmail.thread(current.threadId); metadataRecords += thread.length;
         if (metadataRecords > 500) throw problem('SCAN_RETRIEVAL_LIMIT');
-        const threadMetadata=thread.map(gmailMetadata);
-        if(threadMetadata.some(m=>m.id!==messageId&&filterMessage(m,work.rules)!=='PERMITTED')) retrievalWarnings.push('Some thread history was excluded by current source permissions.');
+        let excluded = false;
+        const threadMetadata = thread.flatMap(item => {
+          try {
+            if (item.id !== messageId && hiddenFromScans(item)) {
+              if (Number(item.internalDate) <= Date.parse(current.sentAt)) excluded = true;
+              return [];
+            }
+            const meta = gmailMetadata(item);
+            if (meta.id !== messageId && (suppressed.has(meta.id) || filterMessage(meta,work.rules) !== 'PERMITTED')) {
+              // Later mail is never context for this message, so excluding it hides nothing.
+              if (Date.parse(meta.sentAt) <= Date.parse(current.sentAt)) excluded = true;
+              return [];
+            }
+            return [meta];
+          } catch { excluded = true; return []; }
+        });
+        if (excluded) retrievalWarnings.push('Some thread history was excluded by current source permissions.');
         const eligible = threadMetadata.filter(m => m.id !== messageId && m.threadId === current.threadId
           && Date.parse(m.sentAt) <= Date.parse(current.sentAt)
-          && Date.parse(current.sentAt)-Date.parse(m.sentAt) <= limits.maxAgeDays*86400000
-          && filterMessage(m,work.rules) === 'PERMITTED')
+          && Date.parse(current.sentAt)-Date.parse(m.sentAt) <= limits.maxAgeDays*86400000)
           .sort((a,b)=>Date.parse(b.sentAt)-Date.parse(a.sentAt));
         if(eligible.length>limits.maxMessages)retrievalWarnings.push('Some earlier history was omitted by the message-count limit.');
         for (const meta of eligible.slice(0,limits.maxMessages)) {
-          await boundary(); const earlier = await gmail.full(meta.id); counts.contextBodies++;
-          if (JSON.stringify(gmailMetadata(earlier)) !== JSON.stringify(meta)) throw problem('GMAIL_METADATA_CHANGED');
+          await boundary();
+          // Context is optional: one unusable earlier message becomes a visible
+          // warning, so the current message can still be reviewed.
           let text;
-          try{text=gmailBody(earlier,limits.maxMessageChars);}catch(error){if(error.code==='GMAIL_BODY_LIMIT'||error.code==='GMAIL_BODY_ENCODING'){retrievalWarnings.push('Some permitted history could not fit or decode within message limits.');continue;}throw error;}
-          if (used+text.length>limits.maxTotalChars) {retrievalWarnings.push('Some earlier history was omitted by the total character limit.');continue;}
-          context.push({...meta,body:text}); used += text.length;
+          try {
+            const earlier = await gmail.full(meta.id); counts.contextBodies++;
+            if (JSON.stringify(gmailMetadata(earlier)) !== JSON.stringify(meta)) throw problem('GMAIL_METADATA_CHANGED');
+            text = gmailBody(earlier,RAW_BODY_CHARS);
+          } catch (error) {
+            if (!CONTEXT_OMISSIONS.has(error?.code)) throw error;
+            retrievalWarnings.push('Some permitted history could not fit or decode within message limits.'); continue;
+          }
+          const chars = cleanBody(text).body.length;
+          if (chars > limits.maxMessageChars) { retrievalWarnings.push('Some permitted history could not fit or decode within message limits.'); continue; }
+          if (used+chars>limits.maxTotalChars) {retrievalWarnings.push('Some earlier history was omitted by the total character limit.');continue;}
+          context.push({...meta,body:text}); used += chars;
         }
       }
       await boundary();
       const result = await consume({ message:{...current,body},threadContext:context.reverse(),rules:work.rules,contextLimits:limits,retrievalWarnings:[...new Set(retrievalWarnings)] },{remainingMs:90000-(now()-started)});
-      counts.modelCalls += result?.modelCalls ?? 0; counts.prepared++; pending.shift();
+      counts.modelCalls += result?.modelCalls ?? 0; counts.prepared++; if (result?.reused) counts.reused++;
+      retry.delete(messageId); pending.shift();
     } catch (error) {
-      const code = error?.code ?? 'GMAIL_UNAVAILABLE'; lastError = code;
-      if (['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_CONTEXT_LIMIT','GMAIL_INVALID_RESPONSE','GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE'].includes(code)) {
-        // Stop with this ID pending: no silent loss of coverage.
-        counts.failed++;
-      }
-      break;
+      const code = error?.code ?? 'GMAIL_UNAVAILABLE';
+      if (code === 'STORAGE_SUPPRESSED') { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
+      if (!MESSAGE_FAILURES.has(code)) { lastError = code; break; }
+      counts.failed++; failures[code] = (failures[code] ?? 0)+1; pending.shift();
+      // Waiting out a retry window made no attempt, so it must not use one up.
+      const attempts = (retry.get(messageId)?.attempts ?? 0)+(code==='STORAGE_RETRY_LATER'?0:1);
+      if (attempts >= MAX_RETRY_ATTEMPTS) { retry.delete(messageId); unresolved++; }
+      else retry.set(messageId,{id:messageId,code,attempts});
+      if (retry.size >= MAX_TRACKED_FAILURES) { lastError = 'SCAN_FAILURE_LIMIT'; break; }
     }
   }
-  return { counts, error:lastError, backlog:pending.length>0 || !!next || !listed,
-    continuation:pending.length || next || !listed ? {pending,next,unlisted:!listed} : null };
+  const remaining = pending.length>0 || !!next || !listed || retry.size>0;
+  return { counts, error:lastError, backlog:remaining, failures, unresolved,
+    continuation:remaining ? {pending,next,unlisted:!listed,failed:[...retry.values()]} : null };
 }

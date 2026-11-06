@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
+import { createGmailProcessor } from '../app/pipeline/gmail-processor.mjs';
+import { createStorageRpc } from '../app/supabase/functions/_shared/storage.mjs';
 
 const app = fileURLToPath(new URL('../app/', import.meta.url));
 const cli = fileURLToPath(new URL('../app/node_modules/supabase/dist/supabase.js', import.meta.url));
@@ -127,6 +129,89 @@ try {
   const paused=await rpc(a,'scan_settings_save',{...consentSettings,p_revision:consentSaved.data.revision,p_paused:true});assert.equal(paused.status,200);
   assert.equal((await request('/rest/v1/rpc/gmail_scan_service',{method:'POST',body:{p_user:a.id,p_action:'assert',p_data:{lease:scanClaim.lease}},key:status.SERVICE_ROLE_KEY})).status,409);
   check('manual scan HTTP coordination denies browser roles, requires consent, serializes claims and fences changed settings (fictional connection, no Gmail calls)');
+
+  // Persistence through real Auth/PostgREST with the real transport. The model is an
+  // injected fictional function: no Gmail or Gemini request happens here.
+  const owner=b,gmailLimits={maxMessages:5,maxAgeDays:90,maxMessageChars:12000,maxTotalChars:24000};
+  const gmailRules={allow:{labels:[],keywords:[],senders:['teacher@example.org'],domains:[],subjectKeywords:[]},block:{labels:[],keywords:[],senders:[],domains:[],subjectKeywords:[]}};
+  const ownerSettings=await rpc(owner,'scan_settings_get');
+  assert.equal((await rpc(owner,'scan_settings_save',{p_revision:ownerSettings.data.revision,p_rules:gmailRules,p_semantic:{include:[],exclude:[]},p_context:gmailLimits,p_consent:true,p_paused:false,p_disclosure:'gmail-scan-v1'})).status,200);
+  const ownerHash='d'.repeat(64);
+  await service('google_connection_service',{p_user:owner.id,p_action:'start',p_data:{hash:ownerHash,email:owner.email,verifier:'fictional-ciphertext'}});
+  const ownerPending=await service('google_connection_service',{p_user:null,p_action:'consume',p_data:{hash:ownerHash}});
+  await service('google_connection_service',{p_user:owner.id,p_action:'finish',p_data:{generation:ownerPending.generation,email:owner.email,subject:'67890',credentials:'fictional-ciphertext',scopes:['https://www.googleapis.com/auth/gmail.readonly'],expiresAt:'2099-01-01T00:00:00Z'}});
+  const work=await service('gmail_scan_service',{p_user:owner.id,p_action:'claim',p_data:{mode:'initial'}});assert.equal(work.state,'claimed');
+  assert.equal((await rpc(owner,'gmail_scan_status')).data.running,true);
+  assert.equal((await rpc(a,'gmail_scan_status')).data.running,false);
+  assert.ok((await request('/rest/v1/rpc/gmail_scan_status',{method:'POST',body:{}})).status>=400);
+  assert.ok((await rpc(owner,'gmail_token_recheck',{p_user:owner.id})).status>=400,'gmail_token_recheck denied to browser roles');
+  for(const name of ['gmail_task_context','gmail_process_claim','gmail_process_finish','gmail_process_assert','gmail_suppressed_messages']) {
+    const denied=await rpc(owner,name,{p_user:owner.id,p_lease:work.lease});assert.ok(denied.status>=400,`${name} denied to browser roles`);
+  }
+  check('safe scan status is owner-scoped and service-only Gmail RPCs reject browser roles');
+  const transport=createStorageRpc({url:base,serviceKey:status.SERVICE_ROLE_KEY});let modelCalls=0;
+  const generate=async({payload})=>{
+    modelCalls++;const evidence={messageId:payload.currentMessage.id,quote:payload.currentMessage.body};
+    const target=payload.existingTaskContext[0],isUpdate=payload.currentMessage.id==='fictional-update';
+    return {attempts:1,usage:{totalTokens:10},latencyMs:1,value:{category:'Actionable',confidence:90,summary:'Fictional.',explanation:'Fictional.',evidence,waitingFor:[],suggestedFollowUps:[],uncertainties:[],
+      topicRelevance:{decision:'relevant',reason:'No topic limits.'},
+      tasks:isUpdate?[]:[{action:'Submit fictional report',requirements:[],condition:null,deadline:null,owner:owner.email,evidence,topicRelevance:'relevant'}],
+      taskChanges:isUpdate?[{topicRelevance:'relevant',kind:'edit',targetTaskId:target.id,expectedRevision:target.revision,changedFields:['deadline'],
+        fields:{...target.acceptedFields,deadline:{date:'2026-11-09',time:null,timeZone:'America/Chicago',wording:'now due November 9',boundary:'on'}},reason:'Fictional revision.',evidence}]:[]}};
+  };
+  const processor=()=>createGmailProcessor({rpc:transport,user:owner,work,systemPrompt:'Fictional injected model.',generate,
+    settings:{contextLimits:gmailLimits,model:'local-gmail-test',version:'local',maxOutputTokens:8192,maxAttempts:1,timeoutMs:60000}});
+  const email=(id,hours,body)=>({message:{id,threadId:'fictional-thread',from:'teacher@example.org',subject:'Fictional report',labels:[],body,
+    sentAt:new Date(Date.parse(work.end)-hours*3600000).toISOString()},threadContext:[],rules:gmailRules,contextLimits:gmailLimits});
+  assert.equal((await processor()(email('fictional-original',3,'Please submit the fictional report.'))).saved,true);
+  assert.equal((await processor()(email('fictional-original',3,'Please submit the fictional report.'))).reused,true);assert.equal(modelCalls,1);
+  const pendingSuggestion=(await userRequest(owner,'/rest/v1/storage_suggestions?select=*&state=eq.pending')).data[0];
+  const taskId=(await action(owner,'suggestion',pendingSuggestion.id,'approve')).taskId;
+  assert.equal((await processor()(email('fictional-original',3,'Please submit the fictional report.'))).reused,true);assert.equal(modelCalls,1);
+  check('real transport saves an injected extraction, reuses it on repeat, and approval causes no new inference');
+  assert.equal((await processor()(email('fictional-update',1,'The fictional report is now due November 9.'))).saved,true);assert.equal(modelCalls,2);
+  const proposal=(await userRequest(owner,'/rest/v1/gmail_task_changes?select=*')).data[0];
+  assert.equal(proposal.target_task_id,taskId);assert.equal(proposal.expected_revision,0);
+  assert.equal((await userRequest(a,'/rest/v1/gmail_task_changes?select=*')).data.length,0);
+  assert.equal((await rpc(a,'gmail_change_review',{p_id:proposal.id,p_revision:0,p_action:'approve'})).status,403);
+  assert.equal((await userRequest(owner,`/rest/v1/tasks?id=eq.${taskId}&select=accepted_fields`)).data[0].accepted_fields.deadline,null);
+  const accepted=(await userRequest(owner,`/rest/v1/tasks?id=eq.${taskId}&select=accepted_fields`)).data[0].accepted_fields;
+  await action(owner,'task',taskId,'edit',0,{...accepted,requirements:['Keep my fictional edit']});
+  assert.equal((await rpc(owner,'gmail_change_review',{p_id:proposal.id,p_revision:0,p_action:'approve'})).status,409);
+  assert.equal((await rpc(owner,'gmail_change_review',{p_id:proposal.id,p_revision:0,p_action:'rebase',p_task_revision:1})).status,200);
+  assert.equal((await rpc(owner,'gmail_change_review',{p_id:proposal.id,p_revision:1,p_action:'approve',p_task_revision:null})).status,200);
+  const updated=(await userRequest(owner,`/rest/v1/tasks?id=eq.${taskId}&select=accepted_fields`)).data[0].accepted_fields;
+  assert.equal(updated.deadline.date,'2026-11-09');assert.deepEqual(updated.requirements,['Keep my fictional edit']);
+  check('deadline change is a targeted proposal, isolated by owner, stale over HTTP, rebased without losing the user edit');
+  const ambiguousGenerate=async({payload})=>{
+    modelCalls++;const evidence={messageId:payload.currentMessage.id,quote:payload.currentMessage.body};
+    return {attempts:1,usage:{totalTokens:10},latencyMs:1,value:{category:'Passive',confidence:60,summary:'Fictional.',explanation:'Fictional.',evidence,waitingFor:[],suggestedFollowUps:[],uncertainties:['Which task is this?'],tasks:[],
+      topicRelevance:{decision:'relevant',reason:'No topic limits.'},taskChanges:[{topicRelevance:'relevant',kind:'edit',targetTaskId:null,expectedRevision:null,changedFields:['deadline'],fields:null,reason:'Fictional ambiguous reference.',evidence}]}};
+  };
+  await createGmailProcessor({rpc:transport,user:owner,work,systemPrompt:'Fictional injected model.',generate:ambiguousGenerate,
+    settings:{contextLimits:gmailLimits,model:'local-gmail-test',version:'local',maxOutputTokens:8192,maxAttempts:1,timeoutMs:60000}})(email('fictional-ambiguous',0.5,'That deliverable is pushed back.'));
+  const ambiguous=(await userRequest(owner,'/rest/v1/gmail_task_changes?select=*&state=eq.pending&target_task_id=is.null')).data[0];
+  const resolveArgs={p_id:ambiguous.id,p_revision:0,p_task:taskId,p_task_revision:2,p_fields:{...updated,deadline:{date:'2026-11-20',time:null,timeZone:'America/Chicago',wording:'Entered by you.',boundary:'by'}}};
+  assert.equal((await rpc(owner,'gmail_change_review',{p_id:ambiguous.id,p_revision:0,p_action:'approve',p_task_revision:null})).status,409);
+  assert.equal((await rpc(a,'gmail_change_resolve',resolveArgs)).status,403);
+  assert.ok((await request('/rest/v1/rpc/gmail_change_resolve',{method:'POST',body:resolveArgs})).status>=400);
+  assert.equal((await rpc(owner,'gmail_change_resolve',{...resolveArgs,p_task_revision:1})).status,409);
+  assert.equal((await rpc(owner,'gmail_change_resolve',resolveArgs)).status,200);
+  assert.equal((await userRequest(owner,`/rest/v1/tasks?id=eq.${taskId}&select=accepted_fields`)).data[0].accepted_fields.deadline.date,'2026-11-20');
+  check('an ambiguous proposal cannot be approved directly; the owner can resolve it with entered values, over HTTP, and other users cannot');
+  const taskLinks=await rpc(owner,'gmail_task_source_links',{p_tasks:[taskId]});assert.equal(taskLinks.status,200);
+  assert.deepEqual(new Set(taskLinks.data.map(l=>l.messageId)),new Set(['fictional-original','fictional-update','fictional-ambiguous']));
+  assert.equal(taskLinks.data.find(l=>l.messageId==='fictional-original').role,'created');
+  assert.equal(JSON.stringify(taskLinks.data).includes('fictional-ciphertext'),false);
+  assert.deepEqual((await rpc(a,'gmail_task_source_links',{p_tasks:[taskId]})).data,[]);
+  assert.ok((await request('/rest/v1/rpc/gmail_task_source_links',{method:'POST',body:{p_tasks:[taskId]}})).status>=400);
+  check('task source links work over HTTP, return only the owner\'s sources, and reject anonymous callers');
+  const gmailSource=(await userRequest(owner,'/rest/v1/storage_sources?select=id,message_id&message_id=eq.fictional-update')).data[0];
+  await action(owner,'source',gmailSource.id,'delete',0);
+  assert.ok((await service('gmail_suppressed_messages',{p_user:owner.id,p_lease:work.lease})).includes('fictional-update'));
+  assert.equal((await service('gmail_scan_service',{p_user:owner.id,p_action:'finish',p_data:{lease:work.lease,continuation:null,result:{executionMode:'GMAIL_PERSISTENT_MANUAL',counts:{modelCalls},error:null,backlog:false}}})).state,'finished');
+  const finished=(await rpc(owner,'gmail_scan_status')).data;assert.equal(finished.running,false);assert.ok(finished.lastSuccessful);assert.equal(finished.backlog,false);
+  check('source deletion reaches retrieval suppression; finish records last successful batch in status');
 
 
 } finally {

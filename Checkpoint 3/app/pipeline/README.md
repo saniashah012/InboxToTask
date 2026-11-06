@@ -11,9 +11,9 @@ The original fixture schema remains the default; `gmailSchema` adds per-item sem
 relevance and reviewable edit/cancel proposals. [gmail-processor.mjs](gmail-processor.mjs)
 uses [task-context.mjs](task-context.mjs), then canonical extraction/validation and
 service-only persistence. [gmail-retrieval.mjs](gmail-retrieval.mjs) independently
-checks source metadata before bodies/context. The newest persistence/status migrations
-are not yet applied to the actual local database; the 134-test offline suite used
-fictional injected model responses, not live Gmail/Gemini.
+checks source metadata before bodies/context. The offline suite uses fictional injected
+model responses. Live local results on fictional mail are recorded separately in
+[UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
 
 ## Historical model evaluation (November 3, 2026)
 

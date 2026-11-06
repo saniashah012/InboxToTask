@@ -62,7 +62,7 @@ export async function googleConnectionAction(action: "connect" | "check" | "disc
     try { code = (await error.context?.json())?.error ?? "" } catch { /* fixed messages */ }
     const messages: Record<string, string> = {
       GOOGLE_NOT_CONFIGURED: "Google connection is not configured in the backend.",
-      GOOGLE_CONNECTION_BUSY: "A connection operation is running. Wait briefly and reload the status.",
+      GOOGLE_CONNECTION_BUSY: "A connection attempt was just started. Wait 30 seconds, then try again.",
       GOOGLE_RECONNECT_REQUIRED: "Google authorization expired or was revoked. Reconnect your account.",
       GOOGLE_REVOCATION_PENDING: "Access is blocked in this app, but Google revocation is pending. Retry disconnect.",
       GOOGLE_PROVIDER_UNAVAILABLE: "Google could not be reached. Try again shortly.",

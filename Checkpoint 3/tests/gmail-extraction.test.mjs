@@ -30,16 +30,44 @@ test('ambiguous updates remain untargeted review proposals',()=>{
  const v=output();v.taskChanges[0].targetTaskId=null;v.taskChanges[0].expectedRevision=null;v.uncertainties=['Which research report does this refer to?'];
  assert.equal(validateExtraction(v,payload()).taskChanges[0].targetTaskId,null);
 });
+test('an edit with no identifiable target can reach review without proposed values, in either category',()=>{
+ // Shape returned by the real model for the live "that deliverable" case, on both replayed runs.
+ for(const category of ['Passive','Actionable']){
+  const v=output();v.category=category;v.uncertainties=['Which deliverable is being pushed back?'];
+  Object.assign(v.taskChanges[0],{targetTaskId:null,expectedRevision:null,fields:null});
+  assert.equal(validateExtraction(v,payload()).taskChanges[0].fields,null);
+ }
+});
+test('a targeted edit still needs complete values, Actionable and at least one changed field',()=>{
+ for(const mutate of [v=>v.taskChanges[0].fields=null,v=>v.category='Passive',v=>v.taskChanges[0].changedFields=[]]){
+  const v=output();mutate(v);assert.throws(()=>validateExtraction(v,payload()));
+ }
+ const none=output();none.taskChanges=[];assert.throws(()=>validateExtraction(none,payload()),/CATEGORY_TASK_MISMATCH/);
+});
 test('new tasks coexist with changes without requiring inferred deadlines',()=>{
  const v=output();v.tasks=[{...fields,action:'Upload the slides',owner:'student@example.org',topicRelevance:'relevant',evidence:{messageId:'gmail1',quote:'Also upload the slides.'}}];
  assert.equal(validateExtraction(v,payload()).tasks[0].deadline,null);
 });
-test('task candidates require permitted provenance and meaningful action overlap, beyond thread identity',()=>{
+test('task candidates require permitted same-thread provenance and exclude the message itself',()=>{
  const row={...context[0],sources:[{...message,id:'original'}]};
  assert.equal(selectTaskContext([row],message,rules).tasks.length,1);
- assert.equal(selectTaskContext([{...row,acceptedFields:{...fields,action:'Book hotel accommodation'}}],message,rules).tasks.length,0);
+ // A reply such as "moved to Friday" shares no action words. Membership is not a match: the model and validation choose the target.
+ assert.equal(selectTaskContext([{...row,acceptedFields:{...fields,action:'Book hotel accommodation'}}],message,rules).tasks.length,1);
+ assert.equal(selectTaskContext([{...row,sources:[{...message,id:'other',threadId:'thread2'}]}],message,rules).tasks.length,0);
  assert.equal(selectTaskContext([{...row,sources:[{...message,from:'blocked@outside.test'}]}],message,rules).tasks.length,0);
  assert.equal(selectTaskContext([{...row,sources:[message]}],message,rules).tasks.length,0);
+});
+test('task candidates exclude the source message and later-origin tasks, and rank word overlap first',()=>{
+ const later={...context[0],id:'22222222-2222-4222-8222-222222222222',sources:[{...message,id:'newer'}],origins:[{id:'newer',sentAt:'2026-11-06T12:00:00Z'}]};
+ const own={...context[0],id:'33333333-3333-4333-8333-333333333333',sources:[{...message,id:'older'},{...message,id:'gmail1'}],origins:[{id:'gmail1',sentAt:message.sentAt}]};
+ const unrelated={...context[0],id:'44444444-4444-4444-8444-444444444444',acceptedFields:{...fields,action:'Book hotel accommodation'},sources:[{...message,id:'older'}],origins:[{id:'older',sentAt:'2026-11-01T12:00:00Z'}]};
+ const related={...context[0],sources:[{...message,id:'older'}],origins:[{id:'older',sentAt:'2026-11-01T12:00:00Z'}]};
+ const selected=selectTaskContext([later,own,unrelated,related],message,rules).tasks;
+ assert.deepEqual(selected.map(t=>t.id),[related.id,unrelated.id]);assert.deepEqual(selected[0].sourceMessageIds,['older']);
+});
+test('oversized task provenance defers that candidate with a warning instead of failing the message',()=>{
+ const row={...context[0],sources:Array.from({length:31},(_,i)=>({...message,id:`m${i}`}))};
+ const out=selectTaskContext([row],message,rules);assert.equal(out.tasks.length,0);assert.equal(out.omitted,true);
 });
 test('mixed-topic filtering removes irrelevant tasks/information/changes and remaps follow-up indexes',()=>{
  const v=output();v.tasks=[{...fields,topicRelevance:'irrelevant'}];v.taskChanges[0].topicRelevance='irrelevant';

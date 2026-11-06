@@ -6,10 +6,9 @@ This implements local fixture extraction, persistent suggestions, and user revie
 
 Read [current state](../../CURRENT_STATE.md) and [the storage contract](STORAGE.md).
 Source/semantic settings, bounded Gmail retrieval, canonical Gmail extraction,
-persistence/change review, and product workspace wiring exist in the working tree.
-The newest persistence/status migrations are pending application to the actual local
-database. Offline fictional/PGlite checks pass; actual new persistence/API/browser
-acceptance and live Gmail/model/OAuth lifecycle checks remain incomplete.
+persistence/change review, and product workspace wiring are implemented. Offline, local API
+and live local checks on fictional mail are recorded in [UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
+Scanning stays disabled by default, and hosted Gmail scanning is not verified.
 
 The original `analysis_email` endpoint remains E01-E20 fixture-only and disabled.
 The separate `gmail_scan` endpoint verifies Auth and accepts only initial/more mode:
@@ -41,8 +40,8 @@ Google callback URL shown by the provider setup in the Google Cloud OAuth
 client. The app requests `openid email profile` only. Do not add Gmail scopes
 to this sign-in flow.
 
-The frontend preference migration is not applied to any hosted database by
-this change. Reconcile hosted migration history first, then apply migrations
+Hosted migration state is recorded in [current state](../../CURRENT_STATE.md).
+Check hosted migration history first, then apply any further migrations
 using the approved deployment workflow. Do not deploy the `analysis_email`
 fixture function as part of this milestone.
 
@@ -147,6 +146,6 @@ The first Deno command may download its runner. Node tests exercise the handler 
 
 ## Verification status
 
-Updated November 5, 2026. The latest [Google verification report](../../docs/google-auth-verification-2026-11-05.md) records 99 offline tests, 40 real local database checks, four Google local API/Edge groups, frontend type/build, Edge types, and browser checks. The earlier [storage report](../../docs/local-storage-verification-2026-11-04.md) records the original storage HTTP/browser coverage. Counts describe separate dated runs; provider simulations do not establish successful live Google OAuth, Gmail retrieval, or live model accuracy. No hosted migration or deployment was performed.
+Updated November 5, 2026. A dated [Google verification report](../../docs/google-auth-verification-2026-11-05.md) records 99 offline tests, 40 real local database checks, four Google local API/Edge groups, frontend type/build, Edge types, and browser checks. The earlier [storage report](../../docs/local-storage-verification-2026-11-04.md) records the original storage HTTP/browser coverage. Counts describe separate dated runs; provider simulations do not establish successful live Google OAuth, Gmail retrieval, or live model accuracy. No hosted migration or deployment was performed.
 
 Hosted history/schema were inspected, the missing onboarding migration was recovered locally, and pending SQL was rehearsed against the inspected schema with fictional rows preserved. Before hosted deployment, recheck hosted state, review permissions and legacy clients, implement the real request/preferences boundary and product callbacks, validate configuration/isolation, and separately authorize rollout. The new request contract differs from the deployed legacy endpoint. Keep the [custom source-filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan), including its unresolved subject-inclusion matching decision, intact when implementing preferences.

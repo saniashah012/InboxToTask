@@ -26,39 +26,60 @@ Service-only public RPCs: `storage_claim`, `storage_finish`, `storage_fail`, `st
 
 Review mutations require a nonnegative revision; stale revisions fail. Approval is idempotent. Accepted edits do not overwrite original model proposals. Proposed updates require an explicitly selected target and expected revision; semantic matching is not implemented. Calendar approval also checks the task revision.
 
-## Saved scanning permission (local foundation)
+## Saved scanning permission
 
-The [settings migration](migrations/20261105070000_scan_settings.sql) adds owner-read
-`scan_settings` and controlled authenticated `scan_settings_get` / `scan_settings_save`
-RPCs. Writes derive the owner from `auth.uid()` and require the expected revision;
-stale saves return `PT409`. New users have no consent, empty inclusions, paused
-scanning, and no earlier-message context. Explicit consent records the
-`gmail-scan-v1` disclosure version and timestamp. Source-rule saves alone never
-grant consent. Legacy onboarding preferences remain separate.
+Owner-readable `scan_settings` are saved only through revision-checked
+`scan_settings_get` / `scan_settings_save`. Exact sender/domain inclusions combine
+with OR; source exclusions and literal case-insensitive subject exclusions win.
+Domains do not include subdomains. Empty source inclusions permit nothing.
+`semantic_preferences` holds separate include/exclude topics; topics never grant
+source access. Semantic relevance is Phase 3 work, after permitted content is sent
+to Gemini. Semantic exclusions cannot prevent transmission.
 
-The [phrase-filter migration](migrations/20261105160000_phrase_filters.sql) adds
-explicit inclusion/exclusion keywords. Phrase lists, sender addresses, and domains
-trim and deduplicate without case sensitivity. Words/phrases match the subject or
-parsed sender address/domain; exact sender/domain controls keep their exact scope.
-Obsolete source rules revoke consent, pause affected users, and fence old jobs;
-previous subject-only exclusions retain their original scope. Onboarding now saves
-reviewed terms through the same revision-checked scanning RPCs.
-Context limits are bounded by the canonical pipeline caps, with a conservative
-zero-message default. Saves follow preference-before-child lock order, increment
-storage generation, cancel current jobs, and preserve accepted tasks. This does
-not authorize retrieval: a future Gmail dispatcher must recheck settings and
-Google connection generations at each external boundary and commit. Deterministic canonical phrase matching is implemented locally; trusted Gmail
-retrieval/inference enforcement remains unconnected. See
-[verification and limitations](../../docs/scan-settings-verification-2026-11-05.md).
+The [source/semantic migration](migrations/20261105200000_source_semantic_contract.sql)
+retains incompatible phrase rules in `legacy_phrase_rules`, pauses affected users,
+revokes consent, increments revisions/generations, and cancels storage work. It
+requires explicit replacement review (`p_reviewed=true`) before saving again.
+Previous subject-only exclusions retain their scope. Categories are never inferred
+from expanded phrases. New saves require `p_semantic`; old clients fail closed.
 
-The [category-group migration](migrations/20261105170000_category_filter_groups.sql)
-stores selected suggestion groups separately from custom phrases while preserving
-`allow.keywords` and `block.keywords` as the effective terms consumed by the
-scanner. A group stores its category name and exact keyword bundle, so future
-preset edits do not silently change saved filtering. Existing keyword-only rows
-are retained as custom phrases; no category is inferred from a coincidental
-keyword set. Apply this migration before the updated frontend saves category
-metadata. It does not change scanning consent or authorize Gmail access.
+New accounts default to no consent, paused, empty source lists, and five earlier
+messages within 90 days. Existing saved settings and consent are preserved unless
+incompatible phrase rules require review. Context supports 0?10 earlier messages,
+1?365 days, 100?30,000 characters per message, and 100?60,000 total. Age is relative
+to the analyzed message. Zero disables earlier context. Accepted tasks are unchanged.
+Consent remains explicitly saved under `gmail-scan-v1`; saving filters or connecting
+Google alone never grants it. Settings saves fence older storage work.
+
+## Manual Gmail retrieval milestone
+
+The separate [gmail_scan](functions/gmail_scan/index.ts) function verifies Supabase
+Auth and accepts only `{ "mode": "initial" }` or `{ "mode": "more" }`. It is disabled
+unless `ENABLE_GMAIL_RETRIEVAL=true` and the Google connection feature is configured.
+It currently performs **retrieval only**, with zero inference, no saved extraction,
+and count-only responses. Do not present it as a completed manual scan.
+
+Service-only `gmail_scan_service` coordinates one four-minute lease per owner,
+with a 60-second request cooldown, seven-day snapshot window, private continuation
+IDs/cursor, and rechecks of saved consent, source access, settings revision, storage
+generation, verified mailbox identity, connection state/scope/generation. The
+handler additionally checks before and after obtaining/refreshing a backend token.
+Continuation requires a new explicit `more` request. A changed revision/generation
+requires a fresh initial request; no scheduler is installed.
+
+The canonical [retriever](../pipeline/gmail-retrieval.mjs) fetches candidate IDs,
+then metadata, then permitted bodies. Each earlier context message passes the same
+current access rules before body retrieval. The endpoint returns no bodies or
+provider diagnostics, and stores only coordination IDs, cursor and sanitized counts.
+See [phase evidence and limitations](../../docs/gmail-manual-scan-phases-2026-11-05.md).
+
+The [semantic contract migration](migrations/20261105200000_source_semantic_contract.sql)
+stores included and excluded topics as `semantic_preferences.include` and
+`semantic_preferences.exclude`. Short suggestion names and custom phrases are
+independent semantic strings; they are not expanded into Gmail labels or source
+keyword rules. Source access remains governed separately by sender/domain rules.
+The category-group migration used by an earlier frontend iteration was removed;
+it is unnecessary for this contract and must not be applied.
 
 ## Trial limits and lifecycle
 

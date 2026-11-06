@@ -1,9 +1,6 @@
 import {
-  effectiveFilterKeywords,
-  filterPresets,
-  preferenceScope,
-  uniqueTerms,
-  type FilterKeywordGroup,
+  excludedTopicSuggestions,
+  includedTopicSuggestions,
 } from "./filterPresets"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import gmailLogo from "./assets/gmail-logo.svg"
@@ -22,6 +19,7 @@ import {
 } from "./supabase"
 import type { Session } from "@supabase/supabase-js"
 import ScanSettingsPanel from "./ScanSettingsPanel"
+import ManualWorkspace from "./ManualWorkspace"
 
 type Email = {
   sender: string
@@ -399,11 +397,9 @@ type AppScreen = "onboarding" | "dashboard"
 
 const emptyOnboardingPreferences: OnboardingPreferences = {
   includedTypes: [],
-  includedCategoryGroups: [],
   selectedSenders: [],
   selectedDomains: [],
   excludedTypes: [],
-  excludedCategoryGroups: [],
   excludedSenders: [],
   excludedDomains: [],
   excludedSubjects: [],
@@ -437,10 +433,12 @@ function App() {
     }
 
     let active = true
+    let authVersion = 0
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return
+      authVersion++; setAuthInitialized(true)
       setSession(nextSession)
       setAuthError("")
       if (!nextSession) {
@@ -450,13 +448,13 @@ function App() {
       }
     })
 
+    const restoringVersion=authVersion
     void supabase.auth
       .getSession()
       .then(({ data, error }) => {
-        if (!active) return
+        if (!active || authVersion!==restoringVersion) return
         if (error) {
           setAuthError("Could not restore your sign-in session.")
-          console.error("Supabase session restoration failed", error)
           setSession(null)
         } else {
           setSession(data.session)
@@ -466,7 +464,6 @@ function App() {
       .catch((error: unknown) => {
         if (!active) return
         setAuthError("Could not restore your sign-in session.")
-        console.error("Supabase session restoration failed", error)
         setAuthInitialized(true)
       })
 
@@ -477,7 +474,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!session) return
+    if (!session || !previewMode) return
     let active = true
     setPreferenceStatus("loading")
     setPreferenceError("")
@@ -496,7 +493,6 @@ function App() {
       })
       .catch((error: unknown) => {
         if (!active) return
-        console.error("Onboarding preference load failed", error)
         setPreferenceError(
           "Could not load your preferences. Check that the database migration has been applied, then retry.",
         )
@@ -506,7 +502,7 @@ function App() {
     return () => {
       active = false
     }
-  }, [session?.user.id, preferenceReloadCount])
+  }, [session?.user.id, preferenceReloadCount, previewMode])
 
   const signInWithGoogle = async () => {
     if (!supabase) return
@@ -522,7 +518,6 @@ function App() {
       })
       if (error) throw error
     } catch (error) {
-      console.error("Google sign-in failed", error)
       setAuthError("Google sign-in could not be started. Please try again.")
       setAuthPending(false)
     }
@@ -544,7 +539,6 @@ function App() {
       setProcessingEnabled(false)
       setScreen("dashboard")
     } catch (error) {
-      console.error("Onboarding preference save failed", error)
       setPreferenceError(
         error instanceof Error ? error.message : "Preferences were not saved. Check your connection and try again.",
       )
@@ -567,10 +561,11 @@ function App() {
     if (!supabase) return
     const { error } = await supabase.auth.signOut()
     if (error) {
-      console.error("Supabase sign-out failed", error)
       setAuthError("Could not sign out. Please try again.")
     }
   }
+
+  if (authInitialized && session && !previewMode) return <ManualWorkspace key={session.user.id} userId={session.user.id} email={session.user.email ?? "Signed-in account"} onSignOut={() => void signOut()} />
 
   if (
     !authInitialized ||
@@ -617,15 +612,9 @@ function App() {
           setProcessingEnabled(true)
           setSavedPreferences({
             ...emptyOnboardingPreferences,
-            includedCategoryGroups: [{
-              category: "School",
-              keywords: filterPresets.School,
-            }],
+            includedTypes: ["school"],
             selectedSenders: ["professor@illinois.edu"],
-            excludedCategoryGroups: [{
-              category: "Financial",
-              keywords: filterPresets.Financial,
-            }],
+            excludedTypes: ["financial"],
           })
           setScreen("dashboard")
         }}
@@ -653,7 +642,6 @@ function App() {
             setPreferenceError("")
           })
           .catch((error: unknown) => {
-            console.error("Settings preference save failed", error)
             throw error
           })
       }}
@@ -836,7 +824,6 @@ function Dashboard({
       setScanState(state)
       return state
     } catch (error) {
-      console.error("Preview scan failed", error)
       setScanState("failed")
       return "failed" as const
     }
@@ -1736,7 +1723,6 @@ function Onboarding({
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
   const hasPreferences =
     preferences.includedTypes.length +
-      preferences.includedCategoryGroups.length +
       preferences.selectedSenders.length +
       preferences.selectedDomains.length >
     0
@@ -1882,7 +1868,6 @@ function Onboarding({
                       onConnectGmail(account.email)
                       setGmailConnected(true)
                     } catch (error) {
-                      console.error("Preview Gmail connection failed", error)
                       setSetupError(
                         "Could not connect the fictional preview inbox. Please try again.",
                       )
@@ -1915,11 +1900,11 @@ function Onboarding({
             <>
               <h2>Which email categories should we check?</h2>
               <p className="setup-description">
-                Choose suggested categories or add words, phrases, senders, and domains. Any inclusion match qualifies an email.
+                Choose exact sender or domain permissions. Topics describe relevance within permitted email.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" />
               <p className="setup-helper requirement-helper">
-                Choose at least one word, phrase, sender, or domain. Nothing is permitted with empty inclusions. Real Gmail scanning is not connected yet.
+                Choose at least one sender or domain. Topics alone permit nothing. Real Gmail scanning is not connected yet.
               </p>
               <FooterActions
                 back={() => setStep(1)}
@@ -1933,7 +1918,7 @@ function Onboarding({
             <>
               <h2>What would you like to keep private?</h2>
               <p className="setup-description">
-                Add words, phrases, senders, or domains to exclude from your
+                Add semantic topics, exact senders, or domains to exclude from your
                 preferences.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="excluded" />
@@ -1943,7 +1928,7 @@ function Onboarding({
               <details className="privacy-disclosure">
                 <summary>How privacy filtering works</summary>
                 <ul>
-                  <li>Words and phrases match subject lines or sender email addresses/domains. Exclusions always win; bodies are not searched for filtering.</li>
+                  <li>Exact source exclusions override inclusions before body retrieval. Semantic topics are evaluated after Gemini receives permitted content.</li>
                   <li>The extraction pipeline supports metadata rules; real Gmail scanning and authorization are not connected here.</li>
                   <li>Metadata rules cannot guarantee that all health or financial content is excluded.</li>
                   <li>This preview uses fictional data and does not retrieve or send real email.</li>
@@ -1974,13 +1959,9 @@ function Onboarding({
                   ]}
                 />
                 <ReviewPreference
-                  label="Included words and phrases"
+                  label="Topics of interest"
                   onEdit={() => setStep(2)}
-                  values={categoryPreferenceLabels(
-                    preferences.includedTypes,
-                    preferences.includedCategoryGroups,
-                    ["School", "Job applications", "Research", "Meetings"],
-                  )}
+                  values={preferences.includedTypes}
                   emptyLabel="No words or phrases selected"
                 />
                 <ReviewPreference
@@ -1993,13 +1974,9 @@ function Onboarding({
                   emptyLabel="No senders or domains selected"
                 />
                 <ReviewPreference
-                  label="Excluded words and phrases"
+                  label="Semantic topics to omit"
                   onEdit={() => setStep(3)}
-                  values={categoryPreferenceLabels(
-                    preferences.excludedTypes,
-                    preferences.excludedCategoryGroups,
-                    ["Financial", "Health", "Promotions", "Family & friends"],
-                  )}
+                  values={preferences.excludedTypes}
                   emptyLabel="No words or phrases excluded"
                 />
                 <ReviewPreference
@@ -2014,7 +1991,7 @@ function Onboarding({
                 />
               </div>
               <p className="setup-helper requirement-helper">
-                Words and phrases are saved filtering rules. Real Gmail scanning
+                Topics never grant source access. Real Gmail scanning
                 is not connected yet.
               </p>
               <div className="scan-plan">
@@ -2065,7 +2042,6 @@ function Onboarding({
                       await previewAdapter.startProcessing()
                       onFinish(preferences)
                     } catch (error) {
-                      console.error("Preview onboarding could not start", error)
                       setSetupError(
                         "Could not start the preview flow. Please try again.",
                       )
@@ -2190,7 +2166,7 @@ function FilterHelp() {
     <button type="button" className="text-link" aria-label="About these filters" aria-expanded={open} aria-controls={id}
       onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(true)}
       onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false) } }}>About these filters (i)</button>
-    {open && <span id={id} role="tooltip">Words and phrases match literal text in subject lines and sender email addresses/domains, ignoring capitalization. Any inclusion can qualify an email; exclusions always win. Sender and domain controls match exactly. Bodies and sender display names are not searched for filters. Permitted bodies may later be analyzed for tasks. Suggested categories cannot identify every sensitive message.</span>}
+    {open && <span id={id} role="tooltip">Exact sender/domain inclusions combine with OR. Exact exclusions and literal subject exclusions override access. Domains do not include subdomains. Topics describe semantic relevance after permitted content reaches Gemini, so semantic exclusions cannot prevent transmission.</span>}
   </span>
 }
 
@@ -2269,18 +2245,15 @@ function RulesEditor({
         <div className="rule-heading">
           <div>
             <strong>Email categories to check</strong>
-            <span>Choose a suggestion or add your own phrase.</span>
+            <span>Topics describe relevance after source permission; they never grant access.</span>
           </div>
         </div>
         <CategorySelector
           label="Add an included email category"
           categoryKey="includedTypes"
-          suggestions={["School", "Job applications", "Research", "Meetings"]}
+          suggestions={includedTopicSuggestions}
           customKeywords={rules.includedTypes}
-          groups={rules.includedCategoryGroups}
-          onChange={(includedTypes, includedCategoryGroups) =>
-            onChange({ ...rules, includedTypes, includedCategoryGroups })
-          }
+          onChange={(includedTypes) => onChange({ ...rules, includedTypes })}
         />
         <div className="rule-heading">
           <div>
@@ -2313,18 +2286,15 @@ function RulesEditor({
         <div className="rule-heading">
           <div>
             <strong>Email categories to skip</strong>
-            <span>Choose a suggestion or add your own phrase to exclude.</span>
+            <span>Semantic exclusions affect results after Gemini has received permitted content.</span>
           </div>
         </div>
         <CategorySelector
           label="Add an excluded email category"
           categoryKey="excludedTypes"
-          suggestions={["Financial", "Health", "Promotions", "Family & friends"]}
+          suggestions={excludedTopicSuggestions}
           customKeywords={rules.excludedTypes}
-          groups={rules.excludedCategoryGroups}
-          onChange={(excludedTypes, excludedCategoryGroups) =>
-            onChange({ ...rules, excludedTypes, excludedCategoryGroups })
-          }
+          onChange={(excludedTypes) => onChange({ ...rules, excludedTypes })}
         />
         <div className="rule-heading">
           <div>
@@ -2355,7 +2325,6 @@ function RulesEditor({
         })}
       </div>}
       <FilterHelp />
-      <div className="scope-summary live" aria-live="polite"><span>Effective scope</span><strong>{preferenceScope(rules)}</strong></div>
       {ruleError && <p className="notice warning" role="alert">{ruleError}</p>}
     </div>
   )
@@ -2366,15 +2335,13 @@ function CategorySelector({
   categoryKey,
   suggestions,
   customKeywords,
-  groups,
   onChange,
 }: {
   label: string
   categoryKey: "includedTypes" | "excludedTypes"
   suggestions: string[]
   customKeywords: string[]
-  groups: FilterKeywordGroup[]
-  onChange: (customKeywords: string[], groups: FilterKeywordGroup[]) => void
+  onChange: (customKeywords: string[]) => void
 }) {
   const [draft, setDraft] = useState("")
   const [error, setError] = useState("")
@@ -2382,65 +2349,42 @@ function CategorySelector({
   const add = (rawValue = draft) => {
     const category = rawValue.trim()
     if (!category) return
-    const effectiveKeywords = effectiveFilterKeywords(customKeywords, groups)
     if (
       category.length > 254 ||
       /[\x00-\x1f\x7f]/.test(category) ||
-      customKeywords.length >= 200 ||
-      (!effectiveKeywords.includes(category.toLowerCase()) &&
-        effectiveKeywords.length >= 200)
+      customKeywords.length >= 200
     ) {
       setError("Use up to 200 terms, each 1-254 characters without control characters.")
       return
     }
-    onChange([...customKeywords, category], groups)
+    onChange([...customKeywords, category])
     setDraft("")
     setError("")
   }
 
   const toggleSuggestion = (suggestion: string) => {
-    const existingGroup = groups.find(
-      (group) => group.category.toLowerCase() === suggestion.toLowerCase(),
-    )
-    const legacyCustom = customKeywords.some(
+    const selected = customKeywords.some(
       (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
     )
-    if (existingGroup || legacyCustom) {
-      onChange(
-        customKeywords.filter(
-          (keyword) => keyword.toLowerCase() !== suggestion.toLowerCase(),
-        ),
-        groups.filter(
-          (group) => group.category.toLowerCase() !== suggestion.toLowerCase(),
-        ),
-      )
-      setError("")
-      return
-    }
-
-    const keywords = filterPresets[suggestion] ?? [suggestion]
-    const nextGroups = [
-      ...groups,
-      { category: suggestion, keywords: uniqueTerms(keywords) },
-    ]
-    if (effectiveFilterKeywords(customKeywords, nextGroups).length > 200) {
-      setError("Use up to 200 terms.")
-      return
-    }
-    onChange(customKeywords, nextGroups)
+    onChange(
+      selected
+        ? customKeywords.filter(
+            (keyword) => keyword.toLowerCase() !== suggestion.toLowerCase(),
+          )
+        : [...customKeywords, suggestion],
+    )
     setError("")
   }
 
   const visibleCustomKeywords = customKeywords
     .map((keyword, index) => ({ keyword, index }))
-    .filter(({ keyword }) => {
-      const suggestion = suggestions.find(
-        (item) => item.toLowerCase() === keyword.toLowerCase(),
-      )
-      return !suggestion || groups.some(
-        (group) => group.category.toLowerCase() === suggestion.toLowerCase(),
-      )
-    })
+    .filter(
+      ({ keyword }) =>
+        !suggestions.some(
+          (suggestion) =>
+            suggestion.toLowerCase() === keyword.toLowerCase(),
+        ),
+    )
 
   return (
     <div className="category-preferences">
@@ -2482,8 +2426,9 @@ function CategorySelector({
         }))}
         onRemove={(_key, _category, index) =>
           onChange(
-            customKeywords.filter((_current, currentIndex) => currentIndex !== index),
-            groups,
+            customKeywords.filter(
+              (_current, currentIndex) => currentIndex !== index,
+            ),
           )
         }
       />
@@ -2491,14 +2436,9 @@ function CategorySelector({
         <p className="suggestions-label">Suggestions</p>
         <div className="type-selection-chips">
           {suggestions.map((suggestion) => {
-            const selected =
-              groups.some(
-                (group) =>
-                  group.category.toLowerCase() === suggestion.toLowerCase(),
-              ) ||
-              customKeywords.some(
-                (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
-              )
+            const selected = customKeywords.some(
+              (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
+            )
             return (
               <span
                 className={`type-chip ${selected ? "selected" : ""}`}
@@ -2535,38 +2475,6 @@ function CategorySelector({
       {error && <p className="notice warning" role="alert">{error}</p>}
     </div>
   )
-}
-
-function categoryPreferenceLabels(
-  customKeywords: string[],
-  groups: FilterKeywordGroup[],
-  suggestions: string[],
-) {
-  const selectedSuggestionNames = suggestions.filter(
-    (suggestion) =>
-      groups.some(
-        (group) => group.category.toLowerCase() === suggestion.toLowerCase(),
-      ) ||
-      customKeywords.some(
-        (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
-      ),
-  )
-  const customPhrases = customKeywords.filter(
-    (keyword) =>
-      !suggestions.some(
-        (suggestion) => suggestion.toLowerCase() === keyword.toLowerCase(),
-      ),
-  )
-  const unknownGroups = groups
-    .filter(
-      (group) =>
-        !suggestions.some(
-          (suggestion) =>
-            suggestion.toLowerCase() === group.category.toLowerCase(),
-        ),
-    )
-    .map((group) => group.category)
-  return [...selectedSuggestionNames, ...unknownGroups, ...customPhrases]
 }
 
 function RuleInput({
@@ -2674,7 +2582,7 @@ function ScanStatus({
     paused: ["Auto-check paused", "Preview scans are paused."],
     "missing-sources": [
       "No sources selected",
-      "Add a sender or domain rule in Settings. Words and phrases are saved rules; scanning is not connected yet.",
+      "Add a sender or domain rule in Settings. Topics never grant access; scanning is not connected yet.",
     ],
     disconnected: [
       "Scanning unavailable",
@@ -2859,7 +2767,7 @@ function SettingsScreen({
                 <span>
                   {previewMode
                     ? "These sample settings do not screen or retrieve any real messages."
-                    : "Words and phrases match subjects or sender addresses/domains. Saving rules does not grant Gmail access or start scanning."}
+                    : "Exact sender/domain permissions control access. Topics are evaluated by Gemini afterward. Saving rules does not grant consent or start scanning."}
                 </span>
               </div>
               <SettingsPreferenceControls
@@ -2871,10 +2779,6 @@ function SettingsScreen({
                     await onPreferencesChange(next)
                     setSaved(true)
                   } catch (error) {
-                    console.error(
-                      "Settings preferences could not be saved",
-                      error,
-                    )
                     setSaveError(
                       error instanceof Error ? error.message : "Preferences were not saved. Check your connection and try again.",
                     )
@@ -3011,7 +2915,6 @@ function SettingsScreen({
                       const account = await previewAdapter.connectGmail()
                       onGmailAccountChange(account.email)
                     } catch (error) {
-                      console.error("Preview Gmail connection failed", error)
                       setConnectionError("Could not connect the preview inbox.")
                     }
                   }}
@@ -3047,7 +2950,6 @@ function SettingsScreen({
                         await previewAdapter.connectGoogleCalendar()
                       onCalendarAccountChange(account.email)
                     } catch (error) {
-                      console.error("Preview Calendar connection failed", error)
                       setConnectionError(
                         "Could not connect the preview calendar.",
                       )
@@ -3353,7 +3255,6 @@ function CalendarPreviewModal({
               )
               onSuccess(event.id)
             } catch (caught) {
-              console.error("Preview Calendar event creation failed", caught)
               setError("Could not create the local preview event.")
             } finally {
               setSubmitting(false)

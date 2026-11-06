@@ -8,6 +8,8 @@ export type Snapshot = Record<string, StoredRow[]>
 export type ScanRules = Record<"allow" | "block", Record<"labels" | "senders" | "domains" | "subjectKeywords" | "keywords", string[]>>
 export type ScanSettings = {
   revision: number; consent: boolean; paused: boolean; consent_at: string | null
+  semantic_preferences: { include: string[]; exclude: string[] }
+  requires_review: boolean; legacy_phrase_rules: ScanRules | null; reviewed?: boolean
   rules: ScanRules
   context_limits: { maxMessages: number; maxAgeDays: number; maxMessageChars: number; maxTotalChars: number }
 }
@@ -20,6 +22,7 @@ export async function loadScanSettings(): Promise<ScanSettings> {
 export async function saveScanSettings(settings: ScanSettings): Promise<ScanSettings> {
   if (!supabase) throw new Error("Account connection is not configured.")
   const { data, error } = await supabase.rpc("scan_settings_save", {
+    p_semantic: settings.semantic_preferences, p_reviewed: settings.reviewed ?? false,
     p_revision: settings.revision, p_rules: settings.rules, p_context: settings.context_limits,
     p_consent: settings.consent, p_paused: settings.paused,
     p_disclosure: settings.consent ? "gmail-scan-v1" : null,
@@ -46,14 +49,14 @@ export async function signInWithGoogle() {
 
 export type GoogleStatus = { state: "disconnected" | "connected" | "reconnect_required" | "disconnecting"; email?: string; scopes?: string[]; expiresAt?: string; scanningEnabled: false }
 export async function googleConnectionStatus(): Promise<GoogleStatus> {
-  if (!storageClient) throw new Error("Storage connection is not configured.")
-  const { data, error } = await storageClient.rpc("google_connection_status")
+  if (!supabase) throw new Error("Account connection is not configured.")
+  const { data, error } = await supabase.rpc("google_connection_status")
   if (error) throw new Error("Could not load Google connection status. Check the backend setup.")
   return data
 }
 export async function googleConnectionAction(action: "connect" | "check" | "disconnect") {
-  if (!storageClient) throw new Error("Storage connection is not configured.")
-  const { data, error } = await storageClient.functions.invoke("google_connection", { body: { action } })
+  if (!supabase) throw new Error("Account connection is not configured.")
+  const { data, error } = await supabase.functions.invoke("google_connection", { body: { action } })
   if (error) {
     let code = ""
     try { code = (await error.context?.json())?.error ?? "" } catch { /* fixed messages */ }
@@ -73,29 +76,29 @@ export async function googleConnectionAction(action: "connect" | "check" | "disc
 const tables = {
   tasks: "tasks", suggestions: "storage_suggestions", extractions: "storage_extractions",
   evidence: "storage_evidence", sources: "storage_sources", waiting: "storage_waiting_for",
-  followups: "storage_followups", preferences: "storage_preferences",
+  followups: "storage_followups", preferences: "storage_preferences", changes: "gmail_task_changes",
 } as const
 
-export async function loadStorageSnapshot(): Promise<Snapshot> {
-  if (!storageClient) throw new Error("Storage connection is not configured.")
+export async function loadStorageSnapshot(client = storageClient): Promise<Snapshot> {
+  if (!client) throw new Error("Account connection is not configured.")
   const entries = await Promise.all(Object.entries(tables).map(async ([key, table]) => {
     // RLS owns authorization; never substitute a browser-supplied owner filter.
-    let query = storageClient.from(table).select("*")
-    if (key === "suggestions" || key === "waiting") query = query.gt("expires_at", new Date().toISOString())
+    let query = client.from(table).select("*")
+    if (key === "suggestions" || key === "waiting" || key === "changes") query = query.gt("expires_at", new Date().toISOString())
     const orderBy = key === "preferences" ? "user_id"
       : ["tasks", "suggestions", "extractions", "sources"].includes(key) ? "created_at" : "id"
     const { data, error } = await query.order(orderBy, { ascending: orderBy !== "created_at" }).limit(200)
     if (error) throw new Error("Could not load stored results. Check the local migrations and session.")
     return [key, data ?? []] as const
   }))
-  const { data: activity, error: activityError } = await storageClient.rpc("storage_activity")
+  const { data: activity, error: activityError } = await client.rpc("storage_activity")
   if (activityError) throw new Error("Could not load processing activity.")
   return { ...Object.fromEntries(entries), activity: activity ? [activity] : [] }
 }
 
 export async function reviewStoredRecord(kind: string, id: string | null, action: string, revision: number, fields: unknown = null) {
-  if (!storageClient) throw new Error("Storage connection is not configured.")
-  const { data, error } = await storageClient.rpc("storage_action", {
+  if (!supabase) throw new Error("Storage connection is not configured.")
+  const { data, error } = await supabase.rpc("storage_action", {
     p_kind: kind, p_id: id, p_action: action, p_revision: revision, p_fields: fields,
   })
   if (error) throw new Error(error.code === "PT409"

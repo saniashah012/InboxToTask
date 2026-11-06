@@ -1,8 +1,21 @@
 # Local InboxToTask extraction pipeline
 
-This backend-only Node.js module processes permitted fictional email through real Gemini inference. It does not need Supabase, Gmail credentials, a running website, or installed npm dependencies. It does not implement inbox polling, persistent deduplication, task storage, calendar writes, or global spending quotas yet.
+This directory contains the canonical extraction core, provider adapter, prompts
+integration, and Gmail retrieval/task-context/persistence coordinators. The fixture
+CLI can run fictional email independently of Supabase; persistent Gmail processing
+requires backend Auth, configured Google/model services and saved scanning permission.
+See [current state](../../CURRENT_STATE.md) for implemented versus verified behavior.
+No automatic inbox polling or Calendar writes are implemented.
 
-## Validation status (November 3, 2026)
+The original fixture schema remains the default; `gmailSchema` adds per-item semantic
+relevance and reviewable edit/cancel proposals. [gmail-processor.mjs](gmail-processor.mjs)
+uses [task-context.mjs](task-context.mjs), then canonical extraction/validation and
+service-only persistence. [gmail-retrieval.mjs](gmail-retrieval.mjs) independently
+checks source metadata before bodies/context. The newest persistence/status migrations
+are not yet applied to the actual local database; the 134-test offline suite used
+fictional injected model responses, not live Gmail/Gemini.
+
+## Historical model evaluation (November 3, 2026)
 
 All 31 offline tests passed on Node.js 24.20.0, and offline preparation covered all 20 CP2 targets. Earlier direct JSON Schema requests returned HTTP 400 on alternative models; default-model requests returned HTTP 503. Controlled tests narrowed the 400 to structured-output configuration rather than explicit thinking settings. An OpenAPI-style responseSchema adapter then succeeded on Gemini 3.6 Flash, including a full E01 pipeline run with LOW thinking, strict backend validation, and the automated E01 checks. That successful request took 3186 ms and reported 1001 input + 346 output = 1347 total tokens (thinking-token count absent). An initial full adapter attempt returned 503 and a subsequent explicit retry succeeded. This is one case, not a 20-email accuracy result or proof of exactly which JSON Schema constraint caused the original rejection.
 
@@ -123,7 +136,7 @@ Use `--input path/to/input.json --live` for one custom case (paths are relative 
   "user": { "email": "student@example.org", "timeZone": "America/Chicago" },
   "analysisTime": "2026-10-05T09:00:00-05:00",
   "rules": {
-    "allow": { "senders": [], "domains": [], "keywords": ["reading response"] },
+    "allow": { "domains": [], "senders": ["professor@example.org"] },
     "block": { "senders": [], "domains": [], "keywords": [], "subjectKeywords": [] }
   },
   "message": {
@@ -138,7 +151,20 @@ Use `--input path/to/input.json --live` for one custom case (paths are relative 
 
 Context messages use the same message shape, unique IDs, the same threadId, and timestamps no later than the current message. Inputs must be plain text: MIME/HTML decoding belongs in the future Gmail adapter. Each context message is independently checked against the rules. The module is not a retrieval boundary: a future Gmail adapter must filter metadata BEFORE fetching excluded bodies; this local module receives already supplied fixture text.
 
-Inclusions use OR: exact case-insensitive sender/domain matches (no implicit subdomains) or `keywords` matching literal substrings in the subject or parsed sender address/domain. Display names and bodies are not searched. Any exclusion overrides inclusion. Legacy `block.subjectKeywords` remain subject-only to preserve their original scope. Mailbox tags do not grant permission or block messages; deprecated rule fields remain compatibility data only. New saved settings reject nonempty obsolete source lists. Empty allowlists produce `NO_ALLOWLIST` and zero inference. Metadata rules are not semantic healthcare/financial classifiers.
+Inclusions use OR: exact case-insensitive sender/domain matches, with no implicit
+subdomains. Source exclusions and literal case-insensitive `block.subjectKeywords`
+override inclusion. Phrase access rules and mailbox labels fail closed with
+`RULE_REVIEW_REQUIRED`; they never grant source access. Empty source allowlists
+produce `NO_ALLOWLIST` and zero inference. Optional `semanticPreferences` include/
+exclude topic lists are validated separately from access permissions; topic
+relevance is part of the versioned Gmail extraction contract, evaluated after source permission. Metadata rules are not semantic
+healthcare/financial classifiers.
+
+The [Gmail retriever](./gmail-retrieval.mjs) is canonical and packaged by
+`supabase:prepare`. Its separate, disabled-by-default Edge endpoint currently
+supports separately gated retrieval-only and persistent modes; both remain disabled by default. It independently
+filters every context message before fetching its body and keeps bodies transient.
+See [phase evidence](../../docs/gmail-manual-scan-phases-2026-11-05.md).
 
 Quoted `>` lines, common reply headers, and signature separators are removed conservatively. This is not a guarantee that inline sensitive content is removed. Original messages must be supplied independently as permitted context. Context omission adds deterministic uncertainty; oversized current content goes to review without silently truncating or paying for inference.
 

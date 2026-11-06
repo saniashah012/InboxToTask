@@ -1,18 +1,11 @@
 import { createClient } from "@supabase/supabase-js"
-import {
-  readStoredKeywordRules,
-  type FilterKeywordGroup,
-  writeStoredKeywordRules,
-} from "./filterPresets"
 
 export type OnboardingPreferences = {
   scanRevision?: number
   includedTypes: string[]
-  includedCategoryGroups: FilterKeywordGroup[]
   selectedSenders: string[]
   selectedDomains: string[]
   excludedTypes: string[]
-  excludedCategoryGroups: FilterKeywordGroup[]
   excludedSenders: string[]
   excludedDomains: string[]
   excludedSubjects: string[]
@@ -45,9 +38,12 @@ type Database = {
       storage_sources: StorageTable
       storage_suggestions: StorageTable
       storage_waiting_for: StorageTable
+      gmail_task_changes: StorageTable
     }
     Views: Record<string, never>
     Functions: {
+      gmail_scan_status: { Args: Record<string, never>; Returns: any }
+      gmail_change_review: { Args: Record<string, any>; Returns: any }
       scan_settings_get: { Args: Record<string, never>; Returns: any }
       scan_settings_save: { Args: Record<string, any>; Returns: any }
       google_connection_status: {
@@ -134,11 +130,9 @@ function fromPreferenceRow(row: PreferenceRow): OnboardingPreferences {
 
   return {
     includedTypes: row.included_types,
-    includedCategoryGroups: [],
     selectedSenders,
     selectedDomains,
     excludedTypes: row.excluded_types,
-    excludedCategoryGroups: [],
     excludedSenders,
     excludedDomains,
     excludedSubjects,
@@ -146,36 +140,58 @@ function fromPreferenceRow(row: PreferenceRow): OnboardingPreferences {
 }
 
 // Canonical scanning settings are the source of truth after a reviewed save.
-// Older category titles remain draft phrases until explicitly reviewed and saved.
-export async function loadOnboardingPreferences(userId: string): Promise<OnboardingPreferences | null> {
+export async function loadOnboardingPreferences(
+  userId: string,
+): Promise<OnboardingPreferences | null> {
   if (!supabase) throw new Error("Supabase is not configured.")
-  const { data: settings, error: settingsError } = await supabase.rpc("scan_settings_get")
-  if (settingsError) throw new Error("Could not load filter settings. Check the local migration and retry.")
+  const { data: settings, error: settingsError } = await supabase.rpc(
+    "scan_settings_get",
+  )
+  if (settingsError) {
+    throw new Error(
+      "Could not load filter settings. Check the local migration and retry.",
+    )
+  }
   if (settings.revision > 0) {
-    const allow = readStoredKeywordRules(settings.rules.allow)
-    const block = readStoredKeywordRules(settings.rules.block)
     return {
       scanRevision: settings.revision,
-      includedTypes: allow.customKeywords,
-      includedCategoryGroups: allow.groups,
+      includedTypes: settings.semantic_preferences.include,
       selectedSenders: settings.rules.allow.senders,
       selectedDomains: settings.rules.allow.domains,
-      excludedTypes: block.customKeywords,
-      excludedCategoryGroups: block.groups,
+      excludedTypes: settings.semantic_preferences.exclude,
       excludedSenders: settings.rules.block.senders,
       excludedDomains: settings.rules.block.domains,
       excludedSubjects: settings.rules.block.subjectKeywords,
     }
   }
-  const { data, error } = await supabase.from("user_onboarding_preferences").select(preferenceColumns).eq("user_id", userId).maybeSingle()
+
+  const { data, error } = await supabase
+    .from("user_onboarding_preferences")
+    .select(preferenceColumns)
+    .eq("user_id", userId)
+    .maybeSingle()
   if (error) throw new Error("Could not load previous preferences.")
   return data ? { ...fromPreferenceRow(data), scanRevision: 0 } : null
 }
 
-export async function saveOnboardingPreferences(_userId: string, preferences: OnboardingPreferences): Promise<OnboardingPreferences> {
+export async function saveOnboardingPreferences(
+  _userId: string,
+  preferences: OnboardingPreferences,
+): Promise<OnboardingPreferences> {
   if (!supabase) throw new Error("Supabase is not configured.")
-  const { data: current, error: readError } = await supabase.rpc("scan_settings_get")
-  if (readError) throw new Error("Could not load scanning settings. Retry after checking the local migration.")
+  const { data: current, error: readError } = await supabase.rpc(
+    "scan_settings_get",
+  )
+  if (readError) {
+    throw new Error(
+      "Could not load scanning settings. Retry after checking the local migration.",
+    )
+  }
+  if (current.requires_review) {
+    throw new Error(
+      "Review previous phrase rules in Settings before saving onboarding preferences.",
+    )
+  }
   const { data, error } = await supabase.rpc("scan_settings_save", {
     p_revision: preferences.scanRevision ?? 0,
     p_rules: {
@@ -183,29 +199,38 @@ export async function saveOnboardingPreferences(_userId: string, preferences: On
         labels: [],
         senders: preferences.selectedSenders,
         domains: preferences.selectedDomains,
-        ...writeStoredKeywordRules(preferences.includedTypes, preferences.includedCategoryGroups),
+        keywords: [],
         subjectKeywords: [],
       },
       block: {
         labels: [],
         senders: preferences.excludedSenders,
         domains: preferences.excludedDomains,
-        ...writeStoredKeywordRules(preferences.excludedTypes, preferences.excludedCategoryGroups),
+        keywords: [],
         subjectKeywords: preferences.excludedSubjects,
       },
     },
-    p_context: current.context_limits, p_consent: current.consent, p_paused: current.paused,
+    p_semantic: {
+      include: preferences.includedTypes,
+      exclude: preferences.excludedTypes,
+    },
+    p_reviewed: false,
+    p_context: current.context_limits,
+    p_consent: current.consent,
+    p_paused: current.paused,
     p_disclosure: current.consent ? "gmail-scan-v1" : null,
   })
-  if (error) throw new Error(error.code === "PT409" ? "Settings changed in another window. Reload before saving again." : "Filters were not saved. Check your entries and retry.")
-  const allow = readStoredKeywordRules(data.rules.allow)
-  const block = readStoredKeywordRules(data.rules.block)
+  if (error) {
+    throw new Error(
+      error.code === "PT409"
+        ? "Settings changed in another window. Reload before saving again."
+        : "Filters were not saved. Check your entries and retry.",
+    )
+  }
   return {
     ...preferences,
     scanRevision: data.revision,
-    includedTypes: allow.customKeywords,
-    includedCategoryGroups: allow.groups,
-    excludedTypes: block.customKeywords,
-    excludedCategoryGroups: block.groups,
+    includedTypes: data.semantic_preferences.include,
+    excludedTypes: data.semantic_preferences.exclude,
   }
 }

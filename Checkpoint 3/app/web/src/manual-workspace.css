@@ -1,0 +1,6 @@
+.manual-workspace { min-height:100vh; }
+.manual-workspace table { width:100%; border-collapse:collapse; margin:1rem 0; }
+.manual-workspace th,.manual-workspace td { border:1px solid #c7d5da; padding:.75rem; text-align:left; vertical-align:top; white-space:pre-wrap; overflow-wrap:anywhere; }
+.manual-workspace th { font-weight:650; }
+.manual-workspace h2 { overflow-wrap:anywhere; }
+@media(max-width:600px){.manual-workspace th,.manual-workspace td{padding:.4rem;font-size:.85rem}}

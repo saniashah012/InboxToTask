@@ -2,25 +2,28 @@
 
 This implements local fixture extraction, persistent suggestions, and user review. It does not change the linked hosted project, replace its deployed Groq function, or configure hosted secrets. Do not run a remote push/deploy as part of the commands below. See [the storage contract](STORAGE.md) for the schema, limits, and integration boundaries.
 
-## What is implemented
+## Implementation and verification status
 
-- The Vite frontend can sign in with Google through Supabase Auth, restore a
-  session, sign out, and save/load each user's onboarding preferences. Sign-in
-  requests profile/email scopes only; it does not authorize Gmail.
-- `user_onboarding_preferences` stores the onboarding selection arrays with
-  owner-only RLS. Its migration and pgTAP isolation test are version controlled.
-- The frontend does not enable scanning after preference save. There is no real
-  Gmail OAuth/API integration yet; scanning remains unavailable until Gmail is
-  separately authorized and a later milestone implements it.
-- A baseline migration recreates the inspected task table for a fresh local database. `CREATE TABLE IF NOT EXISTS` preserves any existing table and rows; it is not a substitute for reconciling hosted migration history/schema drift.
-- Owner-scoped RLS permits browser reads; authenticated review RPCs control edits, approval, completion, undo, and deletion. Direct browser writes are denied. Anonymous users get no task access. Unnecessary privileges, including TRUNCATE, are removed.
-- Ownership, source-email associations, model proposals, confidence, IDs, and timestamps cannot be overwritten by a browser client. Backend service access remains privileged and must stay server-side.
-- A local `analysis_email` replacement requires a bearer session verified through Supabase Auth. Platform JWT verification is also enabled. A publishable key by itself is insufficient.
-- The endpoint accepts **only** `{"caseId":"E01"}` through `E20`. It rejects arbitrary email, identity, rules, model settings, and context supplied by callers. It uses bundled fictional CP2 input and the verified user's email as the inbox owner; it does not read Gmail.
-- The canonical Gemini pipeline performs filtering and strict schema/evidence/ownership validation. Successful transactional persistence returns `saved: true` and a receipt. Duplicate requests reuse saved output without inference.
-- Inference is disabled by default. No real keys were copied or printed. Error responses are fixed codes, with no raw provider logging.
+Read [current state](../../CURRENT_STATE.md) and [the storage contract](STORAGE.md).
+Source/semantic settings, bounded Gmail retrieval, canonical Gmail extraction,
+persistence/change review, and product workspace wiring exist in the working tree.
+The newest persistence/status migrations are pending application to the actual local
+database. Offline fictional/PGlite checks pass; actual new persistence/API/browser
+acceptance and live Gmail/model/OAuth lifecycle checks remain incomplete.
 
-Persistent budgets, shared rate limits, leases, normalized storage, review transactions, cleanup, and a localhost-only development review route are implemented. The main frontend now shares Supabase Auth and saves basic onboarding preferences. The protected backend Gmail connection lifecycle exists, disabled pending private configuration and live verification. Validated scanning consent/source rules, real Gmail retrieval, scan dispatch, semantic task-update matching, and connected Calendar authorization/execution remain. Keep the fixture endpoint disabled outside controlled local testing. Later extraction findings are recorded in [the extraction review report](../../docs/extraction-review-verification-2026-11-04.md).
+The original `analysis_email` endpoint remains E01-E20 fixture-only and disabled.
+The separate `gmail_scan` endpoint verifies Auth and accepts only initial/more mode:
+
+- `ENABLE_GMAIL_RETRIEVAL=true` permits the retrieval-only development mode.
+- `ENABLE_GMAIL_SCAN=true` selects persistent extraction/review mode, requiring
+  private Gemini configuration in addition to the Google connection configuration.
+- Both modes still require explicit saved consent, source permissions and an
+  unpaused connected account. Neither flag is enabled by documentation or tests.
+
+Do not enable either mode as a setup side effect. Use a dedicated account with
+fictional mail for separately controlled live acceptance. Keep credentials private.
+The product uses shared Google-only sign-in and a normal signed-in root workspace;
+`/storage` is development tooling and remains absent from production builds.
 
 ## Frontend Auth configuration
 

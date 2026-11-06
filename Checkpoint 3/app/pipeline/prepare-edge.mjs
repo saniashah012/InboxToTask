@@ -6,7 +6,7 @@ const target = new URL('supabase/functions/_shared/extraction/', root);
 for (const subdir of ['pipeline/', 'prompts/']) {
   await mkdir(new URL(subdir, target), { recursive: true });
 }
-for (const path of ['pipeline/core.mjs', 'pipeline/gemini.mjs',
+for (const path of ['pipeline/core.mjs', 'pipeline/gemini.mjs', 'pipeline/gmail-retrieval.mjs', 'pipeline/task-context.mjs', 'pipeline/gmail-processor.mjs',
   'pipeline/provider-schema.mjs', 'prompts/extraction.schema.mjs']) {
   await copyFile(new URL(path, root), new URL(path, target));
 }

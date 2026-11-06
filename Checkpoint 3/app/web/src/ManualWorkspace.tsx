@@ -4,6 +4,7 @@ import {loadStorageSnapshot,reviewStoredRecord,type Snapshot,type TaskFields} fr
 import {manualScan,manualScanStatus,resolveTaskChange,reviewTaskChange,scanStopMessage,type ScanStatus} from './manualScanAdapter'
 import ManualChangeResolver from './ManualChangeResolver'
 import GoogleConnectionPanel from './GoogleConnectionPanel'
+import TaskCalendarControl,{calendarReviewPending} from './TaskCalendarControl'
 import ScanSettingsPanel from './ScanSettingsPanel'
 import ExtractionReview from './ExtractionReview'
 import CalendarExport from './CalendarExportPanel'
@@ -24,7 +25,7 @@ function Fields({fields}:{fields:TaskFields}){
 export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;email:string;onSignOut:()=>void}){
  const [snapshot,setSnapshot]=useState<Snapshot>(empty),[status,setStatus]=useState<ScanStatus|null>(null)
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
- const [tab,setTab]=useState('review'),[exportId,setExportId]=useState<string|null>(null),[refresh,setRefresh]=useState(0),[sourceLinks,setSourceLinks]=useState<TaskSourceLink[]|null>([])
+ const [tab,setTab]=useState(()=>calendarReviewPending(userId)?'tasks':'review'),[exportId,setExportId]=useState<string|null>(null),[refresh,setRefresh]=useState(0),[sourceLinks,setSourceLinks]=useState<TaskSourceLink[]|null>([])
  const epoch=useRef(0),sequence=useRef(0)
  const reload=useCallback(async()=>{
   const current=epoch.current,request=++sequence.current
@@ -104,7 +105,7 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
     <div className="storage-actions"><button disabled={busy||!open||!!stale||!quote?.quote} onClick={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'approve'),'Task change approved. No Calendar write was authorized.')}>{c.kind==='cancel'?'Approve cancellation':'Approve edit'}</button><button disabled={busy} onClick={()=>void perform(()=>reviewTaskChange(c.id,c.revision,'dismiss'),'Proposal dismissed.')}>Dismiss</button></div>
    </article>})}
   </section>}
-  {tab==='tasks'&&<section aria-label="Accepted tasks">{!tasks.length&&<p>No accepted tasks yet.</p>}{tasks.map(t=><article className="storage-panel" key={t.id}><h2>{t.accepted_fields.action}</h2><p>{t.cancelled_at?'Cancelled':t.status} · revision {t.revision}</p><Fields fields={t.accepted_fields}/><TaskSourceEmails email={email} links={sourceLinks&&sourceLinks.filter(l=>l.taskId===t.id)}/>{!t.cancelled_at&&<button disabled={busy} onClick={()=>void perform(()=>reviewStoredRecord('task',t.id,t.status==='completed'?'undo':'complete',t.revision),'Task status saved.')}>{t.status==='completed'?'Undo completion':'Complete task'}</button>}{!t.cancelled_at&&['approved','completed'].includes(t.status)&&<button aria-expanded={exportId===t.id} onClick={()=>setExportId(exportId===t.id?null:t.id)}>Export calendar file</button>}{exportId===t.id&&!t.cancelled_at&&['approved','completed'].includes(t.status)&&<CalendarExport key={`${t.id}-${t.revision}`} task={t} fields={t.accepted_fields} close={()=>setExportId(null)}/>}</article>)}</section>}
+  {tab==='tasks'&&<section aria-label="Accepted tasks">{!tasks.length&&<p>No accepted tasks yet.</p>}{tasks.map(t=><article className="storage-panel" key={t.id}><h2>{t.accepted_fields.action}</h2><p>{t.cancelled_at?'Cancelled':t.status} · revision {t.revision}</p><Fields fields={t.accepted_fields}/><TaskSourceEmails email={email} links={sourceLinks&&sourceLinks.filter(l=>l.taskId===t.id)}/><TaskCalendarControl key={`${userId}-${t.id}`} task={t} userId={userId}/>{!t.cancelled_at&&<button disabled={busy} onClick={()=>void perform(()=>reviewStoredRecord('task',t.id,t.status==='completed'?'undo':'complete',t.revision),'Task status saved.')}>{t.status==='completed'?'Undo completion':'Complete task'}</button>}{!t.cancelled_at&&['approved','completed'].includes(t.status)&&<button aria-expanded={exportId===t.id} onClick={()=>setExportId(exportId===t.id?null:t.id)}>Export calendar file</button>}{exportId===t.id&&!t.cancelled_at&&['approved','completed'].includes(t.status)&&<CalendarExport key={`${t.id}-${t.revision}`} task={t} fields={t.accepted_fields} close={()=>setExportId(null)}/>}</article>)}</section>}
   {tab==='information'&&<section aria-label="Informational results">{!information.length&&!loading&&<p>No informational summaries are saved.</p>}{information.map(e=><article className="storage-panel" key={e.id}><h2>{e.category}</h2><p>{e.summary}</p><ExtractionReview extraction={e}/></article>)}</section>}
  </main>
 }

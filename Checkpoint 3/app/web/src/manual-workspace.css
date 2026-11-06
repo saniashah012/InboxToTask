@@ -10,3 +10,7 @@
 .manual-resolver textarea { min-height:5rem; }
 .manual-resolver-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(10rem,1fr)); gap:.75rem; }
 @media(max-width:600px){.manual-workspace th,.manual-workspace td{padding:.4rem;font-size:.85rem}}
+.task-calendar-dialog { width: min(36rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; margin: auto; padding: 1.5rem; border: 1px solid #bbb; border-radius: .5rem; }
+.task-calendar-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.task-calendar-dialog fieldset { display: grid; gap: .75rem; padding: 1rem; }
+.task-calendar-dialog label { display: grid; gap: .25rem; }

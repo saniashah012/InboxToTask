@@ -4,6 +4,8 @@ Updated November 5, 2026, after live local manual-scan testing. This is the resu
 index, not a claim that services are running. Check Git status and local
 runtime/migration state before new work.
 
+**Calendar:** on branch `mzheng/calendar-rebase` only, disabled by default, with no real writes yet. Its migration is `20261106050000`, not applied locally or on hosted. See the [Calendar plan](docs/calendar-integration-2026-11-05.md).
+
 ## Read in this order
 
 1. [Repository instructions](../AGENTS.md) and the relevant scoped instructions.
@@ -63,7 +65,7 @@ The app does not fetch or display email bodies on demand.
   November 6 at 03:26 UTC; see the [rollout record](docs/hosted-backup-verification-2026-11-06.md).
   Scanning is not deployed or enabled there. Signed-in hosted checks remain open.
 - **Not on hosted:** `20261106010000`, `20261106030000`, `20261106040000`, and Calendar's
-  `20261106020000`. The product page calls the functions in `010000` and `030000`, so roll them
+  `20261106050000`. The product page calls the functions in `010000` and `030000`, so roll them
   out, in filename order, before or together with merging this branch.
   [Team handoff](../TEAM_HANDOFF.md) has the list.
 - `ENABLE_GMAIL_SCAN=false` again after live testing. A Gemini key remains in the private local

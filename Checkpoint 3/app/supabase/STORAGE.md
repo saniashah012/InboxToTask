@@ -20,6 +20,7 @@ Apply migrations in timestamp order. The original seven establish legacy tasks, 
 | `tasks`, `storage_task_sources` | Accepted values, completion state, and provenance |
 | `storage_waiting_for`, `storage_followups` | External promises and user-confirmed reminder dates |
 | `storage_calendar_operations` | Separate preview/approval records; no Calendar API execution |
+| `private.calendar_events` | New optional Calendar execution receipts; service-only writes and owner-scoped `calendar_event_status` reads; requires `20261106050000` |
 | Private jobs, attempts, usage, provider limits, suppressions | Lease fencing, budget accounting, retry state, deletion protection |
 
 Service-only public RPCs: `storage_claim`, `storage_finish`, `storage_fail`, `storage_propose_update`, and `storage_cleanup`. `storage_receipt` is an internal helper. Authenticated users call `storage_action` and `storage_activity`; identity comes from `auth.uid()`. All public wrappers use fixed search paths and scoped grants. Browser table reads use owner RLS; browser table mutations and private-table reads are denied.

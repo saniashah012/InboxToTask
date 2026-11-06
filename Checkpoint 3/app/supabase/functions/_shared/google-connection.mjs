@@ -1,5 +1,6 @@
 // No provider response bodies, credentials, codes, or state values are logged.
 export const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events.owned';
 const SCOPES = ['openid', 'email', GMAIL_SCOPE];
 const fail = (code) => Object.assign(new Error(code), { code });
 const bytes = (s) => new TextEncoder().encode(s);
@@ -69,11 +70,11 @@ export function createGoogleProvider({ clientId, clientSecret, callbackUrl, fetc
       scopes:typeof data.scope==='string' ? data.scope.split(/\s+/).filter(Boolean) : [] };
   };
   return {
-    authorization(state, verifierChallenge, email) {
+    authorization(state, verifierChallenge, email, calendar = false) {
       const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       url.search = new URLSearchParams({client_id:clientId,redirect_uri:callbackUrl,response_type:'code',
-        scope:SCOPES.join(' '),state,access_type:'offline',prompt:'consent select_account',
-        include_granted_scopes:'false',login_hint:email,code_challenge:verifierChallenge,code_challenge_method:'S256'}).toString();
+        scope:[...SCOPES,...(calendar ? [CALENDAR_SCOPE] : [])].join(' '),state,access_type:'offline',prompt:'consent select_account',
+        include_granted_scopes:'true',login_hint:email,code_challenge:verifierChallenge,code_challenge_method:'S256'}).toString();
       return url.href;
     },
     exchange: (code, verifier) => requestToken({grant_type:'authorization_code',code,code_verifier:verifier,redirect_uri:callbackUrl}),
@@ -106,9 +107,11 @@ export function createGoogleProvider({ clientId, clientSecret, callbackUrl, fetc
 export function createGoogleConnection({ rpc, cipher, provider }) {
   // For trusted backend consumers only. Never serialize the returned token into
   // an HTTP response. The DB lease prevents concurrent refresh token races.
-  const accessToken = async (user) => {
-    const claim = await rpc(user,'refresh_claim');
+  const accessToken = async (user, requiredScope = GMAIL_SCOPE) => {
+    const claim = await rpc(user,'refresh_claim',requiredScope===GMAIL_SCOPE?{}:{requiredScope});
+    if (claim.state==='scope_required') throw fail('GOOGLE_CALENDAR_SCOPE_REQUIRED');
     if (!['ready','refresh'].includes(claim.state)) throw fail(claim.state==='reconnect_required' ? 'GOOGLE_RECONNECT_REQUIRED' : 'GOOGLE_CONNECTION_BUSY');
+    if (requiredScope !== GMAIL_SCOPE && !claim.scopes?.includes(requiredScope)) throw fail('GOOGLE_CALENDAR_SCOPE_REQUIRED');
     const saved = await cipher.open(user,'credentials',claim.credentials);
     if (claim.state==='ready') return saved.accessToken;
     let tokens;
@@ -121,24 +124,26 @@ export function createGoogleConnection({ rpc, cipher, provider }) {
       throw fail(error.code==='GOOGLE_REVOKED'?'GOOGLE_RECONNECT_REQUIRED':'GOOGLE_PROVIDER_UNAVAILABLE');
     }
     const encrypted = await cipher.seal(user,'credentials',{accessToken:tokens.accessToken,refreshToken:tokens.refreshToken ?? saved.refreshToken});
-    const result=await rpc(user,'refresh_finish',{generation:claim.generation,lease:claim.lease,credentials:encrypted,expiresAt:tokens.expiresAt});
+    const result=await rpc(user,'refresh_finish',{generation:claim.generation,lease:claim.lease,credentials:encrypted,expiresAt:tokens.expiresAt,...(tokens.scopes.length?{scopes:tokens.scopes}:{})});
     if(result.state!=='ready') throw fail('GOOGLE_CONNECTION_STALE');
+    if (requiredScope!==GMAIL_SCOPE && tokens.scopes.length && !tokens.scopes.includes(requiredScope)) throw fail('GOOGLE_CALENDAR_SCOPE_REQUIRED');
     return tokens.accessToken;
   };
   return {
     accessToken,
-    async start(user) {
+    async start(user, calendar = false) {
       const state=random(), verifier=random();
-      const result=await rpc(user.id,'start',{hash:await hash(state),email:user.email,
+      const result=await rpc(user.id,'start',{hash:await hash(state),email:user.email,calendar,
         verifier:await cipher.seal(user.id,'verifier',{verifier})});
       if(result.state!=='started') throw fail('GOOGLE_CONNECTION_BUSY');
-      return {authorizationUrl:provider.authorization(state,await challenge(verifier),user.email)};
+      return {authorizationUrl:provider.authorization(state,await challenge(verifier),user.email,calendar)};
     },
     async callback(params) {
       const state=params.get('state');
       if (!state || !/^[A-Za-z0-9_-]{43}$/.test(state) || params.getAll('state').length!==1) throw fail('GOOGLE_INVALID_STATE');
       const pending=await rpc(null,'consume',{hash:await hash(state)});
       if(pending.state!=='consumed') throw fail('GOOGLE_INVALID_STATE');
+      try {
       if(params.has('error')) throw fail('GOOGLE_CONSENT_DENIED');
       const code=params.get('code');
       if(!code || code.length>4096 || params.getAll('code').length!==1) throw fail('GOOGLE_INVALID_STATE');
@@ -149,11 +154,21 @@ export function createGoogleConnection({ rpc, cipher, provider }) {
       if(identity.email.toLowerCase()!==pending.email.toLowerCase()
         || (pending.subject && pending.subject!==identity.subject)) throw fail('GOOGLE_ACCOUNT_MISMATCH');
       if(!tokens.scopes.includes(GMAIL_SCOPE)) throw fail('GOOGLE_SCOPE_REQUIRED');
-      if(!tokens.refreshToken) throw fail('GOOGLE_OFFLINE_ACCESS_REQUIRED');
-      const credentials=await cipher.seal(pending.userId,'credentials',{accessToken:tokens.accessToken,refreshToken:tokens.refreshToken});
+      if ((pending.calendar || pending.scopes?.includes(CALENDAR_SCOPE)) && !tokens.scopes.includes(CALENDAR_SCOPE)) throw fail('GOOGLE_CALENDAR_SCOPE_REQUIRED');
+      // Reauthorization often omits the refresh token. Reuse only credentials
+      // bound to the same verified account and fenced OAuth generation.
+      const previous = pending.credentials ? await cipher.open(pending.userId,'credentials',pending.credentials) : null;
+      const refreshToken = tokens.refreshToken ?? previous?.refreshToken;
+      if(!refreshToken) throw fail('GOOGLE_OFFLINE_ACCESS_REQUIRED');
+      const credentials=await cipher.seal(pending.userId,'credentials',{accessToken:tokens.accessToken,refreshToken});
       const result=await rpc(pending.userId,'finish',{generation:pending.generation,...identity,
         scopes:tokens.scopes,expiresAt:tokens.expiresAt,credentials});
       if(result.state!=='connected') throw fail('GOOGLE_CONNECTION_STALE');
+      } finally {
+        // Release the short callback/refresh exclusion even after denied consent.
+        // A crashed callback expires automatically; generations fence late release.
+        try { await rpc(pending.userId,'oauth_release',{generation:pending.generation}); } catch { /* bounded lease */ }
+      }
     },
     async disconnect(user) {
       const claim=await rpc(user,'disconnect');
@@ -201,10 +216,11 @@ export function createGoogleHandler({ connection, verifyUser, allowedOrigins=/**
         if(size>256) { await reader.cancel(); throw fail('INVALID_REQUEST'); } chunks.push(value); }
       } finally { reader.releaseLock(); }
       body=JSON.parse(new TextDecoder().decode(Uint8Array.from(chunks.flatMap((v)=>Array.from(v)))));
-      if(!body || Array.isArray(body) || Object.keys(body).length!==1 || !['connect','check','disconnect'].includes(body.action)) throw fail('INVALID_REQUEST');
+      if(!body || Array.isArray(body) || Object.keys(body).length!==1 || !['connect','connect_calendar','check','disconnect'].includes(body.action)) throw fail('INVALID_REQUEST');
     } catch { return json(400,{error:'INVALID_REQUEST'}); }
     try {
       if(body.action==='connect') return json(200,await connection.start(user));
+      if(body.action==='connect_calendar') return json(200,await connection.start(user,true));
       if(body.action==='disconnect') { await connection.disconnect(user.id); return json(200,{state:'disconnected',scanningEnabled:false}); }
       await connection.accessToken(user.id);
       return json(200,{state:'connected',scanningEnabled:false});

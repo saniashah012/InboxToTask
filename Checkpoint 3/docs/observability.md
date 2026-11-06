@@ -27,7 +27,7 @@ Updated November 5, 2026. The system records latency boundaries, token accountin
 
 ## Token usage and cost
 
-Before each model call, the backend reserves an estimate: the UTF-8 bytes of the input, prompt and schema, plus `maxOutputTokens`, currently 8,192 ([processor](../app/pipeline/gmail-processor.mjs)). The value differs per message. It is deliberately high and is not a tokenizer count.
+Before each model call, the backend reserves an estimate: the UTF-8 bytes of the input, prompt and schema, plus `maxOutputTokens`, currently 8,192 ([processor](../app/pipeline/gmail-processor.mjs)). The estimate differs per message. It is deliberately high and is not a tokenizer count.
 
 | Outcome | Charged to the daily budget | Evidence |
 | --- | --- | --- |
@@ -61,7 +61,7 @@ Backend responses use fixed codes. Raw provider text never reaches the response,
 | One message, batch continues | `GMAIL_BODY_EMPTY`, `GMAIL_BODY_LIMIT`, `GMAIL_BODY_ENCODING`, `GMAIL_EXTRACTION_FAILED`, `MODEL_INPUT_TOO_LARGE`, `STORAGE_RETRY_LATER`, `STORAGE_ATTEMPT_LIMIT` and similar | Counted as failed, retried up to three times |
 | Attempt row | `safe_error`: `rate_limited`, `unavailable`, `invalid_output` or `failed` | Operator only |
 
-**Trade-off:** the Gmail processor records every non-rate-limit failure as `unavailable` and `GMAIL_EXTRACTION_FAILED`, so a schema or evidence rejection cannot be told apart from an outage. Finding F1 in [UC8](use-cases.md#findings-from-the-live-run) was diagnosed by replaying the fictional message against the model in a throwaway script without touching the database.
+**Trade-off:** the Gmail processor records every non-rate-limit failure as `unavailable` and `GMAIL_EXTRACTION_FAILED`, so the records do not distinguish a schema or evidence rejection from an outage. Finding F1 in [UC8](use-cases.md#findings-from-the-live-run) was diagnosed by replaying the fictional message against the model in a throwaway script without touching the database.
 
 ## No content in logs
 

@@ -1,8 +1,8 @@
 # Run and use InboxToTask locally (Windows)
 
-A short teammate guide. It complements [INSTALL.md](../app/INSTALL.md), which stays the full reference, and Google Cloud setup lives in [GOOGLE_AUTH.md](../app/supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup). It was written from the manifests, templates and UI source. It has **not** been run start to finish on a clean machine, so tell the project owner if a step fails.
+This short teammate guide complements [INSTALL.md](../app/INSTALL.md), the full reference. Google Cloud setup is in [GOOGLE_AUTH.md](../app/supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup). It was written from the manifests, templates and UI source. It has **not** been run start to finish on a clean machine, so tell the project owner if a step fails.
 
-Real Gmail connect and scan work **only locally**. The hosted site cannot do either.
+Real Gmail connection and scanning work **only locally**. The hosted site cannot do either.
 
 ## 1. What you need first
 
@@ -11,7 +11,7 @@ Real Gmail connect and scan work **only locally**. The hosted site cannot do eit
 | Docker Desktop | Linux containers, running (the local database and Edge runtime use it) |
 | Node.js | 22 or later (`engines` in `app/package.json`; `web/.mise.toml` pins 22) |
 | pnpm | 10.34.3, pinned in `web/package.json`. Use `corepack pnpm ...`; do not install pnpm separately |
-| Repo access | A clone of the repository on the branch the project owner names (PR 22 is `mzheng/gmail-scan-hardening`) |
+| Repo access | A clone of the repository on `main`, which has the Gmail scan work (PR #22 is merged) |
 | Google test user | The project owner must add your **dedicated test Gmail address** under Test users in **both** Google Cloud projects (sign-in and Gmail) |
 
 **Private values you must get from the project owner through a private channel** (never chat, email or Git). Names only here:
@@ -22,11 +22,11 @@ Real Gmail connect and scan work **only locally**. The hosted site cannot do eit
 | `Checkpoint 3/app/supabase/functions/.env` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_KEYS`, `GEMINI_API_KEY` |
 | `Checkpoint 3/app/web/.env` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. These are not secret and come from your own local stack in step 6 |
 
-Also set in `supabase/functions/.env`: `GOOGLE_TOKEN_ACTIVE_KEY=v1`, `ENABLE_GOOGLE_CONNECTION=true`, and keep the template values for `GOOGLE_CALLBACK_URL`, `GOOGLE_RETURN_URL` (`http://127.0.0.1:5173/`) and `APP_ORIGINS`. Do not generate a new `GOOGLE_TOKEN_KEYS` if the owner gives you one. Or create your own Google Cloud projects by following GOOGLE_AUTH.md; then you need no one's secrets except your own.
+Also set in `supabase/functions/.env`: `GOOGLE_TOKEN_ACTIVE_KEY=v1`, `ENABLE_GOOGLE_CONNECTION=true`, and keep the template values for `GOOGLE_CALLBACK_URL`, `GOOGLE_RETURN_URL` (`http://127.0.0.1:5173/`) and `APP_ORIGINS`. Do not generate a new `GOOGLE_TOKEN_KEYS` if the owner gives you one. You can also create your own Google Cloud projects by following GOOGLE_AUTH.md; then you need only your own secrets.
 
 ## 2. Setup
 
-Use PowerShell. Run each block from the folder named. Quote paths that contain spaces.
+Use PowerShell and run each block from the named folder. Quote paths that contain spaces.
 
 1. **Check ports first.** Nothing else should be using these (a result means something is already listening; stop and ask before continuing):
 
@@ -125,4 +125,6 @@ Use only the dedicated test account.
 - **Google Calendar:** planned for CP4. ICS export is the current path.
 - **Real data in the designed dashboard:** not connected. The workspace page above is the real-data surface.
 - **Gmail connect and scan on the hosted site:** the Gmail functions are not deployed there.
-- **Onboarding:** on a separate branch under test; do not expect it in your build.
+- **Onboarding:** on the separate branch `claude/onboarding-connect-0e9360`, not merged; do not expect it in your build.
+- **Waiting For view in the workspace:** not built. Those records are saved but not displayed.
+- **Account deletion:** not built.

@@ -1,6 +1,6 @@
 # InboxToTask architecture
 
-Updated November 5, 2026. This describes the code in this repository as of this update and how it has been verified. Results are in [use cases](use-cases.md); limits are in [safety and privacy](safety_privacy.md) and [observability](observability.md).
+Updated November 5, 2026. This describes the code in this repository and its verification as of this update. Results are in [use cases](use-cases.md); limits are in [safety and privacy](safety_privacy.md) and [observability](observability.md).
 
 ## Status at a glance
 
@@ -8,15 +8,15 @@ Updated November 5, 2026. This describes the code in this repository as of this 
 | --- | --- | --- |
 | Manual Gmail scan → Gemini → storage → review | Works locally | Live local on fictional mail ([UC8](use-cases.md#uc8-real-gmail-to-review-workflow)) and automated tests |
 | Signed-in product page | Separate `ManualWorkspace` page ([App.tsx line 565](../app/web/src/App.tsx)) | Seeded local browser and live local |
-| Designed dashboard and onboarding | **Not yet connected to real data.** Reachable only as a fictional preview | Code |
+| Designed dashboard and onboarding | **Not yet connected to real data.** Reachable only as a fictional preview. Onboarding work is on `claude/onboarding-connect-0e9360` (`91234dd`), not merged | Code |
 | Automatic scheduled scans | **Not implemented** | Code: no schedule exists |
-| Hosted (Vercel and hosted Supabase) | **Gmail scanning not deployed; signed-in checks partial** | Reported by the hosted session: 20 ledger versions through `20261106040000`, applied 03:50 UTC November 6. Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip. Vercel's production branch is `main`, per Sania. See also [current state](../CURRENT_STATE.md) |
-| Google Calendar event creation | **Postponed to CP4** by user decision, and not in this branch. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is local only; Sania's original branch is on origin | Offline tests passed per the rebase session (reported); no live test |
+| Hosted (Vercel and hosted Supabase) | **Gmail scanning not deployed; signed-in checks partial** | Reported by the hosted session: 20 ledger versions through `20261106040000`, applied 03:50 UTC November 6. Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Vercel's production branch is `main`, per Sania. PR #22 merged there at `59461b6`; CI passed on that commit and production returned a new build. See also [current state](../CURRENT_STATE.md) |
+| Google Calendar event creation | **Postponed to CP4** by user decision, and not on `main`. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is on GitHub, not merged, and its recorded OAuth reconnect failures block release; Sania's original branch is on origin | Offline tests passed per the rebase session (reported); no live test |
 | ICS file export | Implemented on accepted tasks in the workspace and in the `/storage` development tester | Automated tests and an isolated browser check of the form. Tester-reported: one all-day and one timed import checked in Google Calendar. Duplicate imports untested |
 
 ## End-to-end diagram
 
-Solid lines exist in this branch. Dotted lines are off by default or, where labeled, not in this branch. There is **no vector store**, embedding index or autonomous agent.
+Solid lines exist on `main`. Dotted lines are off by default or, where labeled, not on `main`. There is **no vector store**, embedding index or autonomous agent.
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ flowchart LR
     Gemini["Gemini generateContent<br/>gemini-3.8-flash by default"]
   end
 
-  subgraph Absent["Not in this branch"]
+  subgraph Absent["Not on main"]
     Scheduler["PLANNED: scan scheduler<br/>Not implemented"]
     Calendar["CP4, UNMERGED: Google Calendar events<br/>Separate branches, no live test"]
   end
@@ -109,7 +109,7 @@ sequenceDiagram
   UI->>DB: Review RPC with revision check, no model call
 ```
 
-The handler rechecks the scan lease and saved permission before each external request ([retrieval](../app/pipeline/gmail-retrieval.mjs), [processor](../app/pipeline/gmail-processor.mjs), [endpoint](../app/supabase/functions/gmail_scan/index.ts)). If work remains, the user clicks **Scan more** after the 60-second cooldown. Nothing continues on its own, and results appear when a batch finishes: there is no streaming.
+The handler rechecks the scan lease and saved permission before each external request ([retrieval](../app/pipeline/gmail-retrieval.mjs), [processor](../app/pipeline/gmail-processor.mjs), [endpoint](../app/supabase/functions/gmail_scan/index.ts)). If work remains, the user clicks **Scan more** after the 60-second cooldown. Nothing continues on its own. Results appear when a batch finishes; there is no streaming.
 
 ## Components
 
@@ -154,7 +154,7 @@ Details and tests are in [safety and privacy](safety_privacy.md).
 
 ## Model configuration
 
-[Model settings](../app/prompts/model-settings.json) select `gemini-3.8-flash`, LOW thinking, an 8,192 output-token cap and a 60-second timeout. Gmail processing forces one provider attempt per claim. A server-side `GEMINI_MODEL` setting can override the model, and there is no silent fallback. Prompts and schema are canonical in [prompts](../app/prompts/); `npm.cmd run supabase:prepare` copies them into the ignored Edge bundle.
+The system prompt uses one-line rule examples. Reference few-shot examples are stored in `app/prompts/few-shot/`, but the running app does not load them, and they have not been evaluated for accuracy. [Model settings](../app/prompts/model-settings.json) select `gemini-3.8-flash`, LOW thinking, an 8,192 output-token cap and a 60-second timeout. Gmail processing forces one provider attempt per claim. A server-side `GEMINI_MODEL` setting can override the model, and there is no silent fallback. Prompts and schema are canonical in [prompts](../app/prompts/); `npm.cmd run supabase:prepare` copies them into the ignored Edge bundle.
 
 ## Design decisions
 
@@ -169,4 +169,4 @@ Details and tests are in [safety and privacy](safety_privacy.md).
 
 ## Not yet built
 
-Each item below is planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes (postponed to CP4), a complete account-deletion flow, and a verified hosted rollout.
+The following items are planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, a Waiting For view in the workspace (records are saved but not displayed), scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes (postponed to CP4), a complete account-deletion flow, and a verified hosted rollout.

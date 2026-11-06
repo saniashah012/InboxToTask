@@ -1,6 +1,6 @@
 # InboxToTask Gmail scanning handoff
 
-Updated November 5, 2026 (Central), after live local manual-scan testing. Recheck Git,
+Updated November 5, 2026 (Central), after live local manual-scan testing and the merge of PR #22. Recheck Git,
 PR and runtime state before acting; this describes that moment, not today. Read
 [AGENTS.md](AGENTS.md), then [current state](<Checkpoint 3/CURRENT_STATE.md>), then this.
 
@@ -16,12 +16,12 @@ suppress raw errors: a parser error once printed a secret (see Security below).
 
 | Item | State |
 | --- | --- |
-| `main` | `e2b0009`, does not have this work |
-| [PR #22](https://github.com/saniashah012/InboxToTask/pull/22) `mzheng/gmail-scan-hardening` | Open and **not merged** when last checked; recheck its head and CI |
+| `main` | Has this work: PR #22 merged at `59461b6`, about 11:01 PM Central November 5. CI passed on it and production returned a new build |
+| [PR #22](https://github.com/saniashah012/InboxToTask/pull/22) `mzheng/gmail-scan-hardening` | **Merged** by the user's decision. Instant Rollback target should be `e2b0009`; a rollback does not undo migrations |
 | `feadf66` | Live-test fixes, manual resolution of ambiguous updates, test log |
 | `cef7f06` | Source-email links from another session, kept as a separate commit by user request |
-| PR #20 (Sania, chips) | Open, separate. Both it and PR #22 change `STORAGE.md` |
-| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is local-only at `da4417d`, with its migration renamed `20261106050000`; offline tests reported passing, no live test |
+| PR #20 (Sania, chips) | Separate; recheck its state. Both it and PR #22 change `STORAGE.md` |
+| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is on GitHub at `da4417d`, not merged, with its migration renamed `20261106050000`; offline tests reported passing, no live test, and its recorded OAuth reconnect failures block release |
 
 **Ownership right now:** the "Gmail features in Figma prototype" session coordinates hosted changes and owns
 `CURRENT_STATE.md` and the hosted records. The "CP3 progress check" session owns `docs/demo-script.md` and tonight's
@@ -33,7 +33,7 @@ Per the session coordinating hosted (reported, not checked here), hosted has all
 through `20261106040000`, applied by 03:50 UTC on November 6. The Gmail functions are not deployed there, so
 connecting Gmail and scanning work only locally. Sania reports hosted preview checks passed on `ffa915a` for settings
 save/reload, sign-out/in, stale-tab rejection and two-account isolation in the tested flows; they do not cover
-onboarding, chips, RLS penetration, review, manual resolution or source links. Recheck before relying on this. Merging does not apply migrations, and Vercel production deploys
+onboarding, chips, RLS penetration, review, manual resolution or source links. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Recheck before relying on this. Merging does not apply migrations, and Vercel production deploys
 from `main` per Sania. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy `gmail_scan` as part of this.
 
 1. `20261105200000_source_semantic_contract.sql`
@@ -46,12 +46,12 @@ from `main` per Sania. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy 
 8. `20261106030000_gmail_task_source_links.sql`
 9. `20261106040000_gmail_token_recheck.sql`
 
-Calendar's migration is not on hosted or in this branch. It redefines `google_connection_service`, so
+Calendar's migration is not on hosted or on `main`. It redefines `google_connection_service`, so
 review that against the Gmail flow when Calendar resumes in CP4.
 
 ## Local runtime
 - All nine migrations above are applied locally without reset. Calendar's is not.
-- `ENABLE_GMAIL_SCAN=false`. A Gemini key remains in private `app/supabase/functions/.env`.
+- `ENABLE_GMAIL_SCAN` was turned on the night of November 5 for the local demo; no scan has been confirmed since. Turn it off after the demo. A Gemini key remains in private `app/supabase/functions/.env`.
   `GOOGLE_RETURN_URL` points at the product root.
 - Vite and `functions serve` were started from the previous session as background tasks. They
   may be gone; check ports 5173 and 54321 before starting duplicates.
@@ -91,7 +91,7 @@ context fix and the status recheck have automated coverage only. No scan ran aft
 One tester and about 15 emails do not measure extraction accuracy.
 
 ## Open findings
-None block PR #22. Only the first two need SQL.
+None blocked PR #22. Only the first two need SQL.
 - "Last successful batch" does not update when a batch stops at the model-call limit.
 - New-task option for an ambiguous update whose task is not listed (suggested, not requested).
 - Every normal reply is marked for review, because quote removal adds a warning.
@@ -102,22 +102,21 @@ None block PR #22. Only the first two need SQL.
 - Two calls per batch and 20 requests per day are too low for real use.
 
 ## Next work, in order
-1. Merge PR #22 when the team is ready. Vercel production is `main` per Sania, and Instant Rollback does not undo migrations.
+1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code. Vercel production is `main` per Sania, so every merge deploys.
 2. In CP4, resume Calendar from `mzheng/calendar-rebase`: review the shared OAuth changes, then after
    reconnecting, retest revocation (L17), refused refresh (L20) and a normal scan.
-3. A separate session may land onboarding work. Until confirmed merged, treat onboarding as not connected.
+3. Onboarding work is on `claude/onboarding-connect-0e9360` at `91234dd`, not merged. Onboarding preview `91234dd` is ready, with its remaining checks still pending. Until confirmed merged, treat onboarding as not connected.
 4. **Phase 5:** connect real data to the designed dashboard. `App.tsx` line 565 sends every signed-in
    user to the plain `ManualWorkspace`, so the designed onboarding and PR #20's chips cannot be reached.
    Their save path already uses `scan_settings_save`. Coordinate with PR #20 and Calendar, which both
    touch these files. Do not start until the user says so.
-5. Finish the presentation: `docs/InboxToTask-CP3-presentation-draft.pptx` is a draft. Remove DRAFT, assign
-   speakers, rehearse, and reconcile it with `docs/demo-script.md` (another session's file). Graded docs were
-   updated in `fe4a654`; INSTALL has not been run on a clean machine.
+5. Finish the presentation: `docs/InboxToTask-CP3-presentation-draft.pptx` follows `docs/demo-script.md`. Remove
+   DRAFT, assign speakers and rehearse. INSTALL has not been run on a clean machine.
 
 ## Deadline and demo
-Repo reported due Nov 5 at 11:30 PM Central, demo Friday morning. `main` lacks this work until PR #22 merges. The test account's local daily limit was raised from 20 to 50 for the demo (16 used at last check for UTC day
+Repo reported due Nov 5 at 11:30 PM Central, demo Friday morning. `main` has this work. The test account's local daily limit was raised from 20 to 50 for the demo (16 used at last check for UTC day
 2026-11-06, which resets at 6 PM Central Friday and is shared by rehearsal and demo). Demo setup needs `ENABLE_GMAIL_SCAN=true`, a functions
-restart and a Gmail reconnect on the test account; turn the flag off afterward. A scan after unpausing has not
+restart and a connected test account (reconnect if the status says so); turn the flag off afterward. A scan after unpausing has not
 been run. The tester's personal address can appear on screen as the allowed sender.
 
 ## Testing notes

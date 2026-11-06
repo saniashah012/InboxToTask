@@ -14,6 +14,7 @@ local Auth/PostgREST and a seeded browser check of the signed-in workspace. Phas
 not complete: real data is not wired into the designed dashboard. Phase 6 ran locally with
 real Gmail and Gemini calls on fictional mail, with results and cases not run live in
 [UC8](docs/use-cases.md#uc8-real-gmail-to-review-workflow). Phase 7 has not started.
+PR #22 merged this work to `main` at `59461b6` on November 5.
 
 All Gmail migrations, including the
 [hardening migration](app/supabase/migrations/20261106000000_gmail_scan_hardening.sql),
@@ -29,7 +30,7 @@ messages within 90 days; existing saved context is preserved. Incompatible phras
 rules require explicit review and renewed consent.
 
 Next: connect real data to the designed dashboard and onboarding, and extend signed-in hosted
-checks. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip.
+checks. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed.
 Automatic scans are not implemented. Calendar events are postponed to CP4 by user decision.
 
 Earlier setup evidence remains in [Google Auth verification](docs/google-auth-verification-2026-11-05.md),
@@ -397,7 +398,7 @@ successful by the user; the remaining live checklist and hosted setup remain.
 
 ### CP3.5 Approval, calendars, and lifecycle
 
-Connected Calendar items below are postponed to CP4 by user decision. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is local only, with offline tests reported passing and no live test. Sania's original branch is on origin.
+Connected Calendar items below are postponed to CP4 by user decision. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is on GitHub and not merged, with offline tests reported passing and no live test. Its recorded OAuth reconnect failures block release. Sania's original branch is on origin.
 
 - [ ] CP4: set the supported Calendar destination model and least necessary scopes; implement optional onboarding connection and later connection from Add to Calendar/settings. Calendar connection may not be required for sign-in, Gmail processing, or task approval.
 - [ ] Keep task approval separate from calendar authorization; enforce approval server-side. Review RPCs and separate calendar approval records exist; the future Calendar executor must enforce these approvals before external writes.
@@ -441,6 +442,8 @@ CP3 exit condition: another teammate can reproduce setup, connect a real test ac
 The CP4 instructions have not been supplied. This is a provisional plan based on CP3's Track A/Track B preview and CP2's baseline requirement; align it with the official CP4 rubric when available.
 
 - [ ] Obtain CP4 requirements; select Track A user study or Track B algorithmic benchmark and set success thresholds before final testing.
+- [ ] Unify the workspace's **Scan past seven days** and **Scan more** into one scan button. Keep the existing behavior behind it: a bounded batch, visible backlog, the cooldown, and permission checks. Decide how the user approves continuing a backlog, since the plan currently requires a separate "Scan more" approval.
+- [ ] Evaluate the stored few-shot examples in `app/prompts/few-shot/` against the labeled set, comparing accuracy and token cost, before any of them are added to the system prompt.
 - [ ] Expand the CP3 labeled cases with varied senders/domains, ambiguous dates, multiple responsibilities, changed deadlines, mixed-topic content, and adversarial instructions.
 - [ ] Reserve a held-out set; freeze prompts/settings before final evaluation and avoid tuning on held-out cases.
 - [ ] Compare human-alone, AI-alone, and combined workflows; specify identical inputs, timing rules, and how each workflow's outputs are scored.

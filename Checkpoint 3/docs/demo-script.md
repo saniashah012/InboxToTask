@@ -3,7 +3,7 @@
 For the 5-8 minute presentation, required by [CP3_INSTRUCTIONS](../CP3_INSTRUCTIONS.md). At least
 half must be live. Everything runs locally on a dedicated test mailbox with fictional mail. The
 timings below are plan estimates from the instructions, not measurements, and the full run has not
-been rehearsed end to end.
+been rehearsed end to end. No scan has been confirmed since scanning was turned on tonight.
 
 ## 10-minute setup check
 
@@ -99,8 +99,8 @@ two or three.
    buttons stay disabled during the 60-second countdown, so a scan may have to wait. A scan after unpausing has not been repeated live, so try it once during
    setup.
 
-Optional, only if merged: first-run setup was being connected on a separate branch and may not have
-landed. If it is in your build, click **Run setup again** to show it. If you don't see that button,
+Optional, only if merged: first-run setup is on `claude/onboarding-connect-0e9360` (`91234dd`), which
+is not on `main` as of this update. If it is in your build, click **Run setup again** to show it. If you don't see that button,
 skip this and never describe onboarding as available.
 
 ## If something breaks
@@ -141,17 +141,21 @@ Say these plainly:
 
 - Automatic scans are not implemented. Scans are manual.
 - Google Calendar event creation is on a separate unmerged branch with offline tests only, never
-  tested live, and is planned for CP4. ICS file export is the current calendar path. All-day and
+  tested live, and is planned for CP4. Its recorded OAuth reconnect failures block release. ICS file export is the current calendar path. All-day and
   timed imports were each checked once by a tester in Google Calendar, and importing the same task
   twice is untested. The file holds only the title and schedule, with no sync or undo.
 - Real data is not connected to the designed dashboard.
+- There is no Waiting For view in the workspace (records are saved but not displayed), and account
+  deletion is not built. Not all proposed core features are complete.
 - The demo runs locally. Hosted has the Gmail migrations, but no Gmail functions are deployed, so
   connecting Gmail and scanning don't work on the live site.
 - Live cases are fictional mail in one test mailbox, about 15 emails and one tester. They show the
   workflow runs, not extraction accuracy. L06 is one probe, not proof of injection resistance.
 - Hosted settings save, reload, stale-tab rejection and two-account isolation passed in a teammate's
   check of an earlier preview. That doesn't cover review or the newest screens. Sign-in also silently
-  reuses the current Google account, so switching accounts isn't verified.
+  reuses the current Google account, so switching accounts isn't verified. Sania reports production
+  sign-in passed after the merge, with accounts A and B reaching the workspace without saving.
+  Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed.
 - Not run live: settings changed mid-scan, rate limits, wrong-account connection, and domain and
   subdomain rules.
 

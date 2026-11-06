@@ -1,0 +1,164 @@
+{
+  "description": "Few-shot task examples for the gmail-v1 contract. NOT loaded by the running app (the prompt, cache key and schema are unchanged); reference material to be evaluated in CP4. Emails are the fictional cases L01, L02 and L05 from tests/fixtures/gmail-live-cases.json. All people, addresses and IDs are fictional. Each input is a full prepareInput() input; expectedOutput is the model's gmailSchema result.",
+  "contract": "gmail-v1",
+  "cases": [
+    {
+      "id": "L02",
+      "purpose": "One simple task with a clear date-only deadline: no review needed, no uncertainty.",
+      "input": {
+        "senderRole": "allowed",
+        "contract": "gmail-v1",
+        "user": { "email": "student@example.edu", "timeZone": "America/Chicago" },
+        "analysisTime": "2026-11-05T12:00:00-06:00",
+        "rules": {
+          "allow": { "senders": ["omar.reyes@example.edu"], "domains": [] },
+          "block": { "senders": [], "domains": [], "subjectKeywords": ["Confidential"] }
+        },
+        "semanticPreferences": { "include": ["School"], "exclude": [] },
+        "existingTaskContext": [],
+        "threadContext": [],
+        "message": {
+          "id": "fewshot-L02",
+          "threadId": "fewshot-thread-L02",
+          "from": "omar.reyes@example.edu",
+          "sentAt": "2026-11-04T09:00:00-06:00",
+          "labels": [],
+          "subject": "Lab safety quiz",
+          "body": "Please complete the Riverton lab safety quiz by Monday, November 9.\n\nOmar Reyes, Lab Coordinator"
+        }
+      },
+      "expectedOutput": {
+        "category": "Actionable",
+        "confidence": 95,
+        "evidence": { "messageId": "fewshot-L02", "quote": "Please complete the Riverton lab safety quiz by Monday, November 9." },
+        "explanation": "The coordinator asks the owner to complete the lab safety quiz by a stated date.",
+        "summary": "Omar Reyes asks for the Riverton lab safety quiz to be completed by Monday, November 9.",
+        "tasks": [
+          {
+            "action": "Complete the Riverton lab safety quiz",
+            "owner": "student@example.edu",
+            "deadline": { "date": "2026-11-09", "time": null, "timeZone": "America/Chicago", "wording": "by Monday, November 9", "boundary": "by" },
+            "condition": null,
+            "requirements": [],
+            "evidence": { "messageId": "fewshot-L02", "quote": "Please complete the Riverton lab safety quiz by Monday, November 9." },
+            "topicRelevance": "relevant"
+          }
+        ],
+        "waitingFor": [],
+        "suggestedFollowUps": [],
+        "uncertainties": [],
+        "topicRelevance": { "decision": "relevant", "reason": "A school lab safety requirement matches the School topic." },
+        "taskChanges": []
+      }
+    },
+    {
+      "id": "L01",
+      "purpose": "Two distinct obligations in one email become two separate tasks, each with its own deadline and its own evidence.",
+      "input": {
+        "senderRole": "allowed",
+        "contract": "gmail-v1",
+        "user": { "email": "student@example.edu", "timeZone": "America/Chicago" },
+        "analysisTime": "2026-11-05T12:00:00-06:00",
+        "rules": {
+          "allow": { "senders": ["dana.whitfield@example.edu"], "domains": [] },
+          "block": { "senders": [], "domains": [], "subjectKeywords": ["Confidential"] }
+        },
+        "semanticPreferences": { "include": ["School"], "exclude": [] },
+        "existingTaskContext": [],
+        "threadContext": [],
+        "message": {
+          "id": "fewshot-L01",
+          "threadId": "fewshot-thread-L01",
+          "from": "dana.whitfield@example.edu",
+          "sentAt": "2026-11-03T10:00:00-06:00",
+          "labels": [],
+          "subject": "Riverton capstone deliverables",
+          "body": "Hi, please do two things for the Riverton College capstone:\n1. Submit the written report by Friday, November 13.\n2. Upload your presentation slides by Tuesday, November 17.\n\nDana Whitfield"
+        }
+      },
+      "expectedOutput": {
+        "category": "Actionable",
+        "confidence": 96,
+        "evidence": { "messageId": "fewshot-L01", "quote": "please do two things for the Riverton College capstone" },
+        "explanation": "The sender lists two separate capstone deliverables, each with its own deadline.",
+        "summary": "Dana Whitfield asks for the capstone report by November 13 and the presentation slides by November 17.",
+        "tasks": [
+          {
+            "action": "Submit the written report for the Riverton College capstone",
+            "owner": "student@example.edu",
+            "deadline": { "date": "2026-11-13", "time": null, "timeZone": "America/Chicago", "wording": "by Friday, November 13", "boundary": "by" },
+            "condition": null,
+            "requirements": [],
+            "evidence": { "messageId": "fewshot-L01", "quote": "Submit the written report by Friday, November 13." },
+            "topicRelevance": "relevant"
+          },
+          {
+            "action": "Upload the presentation slides for the Riverton College capstone",
+            "owner": "student@example.edu",
+            "deadline": { "date": "2026-11-17", "time": null, "timeZone": "America/Chicago", "wording": "by Tuesday, November 17", "boundary": "by" },
+            "condition": null,
+            "requirements": [],
+            "evidence": { "messageId": "fewshot-L01", "quote": "Upload your presentation slides by Tuesday, November 17." },
+            "topicRelevance": "relevant"
+          }
+        ],
+        "waitingFor": [],
+        "suggestedFollowUps": [],
+        "uncertainties": [],
+        "topicRelevance": { "decision": "relevant", "reason": "Capstone coursework matches the School topic." },
+        "taskChanges": []
+      }
+    },
+    {
+      "id": "L05",
+      "purpose": "Ambiguous numeric date 12/11 (December 11 or November 12): keep the task, leave the entire deadline null, and put the original wording and both readings in uncertainties so the user reviews it.",
+      "input": {
+        "senderRole": "allowed",
+        "contract": "gmail-v1",
+        "user": { "email": "student@example.edu", "timeZone": "America/Chicago" },
+        "analysisTime": "2026-11-05T12:00:00-06:00",
+        "rules": {
+          "allow": { "senders": ["dana.whitfield@example.edu"], "domains": [] },
+          "block": { "senders": [], "domains": [], "subjectKeywords": ["Confidential"] }
+        },
+        "semanticPreferences": { "include": ["School"], "exclude": [] },
+        "existingTaskContext": [],
+        "threadContext": [],
+        "message": {
+          "id": "fewshot-L05",
+          "threadId": "fewshot-thread-L05",
+          "from": "dana.whitfield@example.edu",
+          "sentAt": "2026-11-03T14:00:00-06:00",
+          "labels": [],
+          "subject": "Research poster upload",
+          "body": "Please upload your Riverton research poster by 12/11. I haven't said which date format I mean.\n\nDana Whitfield"
+        }
+      },
+      "expectedOutput": {
+        "category": "Actionable",
+        "confidence": 90,
+        "evidence": { "messageId": "fewshot-L05", "quote": "Please upload your Riverton research poster by 12/11." },
+        "explanation": "The sender asks the owner to upload the research poster, but the numeric deadline is ambiguous.",
+        "summary": "Dana Whitfield asks for the Riverton research poster to be uploaded by 12/11, an ambiguous date.",
+        "tasks": [
+          {
+            "action": "Upload the Riverton research poster",
+            "owner": "student@example.edu",
+            "deadline": null,
+            "condition": null,
+            "requirements": [],
+            "evidence": { "messageId": "fewshot-L05", "quote": "Please upload your Riverton research poster by 12/11." },
+            "topicRelevance": "relevant"
+          }
+        ],
+        "waitingFor": [],
+        "suggestedFollowUps": [],
+        "uncertainties": [
+          "The deadline \"by 12/11\" is ambiguous: December 11 or November 12? Which date does the sender mean?"
+        ],
+        "topicRelevance": { "decision": "relevant", "reason": "A research poster for a college course matches the School topic." },
+        "taskChanges": []
+      }
+    }
+  ]
+}

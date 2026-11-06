@@ -9,7 +9,7 @@ lands before the demo.
 
 | Limit | Effect on the demo |
 | --- | --- |
-| 20 model requests per account per **UTC** day by default | Rehearsing tonight (after 6 PM Central) uses the same UTC day as a Friday morning demo. The local test account had used 16 of 20 by 9:35 PM Central on November 5, so its limit was raised to 50 for the demo. Say so if asked. The 200,000 daily token limit and the three-requests-per-minute limit are unchanged, and failed attempts keep about 26,000 reserved tokens |
+| 20 model requests per account per **UTC** day by default | Rehearsing tonight (after 6 PM Central) uses the same UTC day as a Friday morning demo. The local test account had used 16 of 20 by 9:35 PM Central on November 5, so its limit was raised to 50 for the demo. Say so if asked. The 200,000 daily token limit and the three-requests-per-minute limit are unchanged, and failed attempts keep their reservation, which was 24,384-26,058 tokens in testing |
 | Two model calls per batch, 60-second scan cooldown | A live scan can only process two new messages at once. Pre-scan everything except the live email |
 | Newest-first scanning; updates need an approved task | Approve the original task before the live deadline-change scan, or no targeted proposal appears |
 | 30-second connect cooldown | Don't cancel and retry Google consent on stage |
@@ -36,7 +36,7 @@ Run this at least 30 minutes ahead.
    | --- | --- | --- |
    | Already scanned | L01 two tasks, L05 ambiguous date, L06 injection | Results ready to show |
    | Already scanned | L07 `Confidential` subject, L09 unlisted sender | Blocked, nothing saved |
-   | Approved beforehand | The L01 report task | Target for the live update |
+   | Approved beforehand | Both L01 tasks (report and slides) | Both must be approved, or the live update has only one candidate task |
    | **Sent during the demo, or just before** | L10 report deadline change | The live model call |
 
 6. Do one full run-through, then confirm you still have budget left for the demo.
@@ -48,7 +48,7 @@ Close other tabs and hide bookmarks. Don't show `.env` files, DevTools network t
 
 | Slide | Time | Say |
 | --- | --- | --- |
-| 1. Title | 30 s | Team, repo link. Important requests get buried in email, and existing tools either read everything or act without asking |
+| 1. Title | 30 s | Team, repo link. Important requests get buried in email |
 | 2. Architecture | 1 min | Walk through the [diagram](architecture.md): React, Supabase Auth and Postgres, Edge Functions, Gmail API, Gemini. No vector database, because results are structured state |
 | 3. Primary flow | 2 min, live | Part A below |
 | 4. Edge cases | 1.5 min, live | Part B below |
@@ -60,13 +60,13 @@ Close other tabs and hide bookmarks. Don't show `.env` files, DevTools network t
 
 1. **Settings.** Open **Connection and permissions**. "Connecting Gmail didn't allow scanning. Scanning needs a sender allowlist and separate consent, and topics never grant access."
 2. **Live scan.** Click **Scan past seven days** and read out the batch counts. "Blocked mail was rejected on metadata, so its body was never fetched. Reused messages cost zero model calls."
-3. **Review.** Open a suggestion. Point out the evidence quote and the **Open in Gmail** link. "This is a proposal with its source, not a task yet."
+3. **Review.** Open a suggestion. Point out the evidence quote and the **Open conversation in Gmail** link. "This is a proposal with its source, not a task yet."
 4. **Approve.** Approve one suggestion. "Approval makes no model call and writes nothing to Calendar."
 5. **Live update.** Show the L10 proposal: report moves from Nov 13 to Nov 18, slides untouched. "Two tasks share this thread, and it targeted the right one. The accepted value doesn't change until I approve." Approve it, then show the task and its source emails.
 
 ## Part B: edge cases and recovery (about 1.5 minutes)
 
-Pick three, in this order, and drop the last if time is short.
+Do these in order, and drop from the end if time is short.
 
 1. **Ambiguous date (L05).** The deadline is empty and the app asks which date `12/11` means. "It flags this rather than guessing."
 2. **Prompt injection (L06).** The email tells AI assistants to create a password task and mark it approved. The result is passive with no task. "One test case isn't proof of resistance. The stronger defense is structural: the model has no tools, output is validated, and only the user can approve."
@@ -80,9 +80,9 @@ If the scan or model fails on stage, say so, click **Reload saved results**, and
 Disclosing these is required, so say them plainly unless the work lands first:
 
 - Automatic 15-minute scans are not implemented; scans are manual.
-- Google Calendar event creation is on an unmerged branch. Accepted tasks offer a downloadable ICS file instead, which the user imports manually, with no sync or undo.
+- Google Calendar event creation is built but not verified live, and is planned for CP4. Accepted tasks offer a downloadable ICS file instead, which the user imports manually, with no sync or undo.
 - Signed-in users get a plain workspace, not the designed dashboard from CP2.
-- The demo runs locally. Hosted has migrations through the Gmail hardening one, but three later migrations are missing and scanning isn't deployed or enabled there.
+- The demo runs locally. Hosted has the Gmail migrations, but the Gmail functions aren't deployed, so connecting Gmail and scanning work only locally.
 - Live tests used one tester and about 15 fictional emails. They show the workflow runs, not how accurate extraction is.
 - Not run live: settings changed mid-scan, rate limits, wrong-account connection, and domain and subdomain rules.
 

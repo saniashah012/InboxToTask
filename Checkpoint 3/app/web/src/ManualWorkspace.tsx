@@ -103,7 +103,6 @@ export default function ManualWorkspace({userId,email,onSignOut}:{userId:string;
    <div className="storage-actions"><button className="manual-primary" disabled={busy||status?.running||cooldownLeft>0} onClick={()=>void scan('initial')}>Scan past seven days</button>
     <button disabled={busy||status?.running||cooldownLeft>0||!status?.backlog||needsReconnect} onClick={()=>void scan('more')}>Scan more</button>
     <button disabled={busy} onClick={()=>{setError('');void reload()}}>Reload saved results</button></div>
-   <p>No Calendar events are created by scans or task approval.</p>
   </section>
   {error&&<p className="storage-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   <nav className="storage-actions" aria-label="Workspace sections">{[['review',`Review (${suggestions.length+changes.length})`],['tasks','Accepted tasks'],['information','Information'],['settings','Connection and permissions']].map(([key,label])=><button key={key} aria-pressed={tab===key} onClick={()=>{setTab(key);setExportId(null);setExportDone(null)}}>{label}</button>)}</nav>

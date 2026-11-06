@@ -25,10 +25,21 @@ dedicated test account only.
    with no new tasks. Then try the pause recovery from Part B once, because a scan after unpausing
    has not been repeated live. Leave scanning unpaused. Make a quick screen recording of this as a
    backup.
-6. **Send the live email last.** Wait for the countdown ring to finish. **Reply** in the existing
-   "Riverton capstone deliverables" Gmail thread from the allowed sender, or the update has no task
-   to target: "The written report is now due Tuesday, November 24. The slides deadline has not
-   changed." Check that it isn't in Spam, and do **not** scan it yet.
+6. **Prepare the live emails, and don't send them yet.** Save the three drafts below in the allowed
+   sender's Gmail. Test one similar email now if you can, because this exact set has never been run.
+   Wait for the countdown ring to finish before you present.
+
+**Live emails** (fictional, sent from the allowed sender to the test mailbox):
+
+| Draft | Subject | Body | Expected |
+| --- | --- | --- | --- |
+| A, new task | Project budget form | Please submit the Riverton project budget form by Friday, November 13. Dana Whitfield | One new suggestion |
+| B, **reply** in the existing "Riverton capstone deliverables" thread | Re: Riverton capstone deliverables | The written report is now due Tuesday, November 24. The slides deadline has not changed. Dana Whitfield | Proposal moving the report from Nov 20 to Nov 24 |
+| C, blocked | Confidential: advisor notes | Please review the advisor notes by November 12. Dana Whitfield | Blocked by the subject rule, nothing saved |
+
+A and B use the batch's two model calls. C uses none. Draft B has to be a real reply, or the update
+has no task to target. Send from a window that shows only the drafts, and don't show that account's
+inbox on screen.
 
 Close other tabs and hide bookmarks. Don't show env files, DevTools network tabs or callback URLs.
 
@@ -40,14 +51,14 @@ held at 10:27 PM on November 5. If it has changed, adjust the lines below.
 | Written report (due Nov 20), slides (due Nov 17) | Accepted, same thread | "2 tasks from this conversation", and the live-update target |
 | Lab safety quiz | Accepted, cancelled | A cancellation that kept its values |
 | Research poster (L05, no deadline) | Pending in **Review** | Part B ambiguous date. Don't approve it |
-| Return the library books (due Nov 15) | Pending in **Review** | The live approval, then the ICS export |
+| Return the library books (due Nov 15) | Pending in **Review** | Leave as it is, or use it as the backup for the live approval and ICS export |
 | Room reservation and room details | Pending in **Review** | Leave as they are |
 | L06 injection | Saved as information, no task | Part B |
 | L07 `Confidential` subject, L09 unlisted sender | Blocked, nothing saved | Part B |
-| Reply moving the report to Nov 24 | Sent, not scanned | The live model call |
+| Live emails A, B and C | Drafted, not sent | The live scan |
 
-Source mail: [labeled fictional set](../tests/fixtures/gmail-live-cases.json). The Nov 24 reply is a
-new message for this demo, not one of the recorded cases.
+Source mail: [labeled fictional set](../tests/fixtures/gmail-live-cases.json). The live emails are
+new for this demo, not recorded cases.
 
 ## Run sheet (8 minutes at most, about 4 minutes live)
 
@@ -59,12 +70,13 @@ slide 5 first.
 | 0:00 | 1. Title | Slide only | "Important requests get buried in email. InboxToTask turns permitted email into reviewable tasks." Names, repo link |
 | 0:30 | 2. Architecture | Slide only, see [diagram](architecture.md) | "React front end, Supabase Auth and Postgres, Edge Functions, the Gmail API and Gemini. No vector database, because results are structured state." |
 | 1:30 | 3. Primary flow (live) | Browser. Point at the branded top bar, then open **Connection and permissions** | "Real Gmail and real Gemini, running locally on fictional mail. Connecting Gmail didn't allow scanning. Scanning needs a sender allowlist and separate consent." Point at the status line "Status: connected" with its icon and the settings form |
-| 2:00 | Live | **Review** section, then click **Scan past seven days** | "While it scans you'll see a spinner." Then read the number tiles under Last batch: "Blocked mail was rejected on metadata, so its body was never fetched. Reused messages cost zero model calls." Note the countdown ring and disabled scan buttons: "That is the 60-second cooldown." |
-| 2:30 | Live | Point at the "Return the library books" card in **Review** | "Each suggestion has its evidence quote and a link, **Open conversation in Gmail**. This is a proposal with its source, not a task yet." |
-| 2:50 | Live | Click **Approve task** on that card | "Approval makes no model call and writes nothing to Calendar." Read the notice: "Task approved. No Calendar event was created." |
-| 3:10 | Live | **Review** proposal for the report (expected: Nov 20 to Nov 24, slides untouched). This reply has never been run, so check what appears. Click **Approve edit** | "A reply moved the deadline. The accepted value doesn't change until I approve." Only if the proposal targets the report: "Two tasks share this thread, and it targeted the right one." Then open **Accepted tasks** |
-| 3:40 | Live | **Accepted tasks**: show "2 tasks from this conversation". Click **Show saved excerpt** on a task | "Each task keeps an email history with its evidence behind **Show saved excerpt**." |
-| 4:10 | Live (Calendar) | On "Return the library books", which hasn't been exported, click **Export calendar file**, then **Download ICS** | "Approval doesn't create a calendar event. The user explicitly exports a file. It holds only the title and the schedule." Point at the confirmation "Calendar file download started. Import it into your chosen calendar." |
+| 2:00 | Live | Send drafts A, B and C. Check that they arrived in the test mailbox and not in Spam | "I'm sending three new emails right now: a new request, a deadline change, and one the rules should block." |
+| 2:20 | Live | **Review** section, then click **Scan past seven days** | "While it scans you'll see a spinner." Then read the number tiles under Last batch: "Two new emails went to the model. The blocked one was rejected on metadata, so its body was never fetched. Reused messages cost zero model calls." Note the countdown ring and disabled scan buttons: "That is the 60-second cooldown." Scan length isn't measured, so keep talking if it takes a while |
+| 3:00 | Live | Point at the new budget form card in **Review** | "Each suggestion has its evidence quote and a link, **Open conversation in Gmail**. This is a proposal with its source, not a task yet." |
+| 3:15 | Live | Click **Approve task** on that card | "Approval makes no model call and writes nothing to Calendar." Read the notice: "Task approved. No Calendar event was created." |
+| 3:30 | Live | **Review** proposal for the report (expected: Nov 20 to Nov 24, slides untouched). This reply has never been run, so check what appears. Click **Approve edit** | "A reply moved the deadline. The accepted value doesn't change until I approve." Only if the proposal targets the report: "Two tasks share this thread, and it targeted the right one." Then open **Accepted tasks** |
+| 3:50 | Live | **Accepted tasks**: show "2 tasks from this conversation". Click **Show saved excerpt** on a task | "Each task keeps an email history with its evidence behind **Show saved excerpt**." |
+| 4:15 | Live (Calendar) | On the budget form task you just approved, click **Export calendar file**, then **Download ICS** | "Approval doesn't create a calendar event. The user explicitly exports a file. It holds only the title and the schedule." Point at the confirmation "Calendar file download started. Import it into your chosen calendar." |
 | 4:40 | 4. Edge cases (live) | **Review** and **Information** | See Part B. "It flags the ambiguous date (L05) rather than guessing." Then L06: "One test is not proof of resistance. The stronger defense is structural: the model has no tools, output is validated, and only the user can approve." |
 | 5:10 | Live | **Connection and permissions**, check **Pause scanning**, **Save scanning settings**, then try a scan if the buttons are enabled | "The scan is refused, and saved results stay." Then click **Edit settings**, uncheck and save. If the countdown is still running, skip the scan and say it comes back when the countdown ends |
 | 5:30 | 5. Technical decisions | Slide only | "One combined structured call per message, reuse of saved results, budget reserved before inference, low thinking, no silent fallback model." |
@@ -100,6 +112,8 @@ skip this and never describe onboarding as available.
   **Connection and permissions**: consent given, not paused, connected.
 - **Connection says reconnect required.** Don't retry Google consent on stage (30-second connect
   cooldown). Use the saved results and say the connection lapsed.
+- **New email isn't found.** Check Gmail's Spam folder and that the sender is allowed. Say what
+  happened, and use the "Return the library books" card for the approval and ICS steps.
 - **Update proposal doesn't appear.** Say it didn't arrive. Likely causes are Spam, or a message that
   wasn't a reply in the thread. Show the [recorded L10 result](use-cases.md#uc8-real-gmail-to-review-workflow),
   which moved the report from Nov 13 to Nov 18.
@@ -113,7 +127,7 @@ skip this and never describe onboarding as available.
 | --- | --- |
 | Daily request limit per account per **UTC** day | Default is 20. The local test account's limit was raised from 20 to 50 for the demo. Say so if asked. Rehearsing in the evening Central time uses the same UTC day as a morning demo |
 | 200,000 tokens per UTC day, three requests per minute | Unchanged |
-| Two model calls per batch, 60-second scan cooldown | A live scan processes two new messages at most. Keep it to the one live reply |
+| Two model calls per batch, 60-second scan cooldown | A live scan processes two new permitted messages at most, so send only drafts A and B plus the blocked C |
 | Tokens per call | About 2,500 per live call across 14 local calls. Failed attempts keep their reservation, which was 24,384-26,058 tokens in testing |
 | Updates need an approved task in the same thread | The report and slides are already approved. Send the update as a reply in their thread |
 | 30-second connect cooldown | Don't cancel and retry Google consent on stage |

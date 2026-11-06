@@ -30,7 +30,7 @@ messages within 90 days; existing saved context is preserved. Incompatible phras
 rules require explicit review and renewed consent.
 
 Next: connect real data to the designed dashboard and onboarding, and extend signed-in hosted
-checks. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. Signed-in production and Sania's newer preview results are not confirmed.
+checks. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed.
 Automatic scans are not implemented. Calendar events are postponed to CP4 by user decision.
 
 Earlier setup evidence remains in [Google Auth verification](docs/google-auth-verification-2026-11-05.md),
@@ -442,6 +442,7 @@ CP3 exit condition: another teammate can reproduce setup, connect a real test ac
 The CP4 instructions have not been supplied. This is a provisional plan based on CP3's Track A/Track B preview and CP2's baseline requirement; align it with the official CP4 rubric when available.
 
 - [ ] Obtain CP4 requirements; select Track A user study or Track B algorithmic benchmark and set success thresholds before final testing.
+- [ ] Unify the workspace's **Scan past seven days** and **Scan more** into one scan button. Keep the existing behavior behind it: a bounded batch, visible backlog, the cooldown, and permission checks. Decide how the user approves continuing a backlog, since the plan currently requires a separate "Scan more" approval.
 - [ ] Expand the CP3 labeled cases with varied senders/domains, ambiguous dates, multiple responsibilities, changed deadlines, mixed-topic content, and adversarial instructions.
 - [ ] Reserve a held-out set; freeze prompts/settings before final evaluation and avoid tuning on held-out cases.
 - [ ] Compare human-alone, AI-alone, and combined workflows; specify identical inputs, timing rules, and how each workflow's outputs are scored.

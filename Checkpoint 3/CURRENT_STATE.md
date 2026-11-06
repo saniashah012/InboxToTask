@@ -26,7 +26,7 @@ reports describe their own run, not today's runtime or later code.
 | 2: retrieval/coordination | Bounded metadata-first retrieval, independent context permissions, per-message failure handling, explicit continuation | Injected tests and local coordination checks pass. Real Gmail retrieval worked in live testing; scan-time rate limits were not exercised live |
 | 3: extraction/task context | Versioned Gmail schema, per-item topic relevance, bounded same-thread task candidates, edit/cancel proposals | Fictional injected tests pass. The real model accepted the schema on 15 fictional emails, which shows the workflow runs, **not extraction accuracy** |
 | 4: persistence | Gmail identities, budgets/leases/cache, revision/permission fencing, proposal review/rebase, re-extraction dedupe | PGlite and actual local Auth/PostgREST with an injected model pass; live saved results, reuse and dedupe confirmed on fictional mail |
-| 5: product UI | Restyled signed-in `ManualWorkspace` with connection/settings, scan/status/backlog, stored review, before/after changes, source email history and ICS export on accepted tasks, and an Information tab with executive summaries, a Gmail link and read state remembered only in that browser. `App.tsx` routes signed-in users there, so the designed onboarding and dashboard remain sample-only | Workspace browser-checked with seeded fictional accounts: review, reload, stale rebase, cancellation, account switching. Google sign-in and real scans exercised in live testing. One all-day and one timed ICS import were tester-reported as correct in Google Calendar. **Not complete: real data and onboarding are not yet connected to the designed dashboard.** Onboarding work is on `claude/onboarding-connect-0e9360` at `91234dd`, not merged. The workspace also has no Waiting For view: those records are saved but not displayed |
+| 5: product UI | Restyled signed-in `ManualWorkspace` with connection/settings, scan/status/backlog, stored review, before/after changes, source email history and ICS export on accepted tasks, and an Information tab with executive summaries, a Gmail link and read state remembered only in that browser. `App.tsx` routes signed-in users there, so the designed onboarding and dashboard remain sample-only | Workspace browser-checked with seeded fictional accounts: review, reload, stale rebase, cancellation, account switching. Google sign-in and real scans exercised in live testing. One all-day and one timed ICS import were tester-reported as correct in Google Calendar. **Not complete: real data and onboarding are not yet connected to the designed dashboard.** Onboarding work is on `claude/onboarding-connect-0e9360` at `91234dd`, not merged. Onboarding preview `91234dd` is ready, with its remaining checks still pending. The workspace also has no Waiting For view: those records are saved but not displayed |
 | 6: live local acceptance | Executed with a dedicated test mailbox on fictional mail | Real Gmail → Gemini → storage → review works, including a correctly targeted deadline-change proposal and the OAuth lifecycle checks. Results and findings are in [UC8](docs/use-cases.md#uc8-real-gmail-to-review-workflow). **Not run live:** settings changed during a scan, rate limits, wrong-account connection, expired or replayed OAuth state, domain and subdomain rules. Fixes after the live run have automated coverage only |
 | 7: automatic scans | Not implemented | Not started; no schedule authorized or installed |
 
@@ -70,7 +70,7 @@ The app does not fetch or display email bodies on demand.
   between two accounts in the tested workspace flows. These were not RLS penetration tests and did not
   cover onboarding or chip screens. Review, manual resolution and source links remain unverified
   signed-in on hosted, because there is no Gmail data there. Sign-in silently reuses the current
-  Google account, so unassisted account switching is not established. Signed-in production and Sania's newer preview results are not confirmed. Details are in the
+  Google account, so unassisted account switching is not established. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Details are in the
   [rollout record](docs/hosted-backup-verification-2026-11-06.md#signed-in-checks-reported-by-sania).
 - **Google Calendar moved to CP4 by user decision.** It is not in CP3 or on hosted. The rebase is on
   the unmerged GitHub branch `mzheng/calendar-rebase` at `da4417d`, with migration `20261106050000`, offline tests reported and no live test. That
@@ -91,11 +91,11 @@ The app does not fetch or display email bodies on demand.
 
 PR #22 was merged to `main` at `59461b6` on November 5 at about 11:01 PM Central, by the user's decision. GitHub CI passed on that merge commit, and production returned a new build. Earlier local runs, not repeated at the current tip: offline suite **168/168**; pgTAP **71**; unmodified local API suite **15 groups, zero model calls**, with scanning disabled. Live results are recorded separately in [UC8](docs/use-cases.md#uc8-real-gmail-to-review-workflow).
 
-Sania reports that Vercel's production branch is `main` (Settings > Git), and that Instant Rollback is available. The rollback target after the PR #22 merge should be `e2b0009`. Treat every merge as a production deployment. A rollback does not undo migrations.
+Sania reports that Vercel's production branch is `main` (Settings > Git), and that rollback to `e2b0009` is available after the PR #22 merge. Treat every merge as a production deployment. A rollback does not undo migrations.
 
 Next:
 
-1. Check signed-in behavior on production, and collect Sania's newer preview results. Neither is confirmed.
+1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code, and for onboarding preview `91234dd`.
 2. Connect real data and onboarding to the designed dashboard, and make PR 20's chip screens reachable for signed-in testing.
 3. Fix the two open defects with a new migration before any hosted Gmail deployment. That deployment and hosted scanning need separate approval.
 4. In CP4, finish Calendar's OAuth fixes and review, then consider Phase 7 and the remaining live checks.

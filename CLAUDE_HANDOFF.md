@@ -33,7 +33,7 @@ Per the session coordinating hosted (reported, not checked here), hosted has all
 through `20261106040000`, applied by 03:50 UTC on November 6. The Gmail functions are not deployed there, so
 connecting Gmail and scanning work only locally. Sania reports hosted preview checks passed on `ffa915a` for settings
 save/reload, sign-out/in, stale-tab rejection and two-account isolation in the tested flows; they do not cover
-onboarding, chips, RLS penetration, review, manual resolution or source links. Signed-in production and Sania's newer preview results are not confirmed. Recheck before relying on this. Merging does not apply migrations, and Vercel production deploys
+onboarding, chips, RLS penetration, review, manual resolution or source links. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Recheck before relying on this. Merging does not apply migrations, and Vercel production deploys
 from `main` per Sania. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy `gmail_scan` as part of this.
 
 1. `20261105200000_source_semantic_contract.sql`
@@ -102,10 +102,10 @@ None blocked PR #22. Only the first two need SQL.
 - Two calls per batch and 20 requests per day are too low for real use.
 
 ## Next work, in order
-1. Confirm signed-in production and collect Sania's newer preview results. Vercel production is `main` per Sania, so every merge deploys.
+1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code. Vercel production is `main` per Sania, so every merge deploys.
 2. In CP4, resume Calendar from `mzheng/calendar-rebase`: review the shared OAuth changes, then after
    reconnecting, retest revocation (L17), refused refresh (L20) and a normal scan.
-3. Onboarding work is on `claude/onboarding-connect-0e9360` at `91234dd`, not merged. Until confirmed merged, treat onboarding as not connected.
+3. Onboarding work is on `claude/onboarding-connect-0e9360` at `91234dd`, not merged. Onboarding preview `91234dd` is ready, with its remaining checks still pending. Until confirmed merged, treat onboarding as not connected.
 4. **Phase 5:** connect real data to the designed dashboard. `App.tsx` line 565 sends every signed-in
    user to the plain `ManualWorkspace`, so the designed onboarding and PR #20's chips cannot be reached.
    Their save path already uses `scan_settings_save`. Coordinate with PR #20 and Calendar, which both

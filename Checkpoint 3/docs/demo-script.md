@@ -153,8 +153,9 @@ Say these plainly:
   workflow runs, not extraction accuracy. L06 is one probe, not proof of injection resistance.
 - Hosted settings save, reload, stale-tab rejection and two-account isolation passed in a teammate's
   check of an earlier preview. That doesn't cover review or the newest screens. Sign-in also silently
-  reuses the current Google account, so switching accounts isn't verified. Signed-in production and
-  the newer preview results are not confirmed.
+  reuses the current Google account, so switching accounts isn't verified. Sania reports production
+  sign-in passed after the merge, with accounts A and B reaching the workspace without saving.
+  Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed.
 - Not run live: settings changed mid-scan, rate limits, wrong-account connection, and domain and
   subdomain rules.
 

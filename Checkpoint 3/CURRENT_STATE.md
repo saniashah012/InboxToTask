@@ -58,10 +58,14 @@ The app does not fetch or display email bodies on demand.
 ## Local migration and feature state last observed
 
 - All migrations through [gmail_token_recheck](app/supabase/migrations/20261106040000_gmail_token_recheck.sql)
-  are applied to the local database, without reset. **Check with the team what is applied to hosted.**
-- A hosted rollout of the Gmail migrations must apply them in filename order and include
-  the hardening migration, which fixes defects in the two before it. The later migrations are
-  additive, but the product page calls their functions. [Team handoff](../TEAM_HANDOFF.md) has the list.
+  are applied to the local database, without reset.
+- **Hosted (`IS492_c3`) has migrations through `20261106000000_gmail_scan_hardening`**, applied
+  November 6 at 03:26 UTC; see the [rollout record](docs/hosted-backup-verification-2026-11-06.md).
+  Scanning is not deployed or enabled there. Signed-in hosted checks remain open.
+- **Not on hosted:** `20261106010000`, `20261106030000`, `20261106040000`, and Calendar's
+  `20261106020000`. The product page calls the functions in `010000` and `030000`, so roll them
+  out, in filename order, before or together with merging this branch.
+  [Team handoff](../TEAM_HANDOFF.md) has the list.
 - `ENABLE_GMAIL_SCAN=false` again after live testing. A Gemini key remains in the private local
   function configuration. Retrieval-only mode, fixture inference and cleanup remain disabled.
 - The local Google token key was rotated after being exposed in a development session's output.

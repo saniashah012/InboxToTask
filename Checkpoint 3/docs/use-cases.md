@@ -4,7 +4,7 @@ Updated November 5, 2026. Walkthrough scripts and test cases for the primary flo
 
 ## Test surfaces and evidence
 
-- **Main product (`/`):** signed-in users reach a persistent workspace page with Gmail connection, saved settings, manual scans and review. The designed onboarding and dashboard are **not yet connected to real data**. They appear only in preview mode, with fictional data and simulated actions.
+- **Main product (`/`):** signed-in users reach a persistent workspace page with Gmail connection, saved settings, manual scans and review. The designed onboarding and dashboard are **not yet connected to real data**. They appear only in preview mode, with fictional data and simulated actions. The workspace has no Waiting For view: those records are saved but not displayed there.
 - **Development tester (`/storage`):** local Vite development route for fixture trials, activity totals, waiting-for records, ICS export and task deletion. It is excluded from production builds, and its password sign-in is development tooling.
 - **Canonical pipeline:** offline tests and the CLI use fictional messages.
 
@@ -223,7 +223,7 @@ Two items remain: real data in the designed dashboard and onboarding, and automa
 
 ## UC9: Future optional Calendar connection and approved event lifecycle
 
-**Status: Postponed to CP4 by user decision.** This branch has no Calendar connection or Calendar API call, and scans and task approval create no events. Calendar approval records and ICS export do not establish this workflow. Event creation exists on a rebased, local-only branch (`mzheng/calendar-rebase`, `da4417d`, migration renamed `20261106050000`). The rebase session reported offline tests passing, and it has had no live test. Sania's original branch (`agents/proceed-with-the-minimal-google-calendar-integra`) is on origin. Neither is merged. The script below is the CP4 acceptance target.
+**Status: Postponed to CP4 by user decision.** `main` has no Calendar connection or Calendar API call, and scans and task approval create no events. Calendar approval records and ICS export do not establish this workflow. Event creation exists on a rebased, unmerged branch on GitHub (`mzheng/calendar-rebase`, `da4417d`, migration renamed `20261106050000`). The rebase session reported offline tests passing, and it has had no live test. Its recorded OAuth reconnect failures block release. Sania's original branch (`agents/proceed-with-the-minimal-google-calendar-integra`) is on origin. Neither is merged. The script below is the CP4 acceptance target.
 
 1. During onboarding, offer **Connect Google Calendar** and **Skip for now**. Skipping or denying access must leave app sign-in, permitted Gmail processing, and task review usable. Offer connection later from Settings or Add to Calendar.
 2. If the user connects, verify actual granted capabilities and show real connection status. Do not infer Calendar authorization from Gmail access or app sign-in.

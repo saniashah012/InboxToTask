@@ -15,6 +15,8 @@
 | `/tests/` | [Checkpoint 3/tests](<Checkpoint 3/tests/>) |
 | Demo script and slides | [demo-script.md](<Checkpoint 3/docs/demo-script.md>), [draft slides](<Checkpoint 3/docs/InboxToTask-CP3-presentation-draft.pptx>) |
 
+**Known gaps against the CP3 requirements.** "Implements all proposed core features" is **not met**. Not built on `main`: automatic scans, real data in the designed dashboard and onboarding, a Waiting For view in the workspace (records are saved but not displayed), and account deletion. Google Calendar events moved to CP4 and are not merged. There is no streaming, vector store, tool-calling agent or PII sanitization. Gmail connection and scanning work only locally, so the live demo runs locally. See [current state](<Checkpoint 3/CURRENT_STATE.md>) and [use cases](<Checkpoint 3/docs/use-cases.md>) for what has and has not been run.
+
 # 1. Project Title & Tagline
 
 ## **InboxToTask**

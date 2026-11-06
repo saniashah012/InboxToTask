@@ -1,6 +1,6 @@
 ﻿# InboxToTask safety and privacy
 
-Updated November 5, 2026. This covers local behavior on this branch. **Hosted Gmail enforcement is not verified:** the hosted session reports that Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current tip. All live results used a dedicated test mailbox with fictional mail, one tester and about 15 messages. This shows the safeguards ran in those cases; it does not measure how reliable they are.
+Updated November 5, 2026. This covers local behavior on `main`. **Hosted Gmail enforcement is not verified:** the hosted session reports that Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. Signed-in production and Sania's newer preview results are not confirmed. All live results used a dedicated test mailbox with fictional mail, one tester and about 15 messages. This shows the safeguards ran in those cases; it does not measure how reliable they are.
 
 **Evidence labels:** *Automated* (offline tests, PGlite, injected responses), *Local API* (real local Auth, PostgREST, Edge, pgTAP), *Seeded browser*, *Live local* (case IDs refer to [UC8](use-cases.md#live-test-cases)), *Code* (read from source only), *Planned*.
 
@@ -97,6 +97,8 @@ The whole feature is off unless `ENABLE_GMAIL_SCAN=true`, `GEMINI_API_KEY` and `
 - Task deletion has a button only in the `/storage` tester. Source deletion exists as a review RPC with automated tests, and neither page offers a button for it.
 - Minimal identifiers and suppressions stay until account deletion. A complete account-deletion flow is **not implemented**.
 - Sign-out keeps the Gmail connection (L25). Deleting anything here does not affect Gmail.
+- **Information tab read state** stays in that browser's `localStorage`, keyed by user ID, as source IDs with no email content. It does not sync to the database or other browsers ([code](../app/web/src/InformationTab.tsx)).
+- **An ICS file** holds only the task title and schedule, plus the event identifier and timestamp the format requires ([code](../app/web/src/calendarExport.ts)). Once imported it has no sync or undo: later task changes do not reach the calendar, and removing the event is up to the user.
 
 ## Honest limits
 
@@ -126,4 +128,4 @@ Token limits would still not be a guaranteed dollar cap, so provider quotas and 
 
 ## How to check
 
-From `Checkpoint 3/app`, see [run the checks](../app/INSTALL.md#run-the-checks). The 168 offline and 5 ICS tests passed when rerun at `92b882a`. GitHub CI is reported passing at that tip. The 71 pgTAP checks and 15 local API groups with scanning off are from an earlier local run at `cef7f06` and were not repeated ([current state](../CURRENT_STATE.md)). None of these make Gmail or model calls.
+From `Checkpoint 3/app`, see [run the checks](../app/INSTALL.md#run-the-checks). The 168 offline and 5 ICS tests passed when rerun at `92b882a`. GitHub CI is reported passing at that tip and passed on merge commit `59461b6`. The 71 pgTAP checks and 15 local API groups with scanning off are from an earlier local run at `cef7f06` and were not repeated ([current state](../CURRENT_STATE.md)). None of these make Gmail or model calls.

@@ -11,7 +11,7 @@ Real Gmail connection and scanning work **only locally**. The hosted site cannot
 | Docker Desktop | Linux containers, running (the local database and Edge runtime use it) |
 | Node.js | 22 or later (`engines` in `app/package.json`; `web/.mise.toml` pins 22) |
 | pnpm | 10.34.3, pinned in `web/package.json`. Use `corepack pnpm ...`; do not install pnpm separately |
-| Repo access | A clone of the repository on the branch the project owner names (PR 22 is `mzheng/gmail-scan-hardening`) |
+| Repo access | A clone of the repository on `main`, which has the Gmail scan work (PR #22 is merged) |
 | Google test user | The project owner must add your **dedicated test Gmail address** under Test users in **both** Google Cloud projects (sign-in and Gmail) |
 
 **Private values you must get from the project owner through a private channel** (never chat, email or Git). Names only here:
@@ -125,4 +125,6 @@ Use only the dedicated test account.
 - **Google Calendar:** planned for CP4. ICS export is the current path.
 - **Real data in the designed dashboard:** not connected. The workspace page above is the real-data surface.
 - **Gmail connect and scan on the hosted site:** the Gmail functions are not deployed there.
-- **Onboarding:** on a separate branch under test; do not expect it in your build.
+- **Onboarding:** on the separate branch `claude/onboarding-connect-0e9360`, not merged; do not expect it in your build.
+- **Waiting For view in the workspace:** not built. Those records are saved but not displayed.
+- **Account deletion:** not built.

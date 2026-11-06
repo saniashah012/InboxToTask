@@ -23,7 +23,7 @@ Use a dedicated Google account with fictional mail. Never include credentials, c
 | [UC3](#uc3-resolve-conflicting-inclusion-and-exclusion-rules) Rule conflicts | Implemented | Live local for one sender; domain rules automated only |
 | [UC4](#uc4-extract-a-fictional-message-and-review-its-evidence) Fixture extraction | Implemented, off by default | Automated, separate CLI evaluations |
 | [UC5](#uc5-correct-approve-dismiss-and-complete-a-task) Review and complete | Implemented, partly in the tester | Live local, seeded browser |
-| [UC6](#uc6-export-a-calendar-file-without-authorizing-calendar-writes) ICS export | Tester only | Automated, isolated browser check |
+| [UC6](#uc6-export-a-calendar-file-without-authorizing-calendar-writes) ICS export | Workspace and tester | Automated, isolated browser check of the form; workspace button not browser-checked |
 | [UC7](#uc7-pause-disconnect-sign-out-and-handle-failures) Pause and failures | Implemented; no account deletion | Live local for several cases |
 | [UC8](#uc8-real-gmail-to-review-workflow) **Primary flow:** Gmail to review | Implemented, manual only | Live local |
 | [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle) Connected Calendar | Not in this branch | None |
@@ -117,9 +117,9 @@ Waiting-for entries are saved from real scans (L04), but the workspace does not 
 
 ## UC6: Export a calendar file without authorizing Calendar writes
 
-**Status:** ICS export is implemented in the `/storage` development tester, and is not offered in the signed-in workspace. Automated tests and an isolated browser check pass; saving a file and importing it into a real calendar has not been verified. Connected Calendar writes are covered in [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle).
+**Status:** ICS export is available on accepted tasks in the signed-in workspace and in the `/storage` development tester. Automated tests and an isolated browser check of the export form pass; the workspace button has passed its type check and build but has not been browser-checked, and saving a file and importing it into a real calendar has not been verified. Connected Calendar writes are covered in [UC9](#uc9-future-optional-calendar-connection-and-approved-event-lifecycle).
 
-1. In the development tester, on an accepted task, open **Export calendar file**.
+1. Under **Accepted tasks**, on an approved or completed task that is not cancelled, open **Export calendar file**.
 2. Review the title and choose an all-day or timed schedule. Supply a date if no task deadline exists; timed entries require a time zone and explicit duration.
 3. Export and manually import the file into a test calendar, checking date/time behavior and duplicate-import behavior.
 

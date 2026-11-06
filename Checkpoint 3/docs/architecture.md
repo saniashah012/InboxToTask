@@ -12,7 +12,7 @@ Updated November 5, 2026. This describes the code on branch `mzheng/gmail-scan-h
 | Automatic scheduled scans | **Not implemented** | Code: no schedule exists |
 | Hosted (Vercel and hosted Supabase) | **Not verified** | Some migrations are applied, but scanning is not deployed or enabled there and signed-in checks remain open ([current state](../CURRENT_STATE.md)) |
 | Google Calendar event creation | **Not in this branch.** Exists only on an unmerged, unreviewed branch (`agents/proceed-with-the-minimal-google-calendar-integra`, `b6f84e6`) | Not evaluated here |
-| ICS file export | Implemented in the `/storage` development tester | Automated tests and an isolated browser check |
+| ICS file export | Implemented on accepted tasks in the workspace and in the `/storage` development tester | Automated tests and an isolated browser check of the form; workspace button not browser-checked |
 
 ## End-to-end diagram
 

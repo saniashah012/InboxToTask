@@ -4,6 +4,9 @@ Updated November 5, 2026 (Central), after live local manual-scan testing and the
 PR and runtime state before acting; this describes that moment, not today. Read
 [AGENTS.md](AGENTS.md), then [current state](<Checkpoint 3/CURRENT_STATE.md>), then this.
 
+**Calendar:** Sania's work is rebased onto the Gmail branch on local branch `mzheng/calendar-rebase`,
+with its migration renamed to `20261106050000`. Not applied, enabled or live-tested.
+
 **Repository:** `C:/Users/mzhen/Desktop/School/IS492/IS-492-Project`
 
 ## Boundaries
@@ -46,8 +49,9 @@ from `main` per Sania. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy 
 8. `20261106030000_gmail_task_source_links.sql`
 9. `20261106040000_gmail_token_recheck.sql`
 
-Calendar's migration is not on hosted or on `main`. It redefines `google_connection_service`, so
-review that against the Gmail flow when Calendar resumes in CP4.
+Calendar's `20261106050000_calendar_events.sql` (`20261106020000` on Sania's branch) runs after 9, as a
+separate later step. It is not on hosted. It redefines `google_connection_service`, so review that
+against the Gmail flow before applying it.
 
 ## Local runtime
 - All nine migrations above are applied locally without reset. Calendar's is not.

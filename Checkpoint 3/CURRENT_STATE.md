@@ -4,6 +4,8 @@ Updated the evening of November 5, 2026 (Central), after live local manual-scan 
 hosted database rollouts and the merge of PR #22 to `main` at `59461b6`. This is the resumption index, not a claim that
 services are running. Check Git status and local runtime/migration state before new work.
 
+**Calendar:** on branch `mzheng/calendar-rebase` only, disabled by default, with no real writes yet. Its migration is `20261106050000`, not applied locally or on hosted. See the [Calendar plan](docs/calendar-integration-2026-11-05.md).
+
 ## Read in this order
 
 1. [Repository instructions](../AGENTS.md) and the relevant scoped instructions.

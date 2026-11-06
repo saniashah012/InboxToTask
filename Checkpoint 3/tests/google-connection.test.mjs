@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTokenCipher, createGoogleConnection, createGoogleHandler, createGoogleProvider, GMAIL_SCOPE } from '../app/supabase/functions/_shared/google-connection.mjs';
+import { createTokenCipher, createGoogleConnection, createGoogleHandler, createGoogleProvider, GMAIL_SCOPE, CALENDAR_SCOPE } from '../app/supabase/functions/_shared/google-connection.mjs';
 
 const user={id:'11111111-1111-4111-8111-111111111111',email:'student@example.org'};
 const cipher=()=>createTokenCipher({keys:JSON.stringify({v1:Buffer.alloc(32,7).toString('base64')}),activeKey:'v1'});
@@ -18,14 +18,14 @@ test('AES-GCM binds ciphertext to account, purpose and key; supports old keys du
   assert.match(await rotated.seal(user.id,'credentials',{}),/^v2\./);
 });
 
-function trial({identity={subject:'12345',email:user.email},scopes=[GMAIL_SCOPE],refreshToken='fictional-refresh',finish='connected'}={}) {
+function trial({identity={subject:'12345',email:user.email},scopes=[GMAIL_SCOPE],refreshToken='fictional-refresh',finish='connected',previous=false}={}) {
   const c=cipher(); let pending; let state; let exchanges=0; let saved;
   const provider={authorization(s,ch,email){state=s; assert.equal(ch.length,43); assert.equal(email,user.email); return 'https://accounts.google.com/o/oauth2/v2/auth';},
     async exchange(code,verifier){ exchanges++; assert.equal(code,'fictional-code'); assert.equal(verifier.length,43); return {accessToken:'fictional-access',refreshToken,scopes,expiresAt:'2026-11-05T12:00:00Z'}; },
     async identity(){return identity;}};
   const rpc=async(uid,action,data)=>{
     if(action==='start'){pending={...data,userId:uid,generation:1};return {state:'started'};}
-    if(action==='consume'){if(!pending || pending.hash!==data.hash)return {state:'invalid_state'}; const result=pending;pending=null;return {...result,state:'consumed'};}
+    if(action==='consume'){if(!pending || pending.hash!==data.hash)return {state:'invalid_state'}; const result=pending;pending=null;return {...result,state:'consumed',...(previous?{subject:'12345',scopes:[GMAIL_SCOPE],credentials:await c.seal(user.id,'credentials',{accessToken:'old-access',refreshToken:'old-refresh'})}:{})};}
     if(action==='finish'){saved=data;return {state:finish};}
     throw new Error('Unexpected RPC');
   };
@@ -48,6 +48,39 @@ test('denied consent consumes state without exchanging a code',async()=>{
   await assert.rejects(t.connection.callback(new URLSearchParams({state:t.state,error:'access_denied'})),{code:'GOOGLE_CONSENT_DENIED'});
   assert.equal(t.exchanges,0); assert.equal(t.saved,undefined);
   await assert.rejects(t.connection.callback(new URLSearchParams({state:t.state,code:'fictional-code'})),{code:'GOOGLE_INVALID_STATE'});
+});
+
+test('Calendar upgrade retains existing refresh token and requires both grants before persistence',async()=>{
+ const t=trial({previous:true,scopes:[GMAIL_SCOPE,CALENDAR_SCOPE],refreshToken:null});
+ await t.connection.start(user,true);
+ await t.connection.callback(new URLSearchParams({state:t.state,code:'fictional-code'}));
+ assert.equal((await t.c.open(user.id,'credentials',t.saved.credentials)).refreshToken,'old-refresh');
+ for(const scopes of [[GMAIL_SCOPE],[CALENDAR_SCOPE]]) {
+  const partial=trial({previous:true,scopes});await partial.connection.start(user,true);
+  await assert.rejects(partial.connection.callback(new URLSearchParams({state:partial.state,code:'fictional-code'})));
+  assert.equal(partial.saved,undefined);
+ }
+ const denied=trial({previous:true});await denied.connection.start(user,true);
+ await assert.rejects(denied.connection.callback(new URLSearchParams({state:denied.state,error:'access_denied'})),{code:'GOOGLE_CONSENT_DENIED'});
+ assert.equal(denied.saved,undefined);assert.equal(denied.exchanges,0);
+});
+
+test('Calendar scope is optional for Gmail-only authorization and requested only by explicit upgrade',()=>{
+ const p=createGoogleProvider({clientId:'fictional',clientSecret:'fictional',callbackUrl:'https://backend.test/callback'});
+ const gmail=new URL(p.authorization('state','challenge',user.email));assert.ok(!gmail.searchParams.get('scope').includes(CALENDAR_SCOPE));
+ const calendar=new URL(p.authorization('state','challenge',user.email,true));assert.ok(calendar.searchParams.get('scope').includes(CALENDAR_SCOPE));
+});
+
+test('Calendar scope checks do not acquire a Gmail refresh lease; refreshed grants reflect Calendar loss',async()=>{
+ const c=cipher();let requested,finished;
+ const missing=createGoogleConnection({cipher:c,provider:{},rpc:async(_,action,data)=>{assert.equal(action,'refresh_claim');requested=data;return {state:'scope_required'};}});
+ await assert.rejects(missing.accessToken(user.id,CALENDAR_SCOPE),{code:'GOOGLE_CALENDAR_SCOPE_REQUIRED'});
+ assert.equal(requested.requiredScope,CALENDAR_SCOPE);
+ const saved=await c.seal(user.id,'credentials',{accessToken:'old',refreshToken:'preserved'});
+ const connection=createGoogleConnection({cipher:c,provider:{refresh:async()=>({accessToken:'new',scopes:[GMAIL_SCOPE],expiresAt:'2099-01-01T00:00:00Z'})},
+  rpc:async(_,action,data)=>{if(action==='refresh_claim')return {state:'refresh',credentials:saved,scopes:[GMAIL_SCOPE,CALENDAR_SCOPE],generation:1,lease:'lease'};assert.equal(action,'refresh_finish');finished=data;return {state:'ready'};}});
+ await assert.rejects(connection.accessToken(user.id,CALENDAR_SCOPE),{code:'GOOGLE_CALENDAR_SCOPE_REQUIRED'});
+ assert.deepEqual(finished.scopes,[GMAIL_SCOPE]);assert.equal((await c.open(user.id,'credentials',finished.credentials)).refreshToken,'preserved');
 });
 
 test('wrong account, partial consent, missing offline token, stale commit never report connected',async()=>{
@@ -125,7 +158,7 @@ test('provider uses fixed HTTPS endpoints, offline consent, scope checking, and 
     fetchImpl:async(url,options)=>{calls.push({url,options});return new Response(JSON.stringify({error:'invalid_grant',error_description:'sensitive prose'}),{status:400});}});
   const url=new URL(provider.authorization('state','challenge',user.email));
   assert.equal(url.searchParams.get('access_type'),'offline');assert.equal(url.searchParams.get('code_challenge_method'),'S256');
-  assert.equal(url.searchParams.get('include_granted_scopes'),'false');
+  assert.equal(url.searchParams.get('include_granted_scopes'),'true');
   await assert.rejects(provider.refresh('fictional-refresh'),{code:'GOOGLE_REVOKED',message:'GOOGLE_REVOKED'});
   assert.equal(calls[0].url,'https://oauth2.googleapis.com/token');assert.equal(calls[0].options.redirect,'error');
 });

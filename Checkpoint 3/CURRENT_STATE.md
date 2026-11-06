@@ -1,5 +1,11 @@
 # Current implementation and verification state
 
+Calendar integration is implemented separately in this isolated branch, disabled
+by default and not deployed. See the [Calendar implementation and approval plan](docs/calendar-integration-2026-11-05.md)
+for its additive migration after Gmail hardening, shared OAuth review gate,
+offline/browser evidence, Google dashboard setup and exact proposed release order.
+This does not change the coordinated Gmail/database rollout status below.
+
 Updated November 5, 2026, after the Gmail scan code review. This is the resumption
 index, not a claim that services are running. Check Git status and local
 runtime/migration state before new work.

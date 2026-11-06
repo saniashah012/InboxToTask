@@ -33,7 +33,7 @@ export default function GoogleConnectionPanel() {
           window.location.assign(destination.href)
           return
         }
-        setNotice(action === "disconnect" ? "Google disconnected. Connecting again still requires saved scanning consent." : "A backend access token is available. No email was read.")
+        setNotice(action === "disconnect" ? "Google disconnected for Gmail and Calendar. Connecting again still requires saved scanning consent." : "A backend access token is available. No email was read.")
       }
     } catch (err) { if (live.current) setError((err as Error).message) }
     finally {
@@ -53,10 +53,10 @@ export default function GoogleConnectionPanel() {
     <div className="storage-actions">
       <button disabled={busy || !status || status.state === "disconnecting"} onClick={() => void run("connect")}>{status?.state === "connected" || status?.state === "reconnect_required" ? "Reconnect Google" : "Connect Google"}</button>
       <button disabled={busy || status?.state !== "connected"} onClick={() => void run("check")}>Check token availability</button>
-      <button disabled={busy || !status || status.state === "disconnected"} onClick={() => void run("disconnect")}>{status?.state === "disconnecting" ? "Retry disconnect" : "Disconnect Gmail"}</button>
+      <button disabled={busy || !status || status.state === "disconnected"} onClick={() => void run("disconnect")}>{status?.state === "disconnecting" ? "Retry disconnect" : "Disconnect Gmail and Calendar"}</button>
       <button disabled={busy} onClick={() => void run("reload")}>Reload connection status</button>
     </div>
-    <p>Manual scanning requires separate saved consent, source permissions and an explicit scan request. Google Calendar is not connected. Signing out of the app does not disconnect Google.</p>
+    <p>Manual scanning requires separate saved consent, source permissions and an explicit scan request. Calendar authorization is optional and requested from Add to calendar. Disconnecting this shared Google connection revokes Gmail and Calendar access together; existing events remain in Google Calendar. Signing out of the app does not disconnect Google.</p>
     {notice && <p role="status">{notice}</p>}{error && <p role="alert">{error}</p>}
   </section>
 }

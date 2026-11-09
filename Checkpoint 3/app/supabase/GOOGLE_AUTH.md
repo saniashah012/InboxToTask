@@ -91,21 +91,28 @@ not a validated scanning consent/allowlist contract. Do not infer consent from t
 
 ## Step-by-step local Google setup
 
-This walkthrough uses two Google Cloud projects and the existing local Supabase
-stack. Keep the existing Gemini project unchanged. No hosted deployment is needed
-for these steps. Use `127.0.0.1` consistently for this walkthrough.
+This walkthrough uses two Google Cloud projects and the local Supabase stack from
+[INSTALL step 4](../INSTALL.md#4-start-local-supabase). You can follow it with your own
+Google account, and you don't need access to any team project. It doesn't touch any
+Gemini project or key: those are only needed later, for scanning. No hosted deployment
+is needed for these steps. Use `127.0.0.1` consistently for this walkthrough.
+
+Below, the "dedicated test account" is a throwaway Google account you create for this,
+holding only fictional mail. The "private Auth file" is `supabase/.env` and the "private
+Functions file" is `supabase/functions/.env`. For support and developer contact emails,
+use an address of your own.
 
 ### 1. Locate the private files
 
-These files are ignored by Git. Blank copies were created for the current local
-checkout; on another checkout, copy the corresponding example if the private file
-does not exist. Preserve any existing configuration rather than overwriting it.
+These files are ignored by Git, so a fresh clone doesn't have them. Copy the
+corresponding example if the private file does not exist. Preserve any existing
+configuration rather than overwriting it.
 
 | Private file | What to enter | Shareable template |
 | --- | --- | --- |
-| [supabase/.env](.env) | Sign-in project ID, sign-in client ID and client secret | [Auth template](.env.example) |
-| [supabase/functions/.env](functions/.env) | Gmail project ID, Gmail client ID and client secret, backend URLs and encryption key | [Functions template](functions/.env.example) |
-| [web/.env](../web/.env) | Public local Supabase URL/key and frontend flags | [Frontend template](../web/.env.example) |
+| `supabase/.env` | Sign-in project ID, sign-in client ID and client secret | [Auth template](.env.example) |
+| `supabase/functions/.env` | Gmail project ID, Gmail client ID and client secret, backend URLs and encryption key | [Functions template](functions/.env.example) |
+| `web/.env` | Public local Supabase URL/key and frontend flags | [Frontend template](../web/.env.example) |
 
 Enter values after `=` without placeholder angle brackets. The project-ID fields
 are handoff notes; runtime configuration uses the OAuth client IDs. Do not paste
@@ -173,11 +180,15 @@ written above, even if an external tutorial uses `_CLIENT_SECRET`.
 4. Leave `GOOGLE_CALLBACK_URL` and `GOOGLE_RETURN_URL` at their local defaults.
    The return URL is `http://127.0.0.1:5173/`; it is the backend's final
    destination, not the redirect URI to register with Google.
-5. Leave `ENABLE_GOOGLE_CONNECTION=false` and `GOOGLE_TOKEN_KEYS` blank for the
-   handoff. Keep `ENABLE_FIXTURE_EXTRACTION=false`. Gemini credentials are not
-   needed for sign-in/connection testing.
+5. Keep `ENABLE_FIXTURE_EXTRACTION=false`. Gemini credentials are not needed for
+   sign-in/connection testing. If you came from INSTALL.md, stop here and return to
+   [INSTALL step 5](../INSTALL.md#5-set-up-google), which sets
+   `ENABLE_GOOGLE_CONNECTION` and `GOOGLE_TOKEN_KEYS`. For a team handoff (step 6),
+   leave `ENABLE_GOOGLE_CONNECTION=false` and `GOOGLE_TOKEN_KEYS` blank.
 
 ### 6. Hand off the completed configuration
+
+Team handoff only. Skip this step if you are following INSTALL.md.
 
 After filling both credential pairs, tell the coding agent:
 

@@ -1,11 +1,14 @@
 import { filterMessage, PipelineError } from './core.mjs';
+import { containsBlockedWord, textValues } from './private-topics.mjs';
 
 const words = text => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []);
 // This selects task candidates, never grants source access. A candidate is not a
 // match: the model must cite current-message evidence and validation checks the
 // target. Word overlap only ranks candidates, because a reply such as "this moved
 // to Friday" can share no words with the task it changes.
-export function selectTaskContext(rows, message, rules, maxChars=12000) {
+// A task whose accepted values or source subjects contain a blocked word is never a
+// candidate, because its values would carry that word to the model.
+export function selectTaskContext(rows, message, rules, maxChars=12000, blockedTerms=[]) {
   const terms=words(`${message.subject} ${message.body}`); const eligible=[]; let omitted=false;
   if (!Array.isArray(rows) || rows.length>21) throw new PipelineError('INVALID_TASK_CONTEXT');
   for (const row of rows) {
@@ -13,6 +16,7 @@ export function selectTaskContext(rows, message, rules, maxChars=12000) {
       || !row.acceptedFields || !Array.isArray(row.sources) || !row.sources.length) throw new PipelineError('INVALID_TASK_CONTEXT');
     if (row.sources.length>30) {omitted=true;continue;}
     if (row.sources.some(s=>filterMessage(s,rules)!=='PERMITTED')) continue;
+    if (containsBlockedWord([...textValues(row.acceptedFields),...row.sources.map(s=>s.subject)],blockedTerms)) continue;
     if (!row.sources.some(s=>s.threadId===message.threadId)) continue;
     if (row.sources.every(s=>s.id===message.id)) continue;
     // A message cannot change a task that it created or that came from later mail.

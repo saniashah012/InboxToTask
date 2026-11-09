@@ -8,7 +8,8 @@ export type Snapshot = Record<string, StoredRow[]>
 export type ScanRules = Record<"allow" | "block", Record<"labels" | "senders" | "domains" | "subjectKeywords" | "keywords", string[]>>
 export type ScanSettings = {
   revision: number; consent: boolean; paused: boolean; consent_at: string | null
-  semantic_preferences: { include: string[]; exclude: string[] }
+  // blockedWords: one literal word list per skipped topic, checked before anything reaches the AI.
+  semantic_preferences: { include: string[]; exclude: string[]; blockedWords?: Record<string, string[]> }
   requires_review: boolean; legacy_phrase_rules: ScanRules | null; reviewed?: boolean
   rules: ScanRules
   context_limits: { maxMessages: number; maxAgeDays: number; maxMessageChars: number; maxTotalChars: number }

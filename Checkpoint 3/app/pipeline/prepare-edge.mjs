@@ -7,7 +7,7 @@ for (const subdir of ['pipeline/', 'prompts/']) {
   await mkdir(new URL(subdir, target), { recursive: true });
 }
 for (const path of ['pipeline/core.mjs', 'pipeline/gemini.mjs', 'pipeline/gmail-retrieval.mjs', 'pipeline/task-context.mjs', 'pipeline/gmail-processor.mjs',
-  'pipeline/provider-schema.mjs', 'prompts/extraction.schema.mjs']) {
+  'pipeline/provider-schema.mjs', 'pipeline/private-topics.mjs', 'prompts/extraction.schema.mjs']) {
   await copyFile(new URL(path, root), new URL(path, target));
 }
 const systemPrompt = await readFile(new URL('prompts/extraction.system.txt', root), 'utf8');

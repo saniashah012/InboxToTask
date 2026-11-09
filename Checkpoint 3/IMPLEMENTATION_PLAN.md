@@ -23,7 +23,7 @@ applied 03:50 UTC November 6, with Gmail functions not deployed, so connecting a
 only locally; see [current state](CURRENT_STATE.md). Recheck runtime state before resumption.
 
 The user accepted empty semantic inclusions as no topic inclusion restriction
-within source-permitted email; semantic exclusions still apply. Source access is
+within source-permitted email; skipped topics still apply. Source access is
 exact sender/domain OR inclusion with overriding source/subject exclusions.
 Categories never expand into access keywords. New users default to five earlier
 messages within 90 days; existing saved context is preserved. Incompatible phrase
@@ -156,16 +156,16 @@ Confirmed direction from the November 5 discussion: separate deterministic acces
 | Excluded sender/domain | Same exact matching; overrides any inclusion |
 | Optional excluded subject phrase | Literal case-insensitive substring of the subject only; enforced before body retrieval and inference |
 | Suggested category or custom topic | Semantic relevance preference in the combined extraction call; never a source permission or an automatic keyword expansion |
-| Semantic topic exclusion, if offered | Controls surfaced results after inference; cannot promise the content was never sent to Gemini |
+| Skipped topic (Never send to AI) | A list of literal words and phrases, checked case- and accent-insensitively as whole words in backend code: the subject before the body is fetched, then the decoded body, and the same for each earlier thread message and existing-task context. A match keeps that email away from Gemini entirely. Suggested topics turn on reviewed starter lists; a user's own word blocks that literal word. Lists only withhold email and never grant access. Decided by Matthew on November 9, 2026, replacing the earlier after-inference result filter |
 
 A nonempty sender/domain allowlist and explicit scanning consent are required. A category alone permits nothing. The backend checks rules before fetching the current body and independently before fetching each context body, and rechecks current consent, pause, connection, revisions, and deletion state before inference and commit. Already dispatched requests cannot be retracted.
 
-Keep suggested interests such as School, Job applications, Research, and Meetings as meaningful topics rather than lists of literal terms. A school-related message can be relevant without containing homework or assignment. Explain that permitted content reaches Gemini before semantic relevance can be determined. Do not present Financial or Health as guaranteed pre-LLM privacy exclusions; topic preferences cannot reliably prevent disclosure of those topics.
+Keep suggested interests such as School, Job applications, Research, and Meetings as meaningful topics rather than lists of literal terms. A school-related message can be relevant without containing homework or assignment. Explain that permitted content reaches Gemini before relevance to topics of interest can be determined. Skipped topics are different: their words are checked in our system before anything goes to Gemini. Say plainly that email discussing a skipped topic without any of its words can still be sent, and that excluding the sender or domain is the complete protection. No LLM suggests words.
 
 Frontend copy and controls:
 
 - Separate permitted sources, Never send to AI exclusions, and semantic topics of interest. Preserve custom entry, exact sender/domain controls, shared-session persistence, and accessible hover/focus/tap help with dismissal and visible focus.
-- Explain that source rules are checked in backend code before retrieval/inference, while topic interpretation happens within Gemini. Do not use a semantic category selector to imply guaranteed sensitive-topic blocking.
+- Explain that source rules and skipped-topic words are checked in backend code before inference, while topics of interest are interpreted within Gemini. Do not imply that a skipped topic blocks every email about it; it blocks emails containing its words.
 - Show effective access scope and semantic preferences separately in onboarding, review, settings, preview, and empty states. Saving settings never grants consent implicitly.
 - Preserve prior subject-only exclusions at their original scope. Existing general phrase exclusions cannot silently become subject-only rules: removing sender matching would weaken blocking. Require review and keep processing blocked for incompatible settings until resolved.
 
@@ -201,7 +201,7 @@ The agreed target is bounded history for task changes, not current-message-only 
 - Retain whole-message omission for context that exceeds size limits; do not silently truncate evidence. An empty/oversized current body stops extraction for review. Surface missing or omitted context explicitly.
 - Update canonical validation, database validation/defaults, settings controls, callers, and tests together for the agreed 90-day default and 1-365-day range. Use a new migration and reviewed settings changes; do not silently widen existing consent/context settings.
 - Remove quoted history and signatures where practical and retrieve permitted originals individually. Cleanup is imperfect: copied sensitive content can remain within an otherwise permitted body.
-- Sender/domain and literal subject rules do not guarantee exclusion of all healthcare or financial content. No semantic sensitive-content detector or secret-pattern scanner is required. Disclose that permitted bodies/context are sent to Gemini; semantic exclusions only affect results afterward.
+- Sender/domain and literal subject rules do not guarantee exclusion of all healthcare or financial content. No semantic sensitive-content detector or secret-pattern scanner is required. Disclose that permitted bodies/context are sent to Gemini unless they contain a skipped topic's words; skipped-topic words are literal, so they are not a sensitive-content detector either.
 - Keep full email bodies transient by default. Do not put email content, prompts, credentials, or model output in technical logs. Supporting excerpts and task values remain sensitive and follow retention/deletion controls; provider-side retention is separate.
 
 ### Task and calendar control

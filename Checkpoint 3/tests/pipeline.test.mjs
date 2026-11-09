@@ -337,6 +337,8 @@ test('context accepts 365 days and measures age from analyzed message', () => {
 
 test('semantic preferences are a separate bounded payload and cannot alter source permission',()=>{
  const x=input();x.semanticPreferences={include:[' School ','school'],exclude:['Financial']};
- assert.deepEqual(prepared(x).payload.semanticPreferences,{include:['school'],exclude:['financial']});
+ // Excluded topics are checked as words before the model and never sent to it.
+ assert.deepEqual(prepared(x).payload.semanticPreferences,{include:['school']});
+ assert.ok(!JSON.stringify(prepared(x).payload).includes('financial'));
  x.semanticPreferences.include=['a'.repeat(255)];assert.throws(()=>prepared(x),/INVALID_SEMANTIC_PREFERENCES/);
 });

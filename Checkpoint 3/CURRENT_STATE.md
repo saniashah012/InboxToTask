@@ -31,7 +31,16 @@ reports describe their own run, not today's runtime or later code.
 | 7: automatic scans | Not implemented | Not started; no schedule authorized or installed |
 
 Empty semantic inclusions mean no topic inclusion restriction within source-permitted
-content; semantic exclusions still apply. The user explicitly accepted that behavior.
+content; skipped topics still apply. The user explicitly accepted that behavior.
+
+**Skipped topics block before Gemini (November 9, user decision).** Each skipped topic is a
+literal word list checked in backend code before any model call; a matching email (subject,
+body, earlier thread message or existing-task context) is never sent to Gemini. Suggested
+topics turn on starter lists; a typed word blocks that literal word. Code, migration
+`20261109200000_private_topic_words` and offline tests are on branch
+`claude/topic-block-pre-gemini`. That migration is **not applied** locally or on hosted, and
+pgTAP and Deno checks were not run for it. Designed-UI word-list editing is a separate
+follow-up.
 Edit/cancel proposals use conservative review and stale-target rebase; that was the
 recommended option and was not separately confirmed by the user. **The user explicitly
 decided** that ambiguous updates show the source and let the user enter what is correct. No source inclusions

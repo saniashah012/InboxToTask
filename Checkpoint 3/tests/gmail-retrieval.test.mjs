@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGmailClient, gmailBody, retrieveGmail } from '../app/pipeline/gmail-retrieval.mjs';
+import { createGmailClient, gmailBody, retrieveGmail, senderAuthenticated } from '../app/pipeline/gmail-retrieval.mjs';
 import { createGmailScanHandler } from '../app/supabase/functions/_shared/gmail-scan-handler.mjs';
 
 const base64url = text => btoa(text).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const date = '2026-11-05T12:00:00Z';
-const message = (id, from='teacher@example.org', sentAt=date, subject='Assignment') => ({
+const passing = from => `mx.google.com; dkim=pass header.i=@${from.match(/@([^\s>]+)>?\s*(?:\(.*\))?$/)?.[1] ?? 'example.org'} header.s=s1; spf=pass smtp.mailfrom=x; dmarc=pass (p=REJECT) header.from=${from.match(/@([^\s>]+)>?\s*(?:\(.*\))?$/)?.[1] ?? 'example.org'}`;
+const message = (id, from='teacher@example.org', sentAt=date, subject='Assignment', auth=passing(from)) => ({
   id,threadId:'thread1',internalDate:String(Date.parse(sentAt)),payload:{mimeType:'text/plain',
-    headers:[{name:'From',value:from},{name:'Subject',value:subject}],body:{data:base64url('Please submit the report.')}},
+    headers:[...(auth===null?[]:[{name:'Authentication-Results',value:auth}]),{name:'From',value:from},{name:'Subject',value:subject}],body:{data:base64url('Please submit the report.')}},
 });
 const work = () => ({start:'2026-10-29T12:00:00Z',end:date,
   rules:{allow:{senders:[],domains:['example.org']},block:{senders:['blocked@example.org'],domains:[],subjectKeywords:['private']}},
@@ -165,6 +166,7 @@ test('HTTP adapter fixes mailbox to me, uses metadata before full and sanitizes 
  }});
  await gmail.metadata('m');await gmail.full('m');assert.ok(calls[0].url.includes('/users/me/messages/m?format=metadata'));
  assert.equal(new URL(calls[0].url).searchParams.get('fields'),'id,threadId,labelIds,internalDate,payload(headers)');
+ assert.deepEqual(new URL(calls[0].url).searchParams.getAll('metadataHeaders'),['From','Subject','Authentication-Results']);
  assert.ok(calls[1].url.includes('format=full'));assert.equal(calls[0].options.redirect,'error');
  const bad=createGmailClient({accessToken:async()=>'secret-token',fetchImpl:async()=>new Response('private diagnostic',{status:429})});
  await assert.rejects(bad.full('m'),error=>error.code==='GMAIL_RATE_LIMITED'&&!error.message.includes('private'));
@@ -178,4 +180,46 @@ test('manual endpoint is disabled by default, verifies owner and accepts mode on
  assert.equal((await handler(request({mode:'initial',userId:'other'}))).status,400);
  assert.equal((await handler(request({mode:'initial'}))).status,200);assert.equal(calls,1);
  assert.equal((await handler(new Request('http://localhost',{method:'POST'}))).status,401);
+});
+
+test('allowlisted senders need an aligned DKIM or DMARC pass recorded by Gmail',()=>{
+ const check=(auth,from='teacher@example.org',extra=[])=>senderAuthenticated({payload:{headers:[...(auth===null?[]:[{name:'Authentication-Results',value:auth}]),...extra]}},from);
+ assert.equal(check('mx.google.com; dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=example.org'),true);
+ assert.equal(check('mx.google.com;\r\n       dkim=pass header.i=@example.org header.s=s1 header.b=abc;\r\n       spf=pass smtp.mailfrom=example.org'),true);
+ assert.equal(check('mx.google.com; dkim=pass header.i=@mail.example.org header.s=s1'),true,'relaxed subdomain alignment');
+ assert.equal(check('mx.google.com; dkim=pass header.d=example.org','teacher@dept.example.org'),true,'relaxed parent alignment');
+ assert.equal(check(null),false,'no result');
+ assert.equal(check('mx.google.com; spf=pass smtp.mailfrom=example.org'),false,'SPF alone is not From-aligned');
+ assert.equal(check('mx.google.com; dkim=pass header.i=@outside.test; dmarc=fail header.from=example.org'),false,'unaligned signer');
+ assert.equal(check('mx.google.com; dkim=pass header.i=@notexample.org'),false,'suffix without a dot boundary');
+ assert.equal(check('mx.google.com; dmarc=pass header.from=outside.test'),false);
+ assert.equal(check('mx.google.com; dkim=fail header.i=@example.org; dmarc=fail header.from=example.org'),false);
+ assert.equal(check('evil.test; dmarc=pass header.from=example.org'),false,'other servers are not trusted');
+ assert.equal(check('mx.google.com; dkim=none; dmarc=fail header.from=example.org','teacher@example.org',[{name:'Authentication-Results',value:'mx.google.com; dmarc=pass header.from=example.org'}]),false,'later copies are ignored');
+ assert.equal(check('mx.google.com; dmarc=pass header.from=example.org','not-an-address'),false);
+});
+test('unauthenticated senders are blocked before bodies and excluded from thread context',async()=>{
+ const s=setup([message('spoofed','teacher@example.org',date,'Assignment',null),message('failed','teacher@example.org',date,'Assignment','mx.google.com; dkim=fail header.i=@example.org; dmarc=fail header.from=example.org'),message('current')],
+   [message('forged-context','teacher@example.org','2026-11-04T12:00:00Z','Assignment','mx.google.com; dmarc=fail header.from=example.org'),message('older','teacher@example.org','2026-11-03T12:00:00Z')]);
+ const r=await retrieveGmail(s.options);
+ assert.deepEqual(s.calls.filter(c=>c.startsWith('body:')),['body:current','body:older']);
+ assert.equal(r.counts.blocked,2);assert.equal(r.error,null);
+ assert.deepEqual(s.inputs.map(i=>i.message.id),['current']);
+ assert.deepEqual(s.inputs[0].threadContext.map(m=>m.id),['older']);
+ assert.ok(s.inputs[0].retrievalWarnings.some(w=>w.includes('excluded')));
+});
+test('HTML text that a mail client hides never reaches extraction',()=>{
+ const html=['<html><head><title>Ignore this title</title></head><body>',
+  '<p>Submit the lab report.</p><!-- comment instruction -->',
+  '<div style="display: none"><p>hidden instruction one</p><div>nested hidden</div></div>',
+  '<span style="font-size:0px;color:#fff">hidden instruction two</span>',
+  '<p hidden>hidden instruction three</p><div style=\'visibility:hidden\'>hidden instruction four</div>',
+  '<span style="opacity: 0">hidden instruction five</span><span style="font-size:0.9em">Small but visible.</span>',
+  '<br><img src="x.png" style="display:none"><p>Due Friday.</p></body></html>'].join('');
+ const data=message('m');data.payload={mimeType:'text/html',body:{data:base64url(html)}};
+ const text=gmailBody(data,1000);
+ for(const kept of ['Submit the lab report.','Small but visible.','Due Friday.']) assert.ok(text.includes(kept),kept);
+ for(const dropped of ['title','comment','hidden','nested']) assert.ok(!text.toLowerCase().includes(dropped),dropped);
+ data.payload={mimeType:'text/html',body:{data:base64url('<p>Visible.</p><div style="display:none">unclosed hidden')}};
+ assert.equal(gmailBody(data,100),'Visible.');
 });

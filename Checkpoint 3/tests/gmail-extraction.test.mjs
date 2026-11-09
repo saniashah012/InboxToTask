@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareInput,validateExtraction} from '../app/pipeline/core.mjs';
+import {contentWarnings,extract,prepareInput,validateExtraction} from '../app/pipeline/core.mjs';
 import {selectTaskContext} from '../app/pipeline/task-context.mjs';
 import {filterRelevantOutput} from '../app/pipeline/gmail-processor.mjs';
 const ID='11111111-1111-4111-8111-111111111111';
@@ -75,4 +75,25 @@ test('mixed-topic filtering removes irrelevant tasks/information/changes and rem
  v.suggestedFollowUps=[{waitingForIndex:0,topicRelevance:'relevant'},{waitingForIndex:1,topicRelevance:'relevant'}];v.topicRelevance.decision='irrelevant';
  const result=filterRelevantOutput({result:v}).result;
  assert.equal(result.tasks.length,0);assert.equal(result.taskChanges.length,0);assert.equal(result.summary,'Outside selected topics.');assert.equal(result.suggestedFollowUps[0].waitingForIndex,0);
+});
+
+test('links and credential or payment wording in suggestions add review warnings without changing them',async()=>{
+ const plain=output();assert.deepEqual(contentWarnings(plain),[]);
+ const cases=[['Open https://portal.example.test/login to confirm','web link'],['Visit portal.example.test/confirm today','web link'],
+  ['Reply with your password and verification code','passwords'],['Buy three gift cards and send the numbers','payments'],
+  ['Send your bank account and routing number','payments']];
+ for(const [action,expected] of cases){
+  const v=output();v.taskChanges[0].fields.action=action;
+  const found=contentWarnings(v);assert.equal(found.length,1,action);assert.ok(found[0].includes(expected),action);
+ }
+ const many=output();many.summary='Wire the payment via www.example.test/pay using your password.';assert.equal(contentWarnings(many).length,3);
+ for(const benign of ['Submit research report by Friday','Upload slides to the shared folder','Email the professor about office hours']){
+  const v=output();v.taskChanges[0].fields.action=benign;assert.deepEqual(contentWarnings(v),[],benign);
+ }
+ const input={contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',rules,message,threadContext:[],
+  contextLimits:{maxMessages:5,maxAgeDays:90,maxMessageChars:12000,maxTotalChars:24000},semanticPreferences:{include:[],exclude:[]},existingTaskContext:context};
+ const value=output();value.taskChanges[0].fields.action='Confirm the report at https://portal.example.test';value.taskChanges[0].changedFields=['action','deadline'];
+ const result=await extract(input,{settings:{contextLimits:{}},systemPrompt:'Unit test prompt',generate:async()=>({value,attempts:1})});
+ assert.equal(result.needsReview,true);assert.ok(result.contextWarnings.some(w=>w.includes('web link')));
+ assert.equal(result.result.taskChanges[0].fields.action,'Confirm the report at https://portal.example.test');
 });

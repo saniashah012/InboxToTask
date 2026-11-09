@@ -14,6 +14,32 @@ const MESSAGE_FAILURES = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAI
 const hiddenFromScans = data => Array.isArray(data?.labelIds) && data.labelIds.some(label => label === 'SPAM' || label === 'TRASH');
 const CONTEXT_OMISSIONS = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_INVALID_RESPONSE','GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_METADATA_UNVERIFIABLE']);
 const id = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
+const METADATA_HEADERS = ['From','Subject','Authentication-Results'];
+const domainOf = value => typeof value === 'string' && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(value) ? value : null;
+const aligned = (signer, from) => signer === from || from.endsWith(`.${signer}`) || signer.endsWith(`.${from}`);
+
+// An allowlist rule names a sender, so it grants access only when Gmail's own
+// receiving server recorded an authenticated, From-aligned result. Only the first
+// Authentication-Results header is read: Gmail adds it above any copies a sender wrote.
+export function senderAuthenticated(data, from) {
+  const fromDomain = typeof from === 'string' ? from.split('@')[1] : null;
+  const headers = data?.payload?.headers;
+  if (!fromDomain || !Array.isArray(headers)) return false;
+  const first = headers.find(h => typeof h?.name === 'string' && h.name.toLowerCase() === 'authentication-results');
+  if (typeof first?.value !== 'string' || first.value.length > 8000) return false;
+  const parts = first.value.replace(/\((?:[^()\\]|\\.)*\)/g, ' ').toLowerCase().split(';').map(p => p.trim().replace(/\s+/g, ' '));
+  if (parts.shift() !== 'mx.google.com') return false;
+  const property = (part, key) => part.match(new RegExp(`(?:^|\\s)${key.replace('.', '\\.')}=(\\S+)`))?.[1] ?? null;
+  return parts.some(part => {
+    if (/^dmarc=pass(\s|$)/.test(part)) return domainOf(property(part, 'header.from')) === fromDomain;
+    if (/^dkim=pass(\s|$)/.test(part)) {
+      const signer = domainOf(property(part, 'header.d')) ?? domainOf(property(part, 'header.i')?.split('@').pop());
+      return !!signer && aligned(signer, fromDomain);
+    }
+    return false;
+  });
+}
+const permitted = (data, meta, rules) => filterMessage(meta, rules) === 'PERMITTED' && senderAuthenticated(data, meta.from);
 async function boundedJson(response, cap) {
   if (!response.body) throw problem('GMAIL_UNAVAILABLE');
   const reader = response.body.getReader(); const chunks = []; let size = 0;
@@ -50,7 +76,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
   const message = async (messageId, format) => {
     if (!id(messageId)) throw problem('GMAIL_INVALID_RESPONSE');
     const params = new URLSearchParams({ format, fields: format === 'metadata' ? 'id,threadId,labelIds,internalDate,payload(headers)' : 'id,threadId,internalDate,payload' });
-    if (format === 'metadata') for (const header of ['From','Subject']) params.append('metadataHeaders',header);
+    if (format === 'metadata') for (const header of METADATA_HEADERS) params.append('metadataHeaders',header);
     return get(`messages/${messageId}`, params, format === 'full' ? 2000000 : 16000);
   };
   return {
@@ -68,7 +94,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
     async thread(threadId) {
       if (!id(threadId)) throw problem('GMAIL_INVALID_RESPONSE');
       const params = new URLSearchParams({ format: 'metadata',fields:'id,messages(id,threadId,labelIds,internalDate,payload(headers))' });
-      for (const header of ['From','Subject']) params.append('metadataHeaders',header);
+      for (const header of METADATA_HEADERS) params.append('metadataHeaders',header);
       const data = await get(`threads/${threadId}`,params,100000);
       if (!Array.isArray(data.messages) || data.messages.length > 100) throw problem('GMAIL_CONTEXT_LIMIT');
       return data.messages;
@@ -96,8 +122,34 @@ export function gmailMetadata(data) {
   return { id: data.id, threadId: data.threadId, from, subject, sentAt: sentAt.toISOString(), labels: [] };
 }
 
+const VOID_TAGS = new Set(['area','base','br','col','embed','hr','img','input','link','meta','source','track','wbr']);
+const hiddenElement = attrs => {
+  if (/(?:^|\s)hidden(?:\s|=|\/|$)/i.test(attrs)) return true;
+  const style = attrs.match(/(?:^|\s)style\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+  const css = style ? (style[1] ?? style[2] ?? style[3]) : '';
+  return /display\s*:\s*none|visibility\s*:\s*hidden|(?:^|[;\s])(?:font-size|opacity|max-height)\s*:\s*0(?![.\d]*[1-9])/i.test(css);
+};
+// Drop markup a mail client does not show, so extraction sees what the reader sees.
+function visibleHtml(html) {
+  html = html.replace(/<!--[\s\S]*?(?:-->|$)/g,' ').replace(/<(head|title|template|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ');
+  const tag = /<\s*(\/)?\s*([a-z][a-z0-9-]*)\b([^>]*)>/gi;
+  let out = '', last = 0, hiddenTag = null, depth = 0, m;
+  while ((m = tag.exec(html))) {
+    const [all, close, rawName, attrs] = m, name = rawName.toLowerCase();
+    const opens = !close && !VOID_TAGS.has(name) && !/\/\s*$/.test(attrs);
+    if (hiddenTag === null) {
+      out += html.slice(last, m.index);
+      if (opens && hiddenElement(attrs)) { hiddenTag = name; depth = 1; } else out += all;
+    } else if (name === hiddenTag) {
+      if (close) depth--; else if (opens) depth++;
+      if (!depth) { hiddenTag = null; out += ' '; }
+    }
+    last = tag.lastIndex;
+  }
+  return hiddenTag === null ? out + html.slice(last) : out;
+}
 function htmlText(html) {
-  return html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ')
+  return visibleHtml(html).replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ')
     .replace(/<\s*(br|\/p|\/div|\/li)\b[^>]*>/gi,'\n').replace(/<[^>]*>/g,' ')
     .replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (all, entity) => {
       if (entity.startsWith('#')) {
@@ -161,18 +213,18 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
     if (suppressed.has(messageId)) { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
     try {
       await boundary();
-      let current;
+      let current, raw;
       try {
-        const listed = await gmail.metadata(messageId);
+        raw = await gmail.metadata(messageId);
         // A saved continuation can name a message that has since moved to Spam or Trash.
-        if (hiddenFromScans(listed)) { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
-        current = gmailMetadata(listed);
+        if (hiddenFromScans(raw)) { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
+        current = gmailMetadata(raw);
       } catch (error) {
         if (error?.code !== 'GMAIL_METADATA_UNVERIFIABLE') throw error;
         counts.candidates++; metadataRecords++; counts.blocked++; retry.delete(messageId); pending.shift(); continue;
       }
       counts.candidates++; metadataRecords++;
-      if (filterMessage(current,work.rules) !== 'PERMITTED') { counts.blocked++; retry.delete(messageId); pending.shift(); continue; }
+      if (!permitted(raw,current,work.rules)) { counts.blocked++; retry.delete(messageId); pending.shift(); continue; }
       if (Date.parse(current.sentAt)<Date.parse(work.start) || Date.parse(current.sentAt)>Date.parse(work.end)) { retry.delete(messageId); pending.shift(); continue; }
       counts.permitted++;
       await boundary(); const full = await gmail.full(messageId);
@@ -194,7 +246,7 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
               return [];
             }
             const meta = gmailMetadata(item);
-            if (meta.id !== messageId && (suppressed.has(meta.id) || filterMessage(meta,work.rules) !== 'PERMITTED')) {
+            if (meta.id !== messageId && (suppressed.has(meta.id) || !permitted(item,meta,work.rules))) {
               // Later mail is never context for this message, so excluding it hides nothing.
               if (Date.parse(meta.sentAt) <= Date.parse(current.sentAt)) excluded = true;
               return [];

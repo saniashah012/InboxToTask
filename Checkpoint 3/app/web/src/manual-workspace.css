@@ -129,3 +129,20 @@
 .manual-workspace .manual-info-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
 .manual-workspace .manual-info-row strong { flex:1 1 12rem; min-width:0; overflow-wrap:anywhere; }
 .manual-workspace .manual-info-marker { padding:2px 10px; background:var(--green-soft); border:1px solid var(--green); border-radius:999px; color:var(--green-dark); font-size:.78rem; font-weight:700; }
+
+/* The real connection panel, consent box and save bar inside the designed onboarding and settings. */
+.storage-page.onboarding-google { max-width:none; margin:16px 0 0; padding:0; color:var(--ink); font-family:inherit; text-align:left; }
+.onboarding-google .storage-panel { margin:0; padding:16px; border-color:var(--line); }
+.onboarding-google .google-state { display:inline-flex; align-items:center; gap:8px; margin:8px 0; padding:6px 12px 6px 8px; border:1px solid var(--line); border-radius:999px; background:var(--canvas); color:var(--muted); font-weight:600; overflow-wrap:anywhere; }
+.onboarding-google .google-state svg { flex:none; }
+.onboarding-google .google-state-connected { background:var(--green-soft); border-color:var(--green); color:var(--green-dark); }
+.onboarding-google .google-state-reconnect_required { background:#fdf6e7; border-color:var(--amber); color:#7a5610; }
+.onboarding-google button { border-color:var(--line); border-radius:8px; color:var(--ink); font-weight:600; }
+.onboarding-google :focus-visible,.onboarding-consent :focus-visible,.onboarding-return:focus-visible,.real-settings-check :focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.onboarding-consent { margin:16px 0; padding:16px; border:1px solid var(--line); border-radius:8px; text-align:left; font-size:.9rem; }
+.onboarding-consent p { margin:0 0 10px; }
+.onboarding-consent label,.real-settings-check { display:flex; align-items:flex-start; gap:10px; margin-top:10px; font-weight:600; }
+.onboarding-consent input,.real-settings-check input { flex:none; width:18px; height:18px; margin-top:2px; accent-color:var(--green); }
+.onboarding-context { margin-top:16px; text-align:left; }
+.real-settings-save { margin-top:20px; }
+.real-settings-save .notice { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }

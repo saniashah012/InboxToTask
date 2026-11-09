@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { loadScanSettings, saveScanSettings, type ScanRules, type ScanSettings } from "./storageAdapter"
+import { SCAN_CONSENT_LABEL, SCAN_DISCLOSURE, SCAN_DISCLOSURE_EFFECTS } from "./scanConsent"
 import "./scan-settings.css"
 
 const fields = [
@@ -117,9 +118,9 @@ export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: {
       </fieldset>
       <fieldset disabled={busy}>
         <legend>Consent and pause</legend>
-        <p>During an authorized manual scan, permitted bodies and selected context may be sent to the configured Gemini service for extraction. Full bodies are transient. Supporting excerpts and unreviewed results currently expire after 30 days; accepted tasks remain until completion or deletion. Minimal source identifiers and suppression records remain until account deletion. Provider and backup retention are separate and provider terms still require verification before real-email processing.</p>
-        <p>Rules affect queued and future processing. Changes cannot retract content already transmitted. Existing results remain available unless separately deleted. Task approval never authorizes Calendar writes.</p>
-        <label className="scan-checkbox"><input type="checkbox" checked={settings.consent} onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, consent: e.target.checked }) }} />I consent to processing permitted Gmail content under the disclosure above.</label>
+        <p>{SCAN_DISCLOSURE}</p>
+        <p>{SCAN_DISCLOSURE_EFFECTS}</p>
+        <label className="scan-checkbox"><input type="checkbox" checked={settings.consent} onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, consent: e.target.checked }) }} />{SCAN_CONSENT_LABEL}</label>
         <label className="scan-checkbox"><input type="checkbox" checked={settings.paused} onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, paused: e.target.checked }) }} />Pause scanning</label>
         <p>Effective saved permission requires consent, an unpaused account, a connected Gmail account, and a nonempty inclusion list. Empty inclusions process nothing.</p>
         <button type="submit">Save scanning settings</button>

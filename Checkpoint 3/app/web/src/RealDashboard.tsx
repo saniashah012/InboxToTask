@@ -8,7 +8,7 @@ import { googleConnectionStatus, loadStorageSnapshot, reviewStoredRecord, type D
 import { manualScan, manualScanStatus, resolveTaskChange, reviewTaskChange, scanStopMessage, type ScanStatus } from "./manualScanAdapter"
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
 import { loadTaskSourceLinks, OpenInGmail, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
-import { loadRead, saveRead } from "./InformationTab"
+import { loadRead, saveRead } from "./readMarks"
 import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
 import type { GmailState } from "./scanSetup"

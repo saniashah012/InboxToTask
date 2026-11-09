@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { consentDecision, resolveScanConsent } from '../app/web/src/scanConsent.ts';
 import {
   accessScopeSummary, contextLimitError, hasSourcePermission, preferencesFromSettings,
-  sameSavedFields, scanBlockers, settingsWithPreferences, signedInRoute, withConsentDecision,
+  parseRuleInput, sameSavedFields, scanBlockers, settingsWithPreferences, signedInRoute, topicInputError,
+  withConsentDecision,
 } from '../app/web/src/scanSetup.ts';
 
 const emptyRules = () => ({
@@ -132,4 +133,39 @@ test('context limits use the backend ranges', () => {
   assert.match(contextLimitError({ ...ok, maxMessageChars: 1.5 }), /whole number/);
   assert.match(contextLimitError({ ...ok, maxMessageChars: Number.NaN }), /Characters per message/);
   assert.match(contextLimitError({ ...ok, maxMessageChars: 20000, maxTotalChars: 10000 }), /at least/);
+});
+
+test('typed sender and domain rules are normalized to exact lowercase values', () => {
+  assert.equal(parseRuleInput('selectedSenders', '   ', []), null);
+  assert.deepEqual(parseRuleInput('selectedSenders', '  Teacher@Example.EDU ', []), { value: 'teacher@example.edu' });
+  assert.deepEqual(parseRuleInput('excludedDomains', '@Mail.Example.edu', []), { value: 'mail.example.edu' });
+  assert.deepEqual(parseRuleInput('selectedSenders', 'teacher', []), { error: 'Enter a complete sender email address.' });
+  assert.deepEqual(parseRuleInput('selectedSenders', 'a b@example.edu', []), { error: 'Enter a complete sender email address.' });
+  for (const bad of ['example', '-example.edu', 'example.edu.', 'exa mple.edu', 'teacher@example.edu']) {
+    assert.deepEqual(parseRuleInput('selectedDomains', bad, []), { error: 'Enter a valid domain, such as example.edu.' }, bad);
+  }
+});
+
+test('typed subject exclusions stay literal and reject control characters', () => {
+  assert.deepEqual(parseRuleInput('excludedSubjects', '  Payroll Notice ', []), { value: 'Payroll Notice' });
+  const error = { error: 'Subject phrases must be 1-254 characters without control characters.' };
+  assert.deepEqual(parseRuleInput('excludedSubjects', 'pay\u0000roll', []), error);
+  assert.deepEqual(parseRuleInput('excludedSubjects', 'x'.repeat(255), []), error);
+  assert.deepEqual(parseRuleInput('excludedSubjects', 'x'.repeat(254), []), { value: 'x'.repeat(254) });
+});
+
+test('typed rules already present are rejected regardless of case', () => {
+  const duplicate = { error: 'That rule is already included.' };
+  assert.deepEqual(parseRuleInput('selectedDomains', 'EXAMPLE.edu', ['example.edu']), duplicate);
+  assert.deepEqual(parseRuleInput('excludedSubjects', 'payroll', ['Payroll']), duplicate);
+  assert.deepEqual(parseRuleInput('excludedSenders', 'b@example.edu', ['a@example.edu']), { value: 'b@example.edu' });
+});
+
+test('topic terms are bounded in length, characters and count', () => {
+  const error = 'Use up to 200 terms, each 1-254 characters without control characters.';
+  assert.equal(topicInputError('exam schedule', 0), null);
+  assert.equal(topicInputError('x'.repeat(254), 199), null);
+  assert.equal(topicInputError('x'.repeat(255), 0), error);
+  assert.equal(topicInputError('tab\there', 0), error);
+  assert.equal(topicInputError('exam', 200), error);
 });

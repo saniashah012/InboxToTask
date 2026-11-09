@@ -2,21 +2,21 @@ import {supabase} from './supabase'
 import type {TaskFields} from './storageAdapter'
 export type ScanStatus={running:boolean;backlog:boolean;lastStarted:string|null;lastFinished:string|null;lastSuccessful:string|null;cooldownUntil:string|null;result:any}
 const stopMessages:Record<string,string>={
- SCAN_INFERENCE_LIMIT:'This batch reached its model-call limit. Use Scan more to continue.',
- SCAN_TIME_LIMIT:'This batch reached its time limit. Use Scan more to continue.',
- SCAN_RETRIEVAL_LIMIT:'This batch reached its Gmail request limit. Use Scan more to continue.',
+ SCAN_INFERENCE_LIMIT:'This batch reached its model-call limit. Scan again to continue.',
+ SCAN_TIME_LIMIT:'This batch reached its time limit. Scan again to continue.',
+ SCAN_RETRIEVAL_LIMIT:'This batch reached its Gmail request limit. Scan again to continue.',
  SCAN_FAILURE_LIMIT:'Too many messages could not be processed, so the batch stopped. Check the Gmail connection and backend configuration.',
- GMAIL_RATE_LIMITED:'Gmail asked the app to slow down. Wait, then use Scan more.',
+ GMAIL_RATE_LIMITED:'Gmail asked the app to slow down. Wait, then scan again.',
  GMAIL_RECONNECT_REQUIRED:'Gmail access is no longer valid. Reconnect Gmail under Connection and permissions.',
- GMAIL_UNAVAILABLE:'Gmail could not be reached. Use Scan more to try again.',
- PROVIDER_HTTP_429:'The AI service is rate limited. Wait, then use Scan more.',
- STORAGE_BUDGET:'Your daily processing allowance is used up. Scan more after it resets.',
- STORAGE_PROVIDER_LIMIT:'The per-minute AI request limit was reached. Wait a minute, then use Scan more.',
+ GMAIL_UNAVAILABLE:'Gmail could not be reached. Scan again to retry.',
+ PROVIDER_HTTP_429:'The AI service is rate limited. Wait, then scan again.',
+ STORAGE_BUDGET:'Your daily processing allowance is used up. Scan again after it resets.',
+ STORAGE_PROVIDER_LIMIT:'The per-minute AI request limit was reached. Wait a minute, then scan again.',
  STORAGE_PAUSED:'Processing is paused.',
- STORAGE_BUSY:'Another extraction is still running. Wait, then use Scan more.',
- STORAGE_STALE:'Saved permissions or task state changed during the batch. Use Scan more to continue under current settings.',
+ STORAGE_BUSY:'Another extraction is still running. Wait, then scan again.',
+ STORAGE_STALE:'Saved permissions or task state changed during the batch. Scan again to continue under current settings.',
 }
-export const scanStopMessage=(code:string)=>stopMessages[code]??'The batch stopped with unfinished work. Use Scan more to continue.'
+export const scanStopMessage=(code:string)=>stopMessages[code]??'The batch stopped with unfinished work. Scan again to continue.'
 export async function manualScanStatus():Promise<ScanStatus>{
  if(!supabase)throw new Error('Account connection is not configured.')
  const {data,error}=await supabase.rpc('gmail_scan_status')

@@ -4,7 +4,7 @@ Updated November 5, 2026. Walkthrough scripts and test cases for the primary flo
 
 ## Test surfaces and evidence
 
-- **Main product (`/`):** signed-in users reach a persistent workspace page with Gmail connection, saved settings, manual scans and review. The designed onboarding and dashboard are **not yet connected to real data**. They appear only in preview mode, with fictional data and simulated actions. The workspace has no Waiting For view: those records are saved but not displayed there.
+- **Main product (`/`):** signed-out visitors see Google sign-in only. A first sign-in goes through the designed onboarding, which saves settings; after that the designed dashboard shows saved suggestions, changes, tasks, Waiting For items and summaries, with manual scans. There is no fictional preview or demo mode.
 - **Development tester (`/storage`):** local Vite development route for fixture trials, activity totals, waiting-for records, ICS export and task deletion. It is excluded from production builds, and its password sign-in is development tooling.
 - **Canonical pipeline:** offline tests and the CLI use fictional messages.
 
@@ -102,7 +102,7 @@ See [canonical filtering](../app/pipeline/core.mjs) and [retrieval regression te
 
 ## UC5: Correct, approve, dismiss, and complete a task
 
-**Status:** Implemented in persistent storage. The workspace offers approve, dismiss, complete and undo. Field editing, restoring a dismissed item and task deletion are in the development tester only, except that ambiguous updates let the user enter values ([UC8](#uc8-real-gmail-to-review-workflow)). Not available in the designed dashboard, which is not connected to real data.
+**Status:** Implemented in persistent storage. The workspace offers approve, dismiss, complete and undo. Field editing, restoring a dismissed item and task deletion are in the development tester only, except that ambiguous updates let the user enter values ([UC8](#uc8-real-gmail-to-review-workflow)). The designed dashboard adds edit-before-adding, restoring dismissed suggestions and editing accepted tasks; it was checked only with seeded fictional records.
 
 1. Open a pending suggestion and compare it with the supporting excerpt.
 2. Approve or dismiss it. In the development tester, you can edit fields first, or restore an eligible dismissed suggestion.
@@ -113,7 +113,7 @@ See [canonical filtering](../app/pipeline/core.mjs) and [retrieval regression te
 
 **Evidence:** Seeded browser (approve, reload, complete, undo, stale rebase, [review](gmail-manual-scan-review-2026-11-05.md)), automated ([storage database tests](../tests/storage-database.test.mjs)), and live local approvals (L10, L11, L12).
 
-Waiting-for entries are saved from real scans (L04), but the workspace does not display them yet; they appear in the development tester with user-confirmed resolution and reminders. Reminders send no email or notification.
+Waiting-for entries are saved from real scans (L04), and the designed dashboard shows them with reminders and resolve/reopen; they also appear in the development tester with user-confirmed resolution and reminders. Reminders send no email or notification.
 
 ## UC6: Export a calendar file without authorizing Calendar writes
 
@@ -144,7 +144,7 @@ Disconnecting does not remove the separate Google sign-in grant or delete accoun
 
 ## UC8: Real Gmail-to-review workflow
 
-**Status:** The manual scan runs end to end locally with real Gmail and real Gemini on fictional mail in a dedicated test account; results are below. Scanning is switched off again by default. Automatic scheduled scans are not implemented. Gmail functions are not deployed on hosted (reported by the hosted session), so connecting and scanning work only locally. The workspace is a separate page, and the designed dashboard is not yet connected to real data.
+**Status:** The manual scan runs end to end locally with real Gmail and real Gemini on fictional mail in a dedicated test account; results are below. Scanning is switched off again by default. Automatic scheduled scans are not implemented. Gmail functions are not deployed on hosted (reported by the hosted session), so connecting and scanning work only locally. Signed-in users now see the designed dashboard on saved records; this live run used the older workspace page.
 
 This is the primary CP3 workflow. Demonstrating fixtures, a simulated preview, or Google connection alone does not satisfy it.
 

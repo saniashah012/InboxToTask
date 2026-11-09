@@ -39,7 +39,7 @@ corepack pnpm build
 corepack pnpm dev --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:5173/` and choose **Preview onboarding** or **Explore demo**. This preview uses fictional data and simulated actions: it reads no mail and calls no model.
+Open `http://127.0.0.1:5173/`. The page offers only **Continue with Google**, so it needs the private configuration and local backend below; there is no fictional preview or demo mode.
 
 ## 3. Create private configuration files
 

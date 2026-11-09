@@ -20,7 +20,7 @@ export type ContextLimits = ScanSettings["context_limits"]
 // Ranges mirror private.valid_scan_context in the source/semantic migration.
 export const contextLimitFields = [
   { key: "maxMessages", label: "Earlier messages", min: 0, max: 10, suffix: "" },
-  { key: "maxAgeDays", label: "Maximum age", min: 1, max: 365, suffix: "days" },
+  { key: "maxAgeDays", label: "Maximum age in days", min: 1, max: 365, suffix: "" },
   { key: "maxMessageChars", label: "Characters per message", min: 100, max: 30000, suffix: "" },
   { key: "maxTotalChars", label: "Total characters", min: 100, max: 60000, suffix: "" },
 ] as const

@@ -4,11 +4,11 @@ import {gmailConversationUrl} from './SourceEmails'
 
 type Props={change:StoredRow;source?:StoredRow;quote?:string|null;tasks:StoredRow[];email:string;busy:boolean;
  onResolve:(taskId:string,taskRevision:number,fields:TaskFields|null)=>void;onDismiss:()=>void}
-type Draft={action:string;requirements:string;condition:string;date:string;time:string;boundary:Deadline['boundary']}
+export type Draft={action:string;requirements:string;condition:string;date:string;time:string;boundary:Deadline['boundary']}
 const zone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone
 // Saved JSON does not keep key order, so compare with sorted keys.
-const canonical=(value:unknown)=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v)
-const draftFrom=(f:TaskFields):Draft=>({action:f.action,requirements:f.requirements.join('\n'),condition:f.condition??'',date:f.deadline?.date??'',time:f.deadline?.time??'',boundary:f.deadline?.boundary??'by'})
+export const canonical=(value:unknown)=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v)
+export const draftFrom=(f:TaskFields):Draft=>({action:f.action,requirements:f.requirements.join('\n'),condition:f.condition??'',date:f.deadline?.date??'',time:f.deadline?.time??'',boundary:f.deadline?.boundary??'by'})
 
 export function fieldsFromDraft(d:Draft,current:TaskFields,timeZone=zone()):TaskFields{
  const unchanged=current.deadline&&current.deadline.date===d.date&&(current.deadline.time??'')===d.time&&current.deadline.boundary===d.boundary

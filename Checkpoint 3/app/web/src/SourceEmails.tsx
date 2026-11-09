@@ -20,7 +20,11 @@ export async function loadTaskSourceLinks(taskIds:string[]):Promise<TaskSourceLi
 
 export function OpenInGmail({email,messageId}:{email:string;messageId?:string|null}){
  if(!messageId)return <p>The source email is unavailable.</p>
- return <p><a href={gmailConversationUrl(email,messageId)} target="_blank" rel="noopener noreferrer">Open conversation in Gmail</a></p>
+ return <p className="gmail-open"><a className="gmail-open-button" href={gmailConversationUrl(email,messageId)} target="_blank" rel="noopener noreferrer">
+  Open conversation in Gmail
+  <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3h7v7"/><path d="m10 14 11-11"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+  <span className="visually-hidden"> (opens in a new tab)</span>
+ </a></p>
 }
 
 export function TaskSourceEmails({links,email}:{links:TaskSourceLink[]|null;email:string}){

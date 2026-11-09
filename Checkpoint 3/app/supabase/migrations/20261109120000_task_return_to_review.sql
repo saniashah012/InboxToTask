@@ -84,9 +84,11 @@ begin
       if s.id is null or s.expires_at<=now() then raise exception 'INVALID_TRANSITION' using errcode='22023'; end if;
       update public.storage_suggestions set state=case when p_action='return_to_suggestions' then 'pending' else 'dismissed' end,
         review_fields=t.accepted_fields,approved_task_id=null,revision=revision+1 where id=s.id;
-      -- Older incoming-update suggestions that point at this task can no longer apply.
-      update public.storage_suggestions set state='deleted',target_task_id=null,expected_task_revision=null,revision=revision+1
-        where user_id=uid and target_task_id=t.id;
+      -- Incoming-update suggestions that point at this task can no longer apply. An
+      -- accepted update also records the task in approved_task_id, which must be
+      -- cleared too, or its foreign key blocks deleting the task.
+      update public.storage_suggestions set state='deleted',target_task_id=null,expected_task_revision=null,approved_task_id=null,revision=revision+1
+        where user_id=uid and id<>s.id and (target_task_id=t.id or approved_task_id=t.id);
       -- Cascades remove its source links and change proposals; calendar records keep a null task.
       delete from public.tasks where id=t.id and user_id=uid;
       return jsonb_build_object('id',t.id,'removed',true,'suggestionId',s.id,'suggestionRevision',s.revision+1);

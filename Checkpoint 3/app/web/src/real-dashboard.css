@@ -60,3 +60,5 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 .rd-summary p { margin:8px 0 0; line-height:1.55; }
 .rd-summary .rd-detail-meta { color:var(--muted); font-size:.8rem; }
 @media (max-width: 720px) { .app-shell .task-row.rd-info-row { grid-template-columns:1fr; } }
+/* Floating success message: same look as the Undo pop-up, but grows for longer text. */
+.undo-toast.rd-toast-message { height:auto; min-height:48px; max-width:min(560px, calc(100vw - 32px)); padding:10px 9px 10px 16px; line-height:1.45; }

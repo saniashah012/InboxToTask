@@ -257,8 +257,6 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
             <button className="text-link" disabled={busy} onClick={() => { setFailure(null); void reload() }}>Reload saved results</button>
           </div>
         )}
-        {notice && !failure && <FadeAway key={notice} className="notice neutral rd-notice" role="status" onDone={() => setNotice("")}>
-          <span>{notice}</span><button aria-label="Dismiss message" className="text-link" onClick={() => setNotice("")}>Dismiss</button></FadeAway>}
         {loadFailed && (
           <div className="notice warning rd-notice" role="alert">
             <span>{snapshot.tasks.length ? "Could not refresh saved results. Showing what was last loaded." : "Could not load your saved results. Nothing was changed."}</span>
@@ -297,7 +295,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                         primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
                           onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added. No Calendar event was created.")}>Add task</button>}
                         menu={<><button onClick={() => { setMenuId(null); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
-                          <button className="danger-action" onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => setToast({ kind: "dismissed", id: s.row.id }))}>Dismiss suggestion</button></>}
+                          <button className="danger-action" onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) })}>Dismiss suggestion</button></>}
                       />))}</div>}
                     {model.changes.length > 0 && <>
                       <h3 className="rd-subhead">Proposed changes to your tasks</h3>
@@ -331,7 +329,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                       <RealTaskRow key={t.row.id} kind="active" fields={t.fields} today={today} busy={busy}
                         context={t.primary?.sender ?? ""} menuOpen={menuId === t.row.id}
                         badges={t.pendingChanges > 0 ? <><span className="updated-badge">Change proposed</span><button className="review-change-link" onClick={() => setChangeId(model.changes.find((c) => c.row.target_task_id === t.row.id)?.row.id ?? null)}>Review change</button></> : null}
-                        onComplete={() => void perform(() => reviewStoredRecord("task", t.row.id, "complete", t.row.revision), "Task completed.", () => setToast({ kind: "completed", id: t.row.id }))}
+                        onComplete={() => void perform(() => reviewStoredRecord("task", t.row.id, "complete", t.row.revision), "Task completed.", () => { setNotice(""); setToast({ kind: "completed", id: t.row.id }) })}
                         onMenu={() => setMenuId((c) => (c === t.row.id ? null : t.row.id))}
                         onSource={() => setSource(sourceForTask(t))}
                         primary={<button className="calendar-button" disabled={busy} onClick={() => setExportTask(t)}><Icon name="calendar" size={16} />Export calendar file</button>}
@@ -393,6 +391,13 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
       {reminderFor && <ReminderModal followup={reminderFor} busy={busy} onCancel={() => setReminderFor(null)}
         onSave={(iso) => void perform(() => reviewStoredRecord("followup", reminderFor.id, "remind", reminderFor.revision, { reminderAt: iso }), "Dashboard reminder saved. No email or notification is sent.", () => setReminderFor(null))} />}
 
+      {/* Success messages float at the bottom like the Undo pop-up, so the page never shifts. */}
+      {notice && !toast && !failure && (
+        <FadeAway key={notice} aria-live="polite" className="undo-toast rd-toast-message" onDone={() => setNotice("")}>
+          <span>{notice}</span>
+          <button aria-label="Dismiss message" className="toast-close" onClick={() => setNotice("")}><Icon name="close" size={16} /></button>
+        </FadeAway>
+      )}
       {toast && (() => {
         const dismissedRow = toast.kind === "dismissed" ? model.dismissed.find((s) => s.row.id === toast.id)?.row : undefined
         const completedRow = toast.kind === "completed" ? model.closed.find((t) => t.row.id === toast.id)?.row : undefined

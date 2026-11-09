@@ -476,6 +476,9 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
   onScan: (mode: "initial" | "more") => void
   onSettings: () => void
 }) {
+  // One button: it continues unfinished work when an earlier check left some,
+  // otherwise it starts a new 7-day check. A reconnect always starts fresh.
+  const resume = Boolean(status?.backlog) && !needsReconnect
   const [title, detail] = stateCopy(state, settings, gmail, status, cooldownLeft)
   const counts = status?.result?.counts
   const allowed = canScan(state) && !busy && !scanning && !status?.running
@@ -488,17 +491,25 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
             : <span className="status-pulse" />}
         <div role="status">
           <strong>{title}</strong>
-          <span>{detail}</span>
+          <span id="rd-scan-why">{detail}</span>
           <span className="scan-last-checked">
             Last successful check: {status?.lastSuccessful ? new Date(status.lastSuccessful).toLocaleString() : "none yet"}
-            {status?.backlog && !needsReconnect && " · More work remains (exact count unknown)"}
+            {resume && " · More email remains; Scan now continues where the last check stopped"}
           </span>
         </div>
       </div>
       <div className="processing-status-actions">
         {blocked && <button className="text-link" onClick={onSettings}>Open Settings</button>}
-        <button className="secondary-button scan-refresh" disabled={!allowed} onClick={() => onScan("initial")}>Check past 7 days</button>
-        {status?.backlog && <button className="secondary-button" disabled={!allowed || needsReconnect} onClick={() => onScan("more")}>Scan more</button>}
+        <button
+          aria-describedby={allowed ? undefined : "rd-scan-why"}
+          className="primary-button rd-scan-button"
+          disabled={!allowed}
+          onClick={() => onScan(resume ? "more" : "initial")}
+          title={allowed ? (resume ? "Continue where the last check stopped" : "Check permitted Gmail from the past 7 days") : title}
+        >
+          <Icon name="refresh" size={16} />
+          {scanning || status?.running ? "Scanning…" : "Scan now"}
+        </button>
         <button aria-expanded={activityOpen} className="text-link" onClick={onToggleActivity}>{activityOpen ? "Hide activity" : "View activity"}</button>
       </div>
       {activityOpen && (
@@ -506,7 +517,7 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
           {counts ? <>
             <strong>Last batch</strong>
             <span>{counts.candidates ?? 0} candidates · {counts.permitted ?? 0} permitted · {counts.blocked ?? 0} excluded by your rules · {counts.prepared ?? 0} processed · {counts.reused ?? 0} reused without a model call · {counts.failed ?? 0} could not be processed · {counts.modelCalls ?? 0} model calls</span>
-            {(counts.failed ?? 0) > 0 && <span>{(status?.result?.unresolved ?? 0) > 0 ? `${status?.result?.unresolved} messages stopped after repeated attempts; a new 7-day check tries them again. ` : ""}Other failed messages are retried by Scan more.</span>}
+            {(counts.failed ?? 0) > 0 && <span>{(status?.result?.unresolved ?? 0) > 0 ? `${status?.result?.unresolved} messages stopped after repeated attempts; a new 7-day check tries them again. ` : ""}Other failed messages are retried by the next scan.</span>}
           </> : <><strong>No batch recorded</strong><span>Activity appears after your first manual check.</span></>}
           <span>Each check covers the past 7 days, inspects up to 100 permitted messages and makes up to two model calls, within daily limits.</span>
         </div>

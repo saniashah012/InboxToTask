@@ -15,3 +15,6 @@
 .app-shell button:disabled { opacity:.5; cursor:not-allowed; }
 .app-shell :focus-visible { outline:3px solid var(--green); outline-offset:2px; }
 .rd-embedded section[aria-label="Calendar export preview"] > h2 { display:none; }
+/* The manual scan is the main action on the status bar: full-size, always visible. */
+.processing-status-actions .rd-scan-button { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:0 14px; font-size:.85rem; white-space:nowrap; }
+.processing-status-actions .rd-scan-button.primary-button:disabled { opacity:.55; }

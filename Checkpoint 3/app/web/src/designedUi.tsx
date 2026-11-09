@@ -1,11 +1,11 @@
-// Shared pieces of the designed product UI, used by the preview and the signed-in dashboard.
+// Shared pieces of the designed product UI, used by onboarding, settings and the dashboard.
 import type { ReactNode } from "react"
 
 export function Icon({
   name,
   size = 18,
 }: {
-  name: "calendar" | "check" | "close" | "more" | "external" | "arrow" | "clock"
+  name: "calendar" | "check" | "close" | "more" | "external" | "arrow" | "clock" | "refresh"
   size?: number
 }) {
   const paths = {
@@ -32,6 +32,12 @@ export function Icon({
       </>
     ),
     arrow: <path d="m15 18-6-6 6-6" />,
+    refresh: (
+      <>
+        <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+        <path d="M20 4v7h-7" />
+      </>
+    ),
     clock: (
       <>
         <circle cx="12" cy="12" r="9" />

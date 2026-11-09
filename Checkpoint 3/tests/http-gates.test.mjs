@@ -95,6 +95,8 @@ for (const h of handlers) {
     const body = JSON.stringify(h.valid);
     await expectError(await send(handler, { headers: { 'Content-Type': 'text/plain' }, body }), 415, 'JSON_REQUIRED');
     assert.notEqual((await send(handler, { headers: { 'Content-Type': 'application/json; charset=utf-8' }, body })).status, 415);
+    // Media types are case-insensitive (all three handlers share one check).
+    assert.notEqual((await send(handler, { headers: { 'Content-Type': 'Application/JSON' }, body })).status, 415);
 
     // Valid JSON just over the limit, sent without a trusted Content-Length.
     const padded = JSON.stringify({ ...h.valid, pad: 'x'.repeat(h.limit) });

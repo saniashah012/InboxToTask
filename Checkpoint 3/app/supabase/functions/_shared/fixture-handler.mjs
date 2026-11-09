@@ -1,27 +1,6 @@
-const BODY_LIMIT = 1024;
+import { corsGate, isJsonRequest, jsonResponder, readJsonBody, verifiedUser } from './http.mjs';
 
-async function readBoundedJson(request) {
-  if (!request.body) throw new Error('INVALID_JSON');
-  const reader = request.body.getReader();
-  const chunks = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > BODY_LIMIT) {
-        await reader.cancel();
-        throw new Error('BODY_TOO_LARGE');
-      }
-      chunks.push(value);
-    }
-  } finally { reader.releaseLock(); }
-  const body = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength; }
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body));
-}
+const BODY_LIMIT = 1024;
 
 // Local integration scaffold, intentionally limited to bundled fictional cases.
 // Does not accept arbitrary email or call Gmail. Persistence is supplied by the
@@ -29,32 +8,20 @@ async function readBoundedJson(request) {
 export function createFixtureHandler({ verifyUser, runExtraction, fixture,
   enabled = false, allowedOrigins = /** @type {string[]} */ ([]) }) {
   return async (request) => {
-    const origin = request.headers.get('origin');
-    const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store',
-      Vary: 'Origin' };
-    const respond = (status, body) => new Response(JSON.stringify(body), { status, headers });
-    if (origin && !allowedOrigins.includes(origin)) return respond(403, { error: 'ORIGIN_NOT_ALLOWED' });
-    if (origin) headers['Access-Control-Allow-Origin'] = origin;
-    if (request.method === 'OPTIONS') {
-      headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS';
-      headers['Access-Control-Allow-Headers'] = 'authorization, apikey, content-type, x-client-info';
-      return new Response(null, { status: 204, headers });
-    }
+    const { headers, json: respond } = jsonResponder();
+    const early = corsGate(request, allowedOrigins, { headers, json: respond });
+    if (early) return early;
     if (request.method !== 'POST') return respond(405, { error: 'METHOD_NOT_ALLOWED' });
-    const match = /^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization') ?? '');
-    if (!match) return respond(401, { error: 'AUTH_REQUIRED' });
-    let user;
-    try { user = await verifyUser(match[1]); }
-    catch { return respond(503, { error: 'AUTH_UNAVAILABLE' }); }
-    if (!user) return respond(401, { error: 'AUTH_REQUIRED' });
+    const { user, response } = await verifiedUser(request, verifyUser, respond);
+    if (response) return response;
     if (!enabled) return respond(503, { error: 'FIXTURE_EXTRACTION_DISABLED' });
-    if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') {
-      return respond(415, { error: 'JSON_REQUIRED' });
-    }
+    if (!isJsonRequest(request)) return respond(415, { error: 'JSON_REQUIRED' });
     let body;
-    try { body = await readBoundedJson(request); }
-    catch (error) { return respond(error.message === 'BODY_TOO_LARGE' ? 413 : 400,
-      { error: error.message === 'BODY_TOO_LARGE' ? 'BODY_TOO_LARGE' : 'INVALID_JSON' }); }
+    try { body = await readJsonBody(request, BODY_LIMIT); }
+    catch (error) {
+      return error?.code === 'BODY_TOO_LARGE'
+        ? respond(413, { error: 'BODY_TOO_LARGE' }) : respond(400, { error: 'INVALID_JSON' });
+    }
     if (!body || typeof body !== 'object' || Array.isArray(body)
       || Object.keys(body).length !== 1 || !/^E(?:0[1-9]|1[0-9]|20)$/.test(body.caseId)) {
       return respond(400, { error: 'EXPECTED_CASE_ID_ONLY' });

@@ -1,3 +1,5 @@
+import { corsGate, isJsonRequest, jsonResponder, readJsonBody, verifiedUser } from './http.mjs';
+
 // No provider response bodies, credentials, codes, or state values are logged.
 export const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const SCOPES = ['openid', 'email', GMAIL_SCOPE];
@@ -170,13 +172,8 @@ export function createGoogleConnection({ rpc, cipher, provider }) {
 
 export function createGoogleHandler({ connection, verifyUser, allowedOrigins=/** @type {string[]} */ ([]), returnUrl, callback=false, enabled=false }) {
   return async(request) => {
-    const headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer','Content-Type':'application/json',Vary:'Origin'};
-    const json=(status,data)=>new Response(JSON.stringify(data),{status,headers});
-    const origin=request.headers.get('origin');
-    if(!callback && origin && !allowedOrigins.includes(origin)) return json(403,{error:'ORIGIN_NOT_ALLOWED'});
-    if(!callback && origin) headers['Access-Control-Allow-Origin']=origin;
-    if(!callback && request.method==='OPTIONS') return new Response(null,{status:204,headers:{...headers,
-      'Access-Control-Allow-Methods':'POST, OPTIONS','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info'}});
+    const {headers,json}=jsonResponder({'Referrer-Policy':'no-referrer'});
+    if(!callback) { const early=corsGate(request,allowedOrigins,{headers,json}); if(early) return early; }
     if(request.method!==(callback?'GET':'POST')) return json(405,{error:'METHOD_NOT_ALLOWED'});
     if(!enabled || !connection) return json(503,{error:'GOOGLE_NOT_CONFIGURED'});
     if(callback) {
@@ -186,21 +183,13 @@ export function createGoogleHandler({ connection, verifyUser, allowedOrigins=/**
       const destination=new URL(returnUrl); destination.searchParams.set('google',outcome);
       return new Response(null,{status:303,headers:{...headers,Location:destination.href}});
     }
-    const bearer=/^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization')??'');
-    if(!bearer) return json(401,{error:'AUTH_REQUIRED'});
-    let user;
-    try { user=await verifyUser(bearer[1]); } catch { return json(503,{error:'AUTH_UNAVAILABLE'}); }
-    if(!user) return json(401,{error:'AUTH_REQUIRED'});
+    const {user,response}=await verifiedUser(request,verifyUser,json);
+    if(response) return response;
+    if(!isJsonRequest(request)) return json(415,{error:'JSON_REQUIRED'});
     // Tiny fixed contract; read a bounded stream rather than trusting length.
     let body;
     try {
-      if(request.headers.get('content-type')?.split(';')[0].trim()!=='application/json') return json(415,{error:'JSON_REQUIRED'});
-      const reader=request.body?.getReader(); if(!reader) throw fail('INVALID_REQUEST');
-      const chunks=[]; let size=0;
-      try { while(true) { const {done,value}=await reader.read(); if(done) break; size+=value.length;
-        if(size>256) { await reader.cancel(); throw fail('INVALID_REQUEST'); } chunks.push(value); }
-      } finally { reader.releaseLock(); }
-      body=JSON.parse(new TextDecoder().decode(Uint8Array.from(chunks.flatMap((v)=>Array.from(v)))));
+      body=await readJsonBody(request,256);
       if(!body || Array.isArray(body) || Object.keys(body).length!==1 || !['connect','check','disconnect'].includes(body.action)) throw fail('INVALID_REQUEST');
     } catch { return json(400,{error:'INVALID_REQUEST'}); }
     try {

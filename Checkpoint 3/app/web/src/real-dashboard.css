@@ -10,7 +10,6 @@
 .rd-wording { color:var(--muted); font-size:.8rem; font-style:italic; overflow-wrap:anywhere; }
 .rd-waiting-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
 .waiting-row.rd-resolved { opacity:.65; }
-.rd-gmail-link a { color:var(--green); font-weight:600; }
 .rd-change-table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.9rem; }
 .rd-change-table th, .rd-change-table td { text-align:left; vertical-align:top; padding:8px; border-bottom:1px solid var(--soft-line); overflow-wrap:anywhere; }
 .rd-change-table thead th { color:var(--muted); font-weight:600; }
@@ -35,3 +34,10 @@
 .rd-modal-body .storage-review p { margin:0; }
 .rd-modal-body .rd-gmail-link p { margin:0; font-size:14px; }
 .rd-modal-body .form-hint { margin:-6px 0 0; font-size:12px; }
+/* "Open conversation in Gmail" reads as a button: outlined, padded, with an
+   external-link icon. Used in source dialogs, email history and summaries. */
+p.gmail-open { margin:0; }
+a.gmail-open-button { display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 16px; border:1px solid var(--green); border-radius:10px; background:#fff; color:var(--green); font-size:14px; font-weight:600; line-height:1; text-decoration:none; cursor:pointer; transition:background .15s, color .15s; }
+a.gmail-open-button:hover { background:var(--green); color:#fff; }
+a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.manual-timeline a.gmail-open-button { min-height:32px; padding:0 12px; font-size:13px; margin-top:6px; }

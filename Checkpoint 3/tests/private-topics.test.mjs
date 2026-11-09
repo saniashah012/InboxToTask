@@ -10,9 +10,11 @@ import { selectTaskContext } from '../app/pipeline/task-context.mjs';
 
 const base64url = text => btoa(text).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const date = '2026-11-05T12:00:00Z';
+// Allowlisted senders must pass an aligned DKIM or DMARC check (see gmail-retrieval tests).
+const passingAuth = 'mx.google.com; dkim=pass header.i=@example.org header.s=s1; spf=pass smtp.mailfrom=x; dmarc=pass (p=REJECT) header.from=example.org';
 const gmailMessage = (id, {subject='Assignment', body='Please submit the report.', sentAt=date}={}) => ({
   id,threadId:'thread1',internalDate:String(Date.parse(sentAt)),payload:{mimeType:'text/plain',
-    headers:[{name:'From',value:'teacher@example.org'},{name:'Subject',value:subject}],body:{data:base64url(body)}},
+    headers:[{name:'Authentication-Results',value:passingAuth},{name:'From',value:'teacher@example.org'},{name:'Subject',value:subject}],body:{data:base64url(body)}},
 });
 const topics = {include:[],exclude:['health','my club'],blockedWords:{health:['diagnosis','lab results'],'my club':['chess club']}};
 const rules = {allow:{senders:[],domains:['example.org']},block:{senders:[],domains:[],subjectKeywords:[]}};

@@ -448,6 +448,19 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
   )
 }
 
+// "today at 2:57 PM", "yesterday at 9:10 AM", or "Nov 6 at 4:00 PM".
+function friendlyTime(iso: string, now = new Date()): string {
+  const when = new Date(iso)
+  if (Number.isNaN(when.getTime())) return "unknown"
+  const clock = when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const diff = Math.round((day(now) - day(when)) / 86_400_000)
+  if (diff === 0) return `today at ${clock}`
+  if (diff === 1) return `yesterday at ${clock}`
+  const date = when.toLocaleDateString("en-US", { month: "short", day: "numeric", year: when.getFullYear() === now.getFullYear() ? undefined : "numeric" })
+  return `${date} at ${clock}`
+}
+
 const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailState, status: ScanStatus | null, cooldownLeft: number): [string, string] => {
   switch (state) {
     case "loading": return ["Loading scan status…", "Checking saved settings and the Gmail connection."]
@@ -457,8 +470,8 @@ const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailSt
     case "disconnected": return gmail === "reconnect_required" ? ["Reconnect Gmail", "Gmail access is no longer valid. Reconnect in Settings → Connections."] : gmail === "unknown" ? ["Gmail status unavailable", "Could not confirm the Gmail connection. Reload, or check Settings → Connections."] : ["Gmail not connected", "Connect Gmail in Settings → Connections. No mailbox was accessed."]
     case "cooldown": return ["Cooling down", `You can check again in ${cooldownLeft} s.`]
     case "failed": return status?.result?.error ? ["Last check stopped", `${scanStopMessage(status.result.error)} Saved results remain available.`] : ["Scan status unavailable", "Could not load scan status. Saved tasks below are unaffected."]
-    case "empty": return ["Ready for a first check", "Checks run only when you ask. Automatic scanning is not enabled."]
-    default: return ["Ready for a manual check", "Checks run only when you ask. Automatic scanning is not enabled."]
+    case "empty": return ["Ready for your first scan", ""]
+    default: return ["Ready to scan", ""]
   }
 }
 
@@ -491,10 +504,10 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
             : <span className="status-pulse" />}
         <div role="status">
           <strong>{title}</strong>
-          <span id="rd-scan-why">{detail}</span>
+          {detail && <span id="rd-scan-why">{detail}</span>}
           <span className="scan-last-checked">
-            Last successful check: {status?.lastSuccessful ? new Date(status.lastSuccessful).toLocaleString() : "none yet"}
-            {resume && " · More email remains; Scan now continues where the last check stopped"}
+            {status?.lastSuccessful ? `Last scan ${friendlyTime(status.lastSuccessful)}` : "No scans yet"}
+            {resume ? " · more email to process" : " · covers the past 7 days"}
           </span>
         </div>
       </div>
@@ -519,7 +532,7 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
             <span>{counts.candidates ?? 0} candidates · {counts.permitted ?? 0} permitted · {counts.blocked ?? 0} excluded by your rules · {counts.prepared ?? 0} processed · {counts.reused ?? 0} reused without a model call · {counts.failed ?? 0} could not be processed · {counts.modelCalls ?? 0} model calls</span>
             {(counts.failed ?? 0) > 0 && <span>{(status?.result?.unresolved ?? 0) > 0 ? `${status?.result?.unresolved} messages stopped after repeated attempts; a new 7-day check tries them again. ` : ""}Other failed messages are retried by the next scan.</span>}
           </> : <><strong>No batch recorded</strong><span>Activity appears after your first manual check.</span></>}
-          <span>Each check covers the past 7 days, inspects up to 100 permitted messages and makes up to two model calls, within daily limits.</span>
+          <span>Scans run only when you press Scan now; automatic scanning is not enabled. Each scan covers the past 7 days, inspects up to 100 permitted messages and makes up to two model calls, within daily limits.</span>
         </div>
       )}
     </section>

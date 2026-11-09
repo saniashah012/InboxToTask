@@ -18,3 +18,7 @@
 /* The manual scan is the main action on the status bar: full-size, always visible. */
 .processing-status-actions .rd-scan-button { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:0 14px; font-size:.85rem; white-space:nowrap; }
 .processing-status-actions .rd-scan-button.primary-button:disabled { opacity:.55; }
+/* Status bar: room above and below the text, and a clear title/meta hierarchy. */
+.app-shell .processing-status { padding:14px 18px; }
+.app-shell .processing-status-copy > div { gap:4px; }
+.app-shell .processing-status-copy > div > .scan-last-checked { color:var(--muted); }

@@ -85,8 +85,8 @@ sequenceDiagram
   Scan->>DB: Claim: consent, not paused, sources, connection, cooldown
   DB-->>Scan: Lease, rules and limits, or refusal
   loop Each message, until a batch limit
-    Scan->>Gmail: List IDs, then From and Subject only
-    Scan->>Scan: Apply sender, domain and subject rules
+    Scan->>Gmail: List IDs, then From, Subject and Authentication-Results only
+    Scan->>Scan: Apply sender, domain and subject rules; sender rules need a From-aligned DKIM or DMARC pass
     alt Not permitted
       Scan->>Scan: Count as blocked, fetch no body
     else Permitted

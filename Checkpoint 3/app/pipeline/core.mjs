@@ -254,6 +254,22 @@ export function validateExtraction(value, payload) {
   }
   return value;
 }
+// Deterministic checks on validated suggestions, independent of the model. They only
+// add review warnings; they never remove or rewrite what the model extracted.
+const CONTENT_CHECKS = [
+  [/(?:\bhttps?:\/\/|\bwww\.)\S+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/\S*/i,
+    'A suggestion contains a web link. Compare it with the original email before opening it.'],
+  [/\b(?:pass(?:word|code|phrase)s?|credentials?|verification codes?|one[- ]time (?:codes?|passwords?)|security codes?|2fa|mfa|two[- ]factor|verify (?:your )?(?:account|identity|login)|social security|ssn)\b/i,
+    'A suggestion mentions passwords, codes or account verification. Confirm the request with the sender another way before acting.'],
+  [/\b(?:gift ?cards?|wire (?:transfer|the|money|funds|payment)|bank (?:account|details|transfer|information)|routing numbers?|account numbers?|card (?:numbers?|details)|credit cards?|debit cards?|bitcoin|crypto(?:currency)?|zelle|venmo|cash ?app|western union|moneygram|payment details)\b/i,
+    'A suggestion mentions payments, gift cards or bank details. Confirm the request with the sender another way before acting.'],
+];
+export function contentWarnings(result) {
+  const strings = [];
+  const collect = v => { if (typeof v === 'string') strings.push(v); else if (Array.isArray(v)) v.forEach(collect); else if (v && typeof v === 'object') Object.values(v).forEach(collect); };
+  collect([result.summary, result.tasks, result.waitingFor, result.suggestedFollowUps, result.taskChanges ?? []]);
+  return CONTENT_CHECKS.filter(([pattern]) => strings.some(s => pattern.test(s))).map(([, warning]) => warning);
+}
 export async function extract(input, { settings, systemPrompt, generate }) {
   const prepared = prepareInput(input, settings.contextLimits);
   if (prepared.status !== 'prepared') return { ...prepared, modelCalls: 0 };
@@ -265,11 +281,12 @@ export async function extract(input, { settings, systemPrompt, generate }) {
   catch (error) { if (error instanceof PipelineError) error.usage = generated.usage; throw error; }
   // Preserve the model's bounded schema; backend warnings live in the envelope
   // so they cannot be omitted by the model or overflow its uncertainties array.
+  const warnings = [...prepared.payload.contextWarnings, ...contentWarnings(result)];
   return { status: 'extracted', messageId: prepared.messageId, modelCalls: generated.attempts ?? 1,
     ...(input.contract==='gmail-v1'?{contract:'gmail-v1'}:{}),
     returnedModelVersion: generated.modelVersion ?? null,
-    contextWarnings: prepared.payload.contextWarnings,
-    needsReview: prepared.payload.contextWarnings.length > 0 || result.uncertainties.length > 0 || result.tasks.some((t) => t.deadline === null)
+    contextWarnings: warnings,
+    needsReview: warnings.length > 0 || result.uncertainties.length > 0 || result.tasks.some((t) => t.deadline === null)
       || (result.topicRelevance?.decision==='uncertain') || result.taskChanges?.some(c=>c.targetTaskId===null) === true,
     result, usage: generated.usage, latencyMs: generated.latencyMs };
 }

@@ -273,8 +273,11 @@ test('PostgreSQL storage migrations, transactions, privileges and lifecycle', as
       assert.equal(await scalar('select count(*) from public.tasks where id=$1',[active]),1);
     });
     await t.test('calendar storage requires separate approval and refuses stale task previews',async()=>{
+      const first=await action('task',taskId,'preview_calendar',5,{calendarId:'primary',title:'Response',allDay:true,date:'2026-11-04',timeZone:'America/Chicago'});
       const op=await action('task',taskId,'preview_calendar',5,{calendarId:'primary',title:'Response',allDay:true,date:'2026-11-05',timeZone:'America/Chicago'});
       assert.equal(await scalar('select state from public.storage_calendar_operations where id=$1',[op.operationId]),'pending');
+      assert.equal(await scalar('select count(*) from public.storage_calendar_operations where id=$1',[first.operationId]),0,'a new preview replaces the earlier pending one');
+      assert.equal(await scalar("select count(*) from public.storage_calendar_operations where task_id=$1 and state='pending'",[taskId]),1);
       await action('task',taskId,'edit',5,{...fields,action:'Changed again'});
       await assert.rejects(action('calendar',op.operationId,'approve'),{code:'PT409'});
     });

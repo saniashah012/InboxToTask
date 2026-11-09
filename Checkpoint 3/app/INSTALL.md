@@ -1,20 +1,31 @@
 # Installation
 
-To set up InboxToTask locally, run commands from the folder named in each step. On macOS or Linux, use `npm` and `npx` instead of `npm.cmd` and `npx.cmd`.
+This is the full setup guide. It is for anyone setting up InboxToTask on their own, including instructors and people outside the team: you create your own Google projects, encryption key and Gemini key. Team members who get those values from the project owner can use the shorter [local setup and use](../docs/local-setup-and-use.md) guide, and this page stays the reference for both.
 
-Hosted Gmail scanning is not deployed or verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first. For a short teammate walkthrough, see [local setup and use](../docs/local-setup-and-use.md).
+Run commands from the folder named in each step.
+
+Hosted Gmail scanning is not deployed or verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first.
+
+## Windows, macOS and Linux
+
+This guide was written and checked on Windows, in PowerShell. The macOS and Linux notes below have not been tested.
+
+- **Commands:** on macOS or Linux, use `npm` and `npx` instead of `npm.cmd` and `npx.cmd`. `node` and `corepack` are the same everywhere.
+- **Containers:** the local backend needs a running Docker-compatible runtime. On Windows, use Docker Desktop with Linux containers. For macOS and Linux, see [Supabase's prerequisites](https://supabase.com/docs/guides/local-development/cli/getting-started).
 
 ## Requirements
 
 **To sign in, connect Gmail or scan, you need your own Google Cloud setup.** The team's Google projects, accounts and keys are not shared, so step 5 walks you through creating yours. Allow about 30–45 minutes the first time.
 
-- Node.js 22 or later, with Corepack for the pinned pnpm
-- Docker Desktop with Linux containers, running (backend only)
-- A Google account you can use for testing, ideally a new one holding only fictional mail
-- Two Google Cloud projects, both free to create: one for app sign-in and one for Gmail access (step 5)
-- A Gemini API key, needed only for scanning (step 5.6)
+- Node.js 22.6 or later. `package.json` says 22, but `npm.cmd test` and the `test:calendar`, `test:onboarding` and `test:dashboard` scripts use a type-stripping flag that Node added in 22.6.
+- Corepack, for the pinned pnpm. It ships with Node before 25.0.0. On Node 25 or later, install it first with `npm install -g corepack`. The first `corepack pnpm` command downloads pnpm and may ask you to confirm.
+- A Docker-compatible runtime, running (backend only). See [above](#windows-macos-and-linux).
+- For real sign-in and scanning only:
+  - Two Google Cloud projects, both free to create with your own Google account: one for app sign-in and one for Gmail access (step 5).
+  - A dedicated Google account to use as a throwaway test mailbox holding only fictional mail, plus a second account you control to send it that mail.
+  - A Gemini API key, needed only for scanning (step 5.6).
 
-Steps 1 and 2 need none of this.
+Steps 1 and 2 need none of the Google items.
 
 ## 1. Install and run offline checks
 
@@ -43,7 +54,7 @@ Open `http://127.0.0.1:5173/`. The page offers only **Continue with Google**, so
 
 ## 3. Create private configuration files
 
-Copy each template only if the private file does not already exist. All private files are ignored by Git. Never commit or share them.
+There are four templates. The first three run the app, and the fourth is only for the pipeline CLI in step 9. Copy each template you need only if the private file does not already exist. All private files are ignored by Git. Never commit or share them.
 
 | Template | Private copy | Used by |
 | --- | --- | --- |
@@ -61,6 +72,8 @@ npx.cmd supabase --agent no start
 npx.cmd supabase --agent no migration up
 ```
 
+- The first `start` downloads several container images and can take a while. Docker must be running.
+- Google values are still blank at this point, so Google sign-in won't work until step 5. From reading the source of the pinned CLI (3.0.0), `start` should still succeed, but this hasn't been run. If it reports `Missing required field in config: auth.external.google.client_id`, do [Google setup, steps 2 and 3](supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup) first, then run `start` again.
 - `supabase:prepare` copies prompts and the pipeline into the ignored Edge bundle. Rerun it after changing them.
 - `start` applies migrations to a new database. `migration up` applies only pending ones to an existing database. Do not run a database reset to apply migrations, because it erases local data.
 - Stay local: do not add `--remote` or link and push to a hosted project.
@@ -131,7 +144,7 @@ In `supabase/functions/.env`, set:
 | `APP_ORIGINS` | Keep the template's `http://localhost:5173,http://127.0.0.1:5173`, or list your exact frontend origins. Other browser origins are refused with `ORIGIN_NOT_ALLOWED` |
 | `GOOGLE_TOKEN_ACTIVE_KEY` | `v1` on a new setup |
 | `GOOGLE_TOKEN_KEYS` | `{"v1":"<base64 key>"}`, using a key you generate as below |
-| `ENABLE_GOOGLE_CONNECTION` | `true`, once all of the above are filled |
+| `ENABLE_GOOGLE_CONNECTION` | `true`, once all of the above are filled. Leave it on |
 
 The token key encrypts saved Google credentials. Generate one privately, and never replace a key that already encrypted saved connections:
 
@@ -139,7 +152,7 @@ The token key encrypts saved Google credentials. Generate one privately, and nev
 node -p "require('node:crypto').randomBytes(32).toString('base64')"
 ```
 
-Restart local Supabase so Auth loads the new sign-in settings. This keeps local data:
+Restart local Supabase so Auth loads the new sign-in settings. This keeps local data. Do the same after any later change to sign-in settings:
 
 ```powershell
 # From Checkpoint 3/app
@@ -162,7 +175,21 @@ Sign-in and connecting Gmail work without this; only step 7 needs it.
 
 ## 6. Run the app
 
-Use two terminals:
+First check what is already using the ports:
+
+```powershell
+# Windows PowerShell
+Get-NetTCPConnection -State Listen -LocalPort 54321,5173 -ErrorAction SilentlyContinue
+```
+
+```bash
+# macOS or Linux
+lsof -nP -iTCP:54321 -iTCP:5173 -sTCP:LISTEN
+```
+
+Port 54321 should be listening, because that is Supabase from step 4. Port 5173 should be free. If 5173 is busy, stop whatever is using it, or use that server if it is this app's Vite from an earlier run. If 54321 was already busy before step 4, stop the other program or Supabase project first. Don't move to other ports: Google redirects and `APP_ORIGINS` expect these, and Vite silently picks the next free port when 5173 is taken.
+
+Then use two terminals:
 
 ```powershell
 # Terminal 1, from Checkpoint 3/app
@@ -172,13 +199,15 @@ npx.cmd supabase --agent no functions serve --env-file supabase/functions/.env
 corepack pnpm dev --host 127.0.0.1
 ```
 
-Check first whether ports 54321 and 5173 are already serving. Open `http://127.0.0.1:5173/` and sign in with Google. Use `127.0.0.1` throughout, because `localhost` is a different OAuth origin.
+Open `http://127.0.0.1:5173/` and sign in with Google. Use `127.0.0.1` throughout, because `localhost` is a different OAuth origin.
 
 Under **Connection and permissions**, connect Gmail with the same address. Connecting reads no mail, and scans stay refused while scanning is off. Signed-in users see the workspace page; the designed dashboard is not yet connected to real data.
 
 ## 7. Turn on manual scanning deliberately
 
 Each model call uses Gemini quota. Do this only with the dedicated fictional mailbox.
+
+A new test mailbox has nothing to scan. Send it a few fictional emails from a second account you control, and allow only that sender in item 3 below. Never use real mail. The [labeled fictional set](../tests/fixtures/gmail-live-cases.json) has sample text.
 
 1. In `supabase/functions/.env`, set:
 
@@ -188,7 +217,7 @@ Each model call uses Gemini quota. Do this only with the dedicated fictional mai
    GEMINI_API_KEY=<your private key>
    ```
 
-   To override the [default model](prompts/model-settings.json), add `GEMINI_MODEL=<model id>`. Keep the key in this file only, never in a `VITE_*` variable.
+   `ENABLE_GOOGLE_CONNECTION` should already be on from step 5. Get the key from [Google AI Studio](https://aistudio.google.com/apikey). To override the [default model](prompts/model-settings.json), add `GEMINI_MODEL=<model id>`. Keep the key in this file only, never in a `VITE_*` variable.
 2. Stop and restart the `functions serve` command. Settings load at startup.
 3. In the app, under **Connection and permissions** (select **Edit settings** if you see a summary), save at least one exact sender or domain, give consent, and uncheck **Pause scanning**. Keep the list narrow: everything it permits can go to Gemini.
 4. Under **Check Gmail**, click **Scan past seven days**. The scan buttons stay disabled with a countdown during the 60-second cooldown. Use **Scan more** when work remains.

@@ -22,6 +22,7 @@ import {
 } from "./scanConsent"
 import { Brand } from "./AppChrome"
 import RulesEditor from "./RulesEditor"
+import { calendarEventsEnabled } from "./TaskCalendarControl"
 import { ContextLimitInputs, SaveFailure, useGmailState, useSettingsSave } from "./settingsForm"
 
 // Signed-in onboarding reads and writes saved scan settings.
@@ -130,7 +131,7 @@ export default function Onboarding({
               </div>
               <p className="setup-helper">
                 You can save your sources and consent before or after
-                connecting. Google Calendar is not connected in this release.
+                connecting. {calendarEventsEnabled ? "Google Calendar is optional and can be added later from a task." : "Google Calendar is not connected in this release."}
               </p>
               <FooterActions back={real.onLeave} backLabel={real.leaveLabel} next={() => setStep(2)} />
             </>

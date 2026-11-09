@@ -13,6 +13,7 @@ import { changeKey, countAdded, NOTHING_ADDED, scanSummary, suggestionKey } from
 import { useNewItems } from "./useNewItems"
 import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
+import TaskCalendarControl, { calendarEventsEnabled, clearCalendarDraft, pendingCalendarTask } from "./TaskCalendarControl"
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
   autoNextCheck, quietStop, skippedByCategories, TRANSIENT_STOPS, TROUBLE_AFTER, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
@@ -317,6 +318,16 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   }
 
   const model = useMemo(() => buildDashboardModel(snapshot, links), [snapshot, links])
+  // Returning from Google Calendar authorization reopens that task's event review once.
+  const resumedCalendar = useRef(false)
+  useEffect(() => {
+    if (loading || resumedCalendar.current || !calendarEventsEnabled) return
+    resumedCalendar.current = true
+    const pending = pendingCalendarTask(userId)
+    const task = pending ? model.active.find((t) => t.row.id === pending) : undefined
+    if (task) { setActiveTab("tasks"); setView("active"); setExportTask(task) }
+    else if (pending) clearCalendarDraft(userId)
+  }, [loading, model.active, userId])
   const today = localDate(new Date(now))
   const reviewCount = model.suggestions.length + model.changes.length + model.unresolvedChanges.length
   const counts: Record<View, number> = { suggestions: reviewCount, active: model.active.length, completed: model.closed.length, dismissed: model.dismissed.length }
@@ -567,7 +578,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                         onComplete={() => void perform(() => reviewStoredRecord("task", t.row.id, "complete", t.row.revision), "Task completed.", () => { setNotice(""); setToast({ kind: "completed", id: t.row.id }) })}
                         onMenu={() => setMenuId((c) => (c === t.row.id ? null : t.row.id))}
                         onSource={() => setSource(sourceForTask(t))}
-                        primary={<button className="calendar-button" disabled={busy} onClick={() => setExportTask(t)}><Icon name="calendar" size={16} />Export calendar file</button>}
+                        primary={<button className="calendar-button" disabled={busy} onClick={() => setExportTask(t)}><Icon name="calendar" size={16} />{calendarEventsEnabled ? "Add to calendar" : "Export calendar file"}</button>}
                         menu={<><button onClick={() => { setMenuId(null); setEditing({ kind: "task", row: t.row, fields: t.fields }) }}>Edit task</button>
                           {moveItems("active", t.row, t.row.origin_suggestion_id)}</>}
                       />))}</div>}
@@ -623,10 +634,12 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         onDismiss={() => void perform(() => reviewTaskChange(change.row.id, change.row.revision, "dismiss"), "Proposal dismissed. The task is unchanged.", () => setChangeId(null))}
         onRebase={() => change.target && void perform(() => reviewTaskChange(change.row.id, change.row.revision, "rebase", change.target!.revision), "Proposal refreshed against the current task. Review the new comparison before approving.")} />}
       {exportTask && (
-        <Modal onClose={() => setExportTask(null)} title="Export calendar file" wide>
-          <p className="calendar-separation-note">Google Calendar is not connected (planned for a later release). This downloads a file you import yourself; nothing is written to any calendar.</p>
-          <Embedded><CalendarExport key={`${exportTask.row.id}-${exportTask.row.revision}`} task={exportTask.row} fields={exportTask.fields} close={() => setExportTask(null)}
-            onDownloaded={() => { setExportTask(null); setNotice("Calendar file download started. Import it into your chosen calendar.") }} /></Embedded>
+        <Modal onClose={() => { clearCalendarDraft(userId); setExportTask(null) }} title={calendarEventsEnabled ? "Add to calendar" : "Export calendar file"} wide>
+          <Embedded><TaskCalendarControl key={`${userId}-${exportTask.row.id}`} task={exportTask.row} userId={userId}
+            onCancel={() => setExportTask(null)}
+            onAdded={() => { setExportTask(null); setNotice("Event added to your Google Calendar. Later task edits do not update it."); void reload() }}
+            fileExport={<CalendarExport key={`${exportTask.row.id}-${exportTask.row.revision}`} task={exportTask.row} fields={exportTask.fields} close={() => { clearCalendarDraft(userId); setExportTask(null) }}
+              onDownloaded={() => { setExportTask(null); setNotice("Calendar file download started. Import it into your chosen calendar.") }} />} /></Embedded>
         </Modal>
       )}
       {reminderFor && <ReminderModal followup={reminderFor} busy={busy} onCancel={() => setReminderFor(null)}

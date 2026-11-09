@@ -24,3 +24,14 @@
 .app-shell .processing-status { padding:14px 18px; }
 .app-shell .processing-status-copy > div { gap:4px; }
 .app-shell .processing-status-copy > div > .scan-last-checked { color:var(--muted); }
+/* Source email dialog: wider, and the review box, Gmail link and note share the
+   dialog's 24px side padding and text size instead of running edge to edge. */
+.modal.rd-source-modal { width:min(100%, 820px); max-height:calc(100vh - 48px); overflow-y:auto; }
+.rd-modal-body { padding:16px 24px 18px; display:grid; gap:12px; font-size:13px; line-height:1.5; }
+.rd-modal-body .rd-embedded, .rd-modal-body .rd-embedded p, .rd-modal-body .rd-embedded li { font-size:13px; line-height:1.5; }
+.rd-modal-body .storage-review { margin:0; padding:12px 16px; border-radius:10px; }
+.rd-modal-body .storage-review strong { font-size:14px; }
+.rd-modal-body .storage-review ul { margin:6px 0; padding-left:20px; }
+.rd-modal-body .storage-review p { margin:0; }
+.rd-modal-body .rd-gmail-link p { margin:0; font-size:14px; }
+.rd-modal-body .form-hint { margin:-6px 0 0; font-size:12px; }

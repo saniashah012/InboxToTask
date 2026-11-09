@@ -587,17 +587,19 @@ function WaitingSection({ items, openCount, busy, today, onSource, onToggle, onR
 function SourceModal({ source, email, links, onClose }: { source: SourceView; email: string; links: TaskSourceLink[] | null; onClose: () => void }) {
   const own = source.taskId ? (links ? links.filter((l) => l.taskId === source.taskId) : null) : undefined
   return (
-    <Modal onClose={onClose} title="Source email" wide>
+    <Modal className="rd-source-modal" onClose={onClose} title="Source email" wide>
       <div className="email-details">
         <div><span>From</span><strong>{source.sender ?? "Unavailable"}</strong></div>
         <div><span>Subject</span><strong>{source.subject || "(no subject)"}</strong></div>
         <div><span>Received</span><strong>{formatWhen(source.sentAt) ?? "Unavailable"}</strong></div>
       </div>
       {own === undefined && <div className="excerpt"><span>Saved excerpt</span><blockquote>{source.quote ? `“${source.quote}”` : "The saved excerpt has expired."}</blockquote></div>}
-      {source.extraction && <Embedded><ExtractionReview extraction={source.extraction} /></Embedded>}
-      {own !== undefined && <Embedded><TaskSourceEmails email={email} links={own} /></Embedded>}
-      {own === undefined && <div className="rd-gmail-link"><OpenInGmail email={email} messageId={source.messageId} /></div>}
-      <p className="form-hint">InboxToTask keeps only a short excerpt. Gmail opens the whole conversation, which can include messages your rules excluded.</p>
+      <div className="rd-modal-body">
+        {source.extraction && <Embedded><ExtractionReview extraction={source.extraction} /></Embedded>}
+        {own !== undefined && <Embedded><TaskSourceEmails email={email} links={own} /></Embedded>}
+        {own === undefined && <div className="rd-gmail-link"><OpenInGmail email={email} messageId={source.messageId} /></div>}
+        <p className="form-hint">InboxToTask keeps only a short excerpt. Gmail opens the whole conversation, which can include messages your rules excluded.</p>
+      </div>
       <div className="modal-actions"><button className="primary-button" onClick={onClose}>Close</button></div>
     </Modal>
   )

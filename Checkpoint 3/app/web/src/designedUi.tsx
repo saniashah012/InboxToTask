@@ -64,18 +64,20 @@ export function Modal({
   onClose,
   title,
   wide = false,
+  className = "",
 }: {
   children: ReactNode
   onClose: () => void
   title: string
   wide?: boolean
+  className?: string
 }) {
   return (
     <div className="overlay" role="presentation" onMouseDown={onClose}>
       <section
         aria-label={title}
         aria-modal="true"
-        className={`modal ${wide ? "modal-wide" : ""}`}
+        className={`modal ${wide ? "modal-wide" : ""} ${className}`.trim()}
         role="dialog"
         onMouseDown={(event) => event.stopPropagation()}
       >

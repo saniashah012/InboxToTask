@@ -548,6 +548,16 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
 function confidenceLevel(value: number): "high" | "medium" | "low" {
   return value >= 85 ? "high" : value >= 60 ? "medium" : "low"
 }
+// A small ring that fills clockwise to the confidence percentage, in the text color.
+function ConfidenceRing({ value }: { value: number }) {
+  const r = 6.5, c = 2 * Math.PI * r, filled = Math.max(0, Math.min(100, value)) / 100 * c
+  return (
+    <svg aria-hidden="true" className="rd-confidence-ring" height="16" viewBox="0 0 16 16" width="16">
+      <circle cx="8" cy="8" fill="none" r={r} stroke="currentColor" strokeOpacity=".22" strokeWidth="2.5" />
+      <circle cx="8" cy="8" fill="none" r={r} stroke="currentColor" strokeDasharray={`${filled} ${c}`} strokeLinecap="round" strokeWidth="2.5" transform="rotate(-90 8 8)" />
+    </svg>
+  )
+}
 function ConfidenceBadge({ category, value }: { category: string; value: number }) {
   const level = confidenceLevel(value)
   const kind = category === "Actionable" ? "Actionable" : "Informational"
@@ -555,7 +565,7 @@ function ConfidenceBadge({ category, value }: { category: string; value: number 
   return (
     <span aria-label={`Classification confidence: ${word}, ${value}% ${kind.toLowerCase()}`} className={`rd-confidence is-${level}`} role="img"
       title={`The model is ${value}% confident this email is ${kind.toLowerCase()}.`}>
-      <span aria-hidden="true" className="rd-confidence-dot" />{kind} · {value}%
+      <ConfidenceRing value={value} />{kind} · {value}%
     </span>
   )
 }

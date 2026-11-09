@@ -11,6 +11,7 @@ import {
   type ScanState,
 } from "./demoData"
 import { previewAdapter } from "./previewAdapter"
+import { Icon, Modal } from "./designedUi"
 import {
   supabase,
   type OnboardingPreferences,
@@ -18,6 +19,7 @@ import {
 import type { Session } from "@supabase/supabase-js"
 import ScanSettingsPanel from "./ScanSettingsPanel"
 import ManualWorkspace from "./ManualWorkspace"
+import RealDashboard from "./RealDashboard"
 import GoogleConnectionPanel from "./GoogleConnectionPanel"
 import {
   googleConnectionStatus,
@@ -331,93 +333,6 @@ const passiveGroups: Record<string, PassiveItem[]> = {
   ],
 }
 
-function Icon({
-  name,
-  size = 18,
-}: {
-  name: "calendar" | "check" | "close" | "more" | "external" | "arrow" | "clock"
-  size?: number
-}) {
-  const paths = {
-    calendar: (
-      <>
-        <rect x="3" y="5" width="18" height="16" rx="2" />
-        <path d="M16 3v4M8 3v4M3 10h18" />
-      </>
-    ),
-    check: <path d="m5 12 4 4L19 6" />,
-    close: <path d="M18 6 6 18M6 6l12 12" />,
-    more: (
-      <>
-        <circle cx="12" cy="5" r="1" fill="currentColor" stroke="none" />
-        <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
-        <circle cx="12" cy="19" r="1" fill="currentColor" stroke="none" />
-      </>
-    ),
-    external: (
-      <>
-        <path d="M14 3h7v7" />
-        <path d="m10 14 11-11" />
-        <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
-      </>
-    ),
-    arrow: <path d="m15 18-6-6 6-6" />,
-    clock: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
-      </>
-    ),
-  }
-  return (
-    <svg
-      aria-hidden="true"
-      className="icon"
-      fill="none"
-      height={size}
-      viewBox="0 0 24 24"
-      width={size}
-    >
-      {paths[name]}
-    </svg>
-  )
-}
-
-function Modal({
-  children,
-  onClose,
-  title,
-  wide = false,
-}: {
-  children: React.ReactNode
-  onClose: () => void
-  title: string
-  wide?: boolean
-}) {
-  return (
-    <div className="overlay" role="presentation" onMouseDown={onClose}>
-      <section
-        aria-label={title}
-        aria-modal="true"
-        className={`modal ${wide ? "modal-wide" : ""}`}
-        role="dialog"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="modal-head">
-          <div>
-            <span className="eyebrow">InboxToTask</span>
-            <h2>{title}</h2>
-          </div>
-          <button aria-label="Close" className="icon-button" onClick={onClose}>
-            <Icon name="close" />
-          </button>
-        </div>
-        {children}
-      </section>
-    </div>
-  )
-}
-
 type AppScreen = "onboarding" | "dashboard"
 
 const emptyOnboardingPreferences: OnboardingPreferences = {
@@ -433,14 +348,17 @@ const emptyOnboardingPreferences: OnboardingPreferences = {
 type SettingsSection = "sources" | "processing" | "connections" | "retention"
 
 // What a signed-in account sees. "auto" follows saved settings: a first save goes
-// through onboarding, otherwise the workspace. "google-return" is Google's redirect
-// back to the root after a connection attempt.
+// through onboarding, otherwise the designed dashboard ("workspace"). "google-return"
+// is Google's redirect back to the root after a connection attempt. "dev-workspace"
+// is the older ManualWorkspace testing screen, reachable only in development builds.
 type SignedInView =
   | { kind: "auto" }
   | { kind: "google-return" }
   | { kind: "setup" }
   | { kind: "settings"; section: SettingsSection }
   | { kind: "workspace"; notice: string }
+  | { kind: "dev-workspace" }
+  | { kind: "legacy-review" }
 
 function setupSavedNotice(result: ScanSettings) {
   const blockers = scanBlockers(result, "connected")
@@ -601,7 +519,8 @@ function App() {
     if (kind === "google-return") kind = route === "onboarding" ? "setup" : "settings"
     if (kind === "auto") kind = route === "onboarding" ? "setup" : "workspace"
     // Only the workspace form can confirm review of previous phrase rules.
-    if (route === "review-legacy") kind = "workspace"
+    if (route === "review-legacy") kind = "legacy-review"
+    if (kind === "dev-workspace" && !import.meta.env.DEV) kind = "workspace"
 
     if (kind === "setup") {
       return (
@@ -629,7 +548,7 @@ function App() {
             leaveLabel:
               settings.revision === 0
                 ? "Skip setup for now"
-                : "Back to workspace without saving",
+                : "Back to dashboard without saving",
             onLeave: () => show({ kind: "workspace", notice: "" }),
           }}
           onConnectGmail={() => {}}
@@ -656,22 +575,40 @@ function App() {
         />
       )
     }
+    if (kind === "legacy-review") {
+      return (
+        <LegacyReviewScreen
+          key={owner}
+          email={email}
+          onSaved={saved.reload}
+          onSignOut={() => void signOut()}
+        />
+      )
+    }
+    if (kind === "dev-workspace") {
+      return (
+        <ManualWorkspace
+          key={owner}
+          userId={owner}
+          email={email}
+          onSignOut={() => void signOut()}
+          onOpenSettings={() => show({ kind: "settings", section: "sources" }, true)}
+          onRunSetup={() => show({ kind: "setup" }, true)}
+          initialNotice="Developer workspace: the older testing screen. Product users see the designed dashboard."
+        />
+      )
+    }
     return (
-      <ManualWorkspace
+      <RealDashboard
         key={owner}
         userId={owner}
         email={email}
+        settings={settings}
+        initialNotice={view.kind === "workspace" ? view.notice : ""}
         onSignOut={() => void signOut()}
-        onOpenSettings={() => show({ kind: "settings", section: "sources" }, true)}
+        onOpenSettings={(section) => show({ kind: "settings", section }, true)}
         onRunSetup={() => show({ kind: "setup" }, true)}
-        initialTab={route === "review-legacy" ? "settings" : "review"}
-        initialNotice={
-          route === "review-legacy"
-            ? "Previous phrase rules need your review before scanning. Review them under Scanning permission and sources below."
-            : view.kind === "workspace"
-              ? view.notice
-              : ""
-        }
+        onOpenDevWorkspace={import.meta.env.DEV ? () => show({ kind: "dev-workspace" }) : undefined}
       />
     )
   }
@@ -763,6 +700,24 @@ function AppStatus({
           </button>
         )}
       </section>
+    </main>
+  )
+}
+
+// Previous phrase rules must be reviewed before scanning. Only ScanSettingsPanel can
+// send that review (p_reviewed), so it is shown on its own until the review is saved.
+function LegacyReviewScreen({ email, onSaved, onSignOut }: { email: string; onSaved: () => void; onSignOut: () => void }) {
+  return (
+    <main className="storage-page manual-workspace">
+      <header className="manual-topbar">
+        <div className="manual-brand"><img alt="" src={inboxToTaskLogo} /><span>InboxToTask</span></div>
+        <div className="manual-account"><span>{email}</span><button onClick={onSignOut}>Sign out</button></div>
+      </header>
+      <div className="manual-intro">
+        <h1>Review your previous rules</h1>
+        <p role="status">Previous phrase rules need your review before scanning. Review and save them below; your dashboard opens afterwards.</p>
+      </div>
+      <ScanSettingsPanel onSaved={onSaved} />
     </main>
   )
 }
@@ -3448,7 +3403,7 @@ function RealSettingsScreen({
         <div className="topbar-actions">
           <span className="demo-mode-badge">Signed in · {email}</span>
           <button className="secondary-button" onClick={onBack}>
-            <Icon name="arrow" size={15} /> {dirty ? "Back to workspace (discard changes)" : "Back to workspace"}
+            <Icon name="arrow" size={15} /> {dirty ? "Back to dashboard (discard changes)" : "Back to dashboard"}
           </button>
         </div>
       </header>
@@ -3475,7 +3430,7 @@ function RealSettingsScreen({
             <span>
               {blockers.length
                 ? blockers.join(" ")
-                : "Scans still start only when you request one from the workspace."}
+                : "Scans still start only when you request one from the dashboard."}
             </span>
           </div>
           {section === "sources" && (
@@ -3554,7 +3509,7 @@ function RealSettingsScreen({
               </div>
               <p className="settings-footnote">
                 Accepted tasks can be exported as calendar files from the
-                workspace. Nothing is written to Google Calendar.
+                dashboard. Nothing is written to Google Calendar.
               </p>
               <div className="settings-card split-card">
                 <div>

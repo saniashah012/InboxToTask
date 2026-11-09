@@ -1,0 +1,17 @@
+/* Small additions for the signed-in designed dashboard. Reuses index.css tokens. */
+.rd-embedded { min-height:0; padding:0; margin:0; max-width:none; background:transparent; }
+.rd-embedded > * { max-width:none; padding-inline:0; }
+.rd-embedded .storage-panel { margin:0 0 12px; }
+.rd-notice { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; margin:0 0 16px; }
+.rd-subhead { margin:24px 0 10px; font-family:"Manrope",sans-serif; font-size:1rem; color:var(--ink); }
+.rd-sort-note { color:var(--muted); font-size:.85rem; }
+.rd-wording { color:var(--muted); font-size:.8rem; font-style:italic; overflow-wrap:anywhere; }
+.rd-waiting-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+.waiting-row.rd-resolved { opacity:.65; }
+.rd-gmail-link a { color:var(--green); font-weight:600; }
+.rd-change-table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.9rem; }
+.rd-change-table th, .rd-change-table td { text-align:left; vertical-align:top; padding:8px; border-bottom:1px solid var(--soft-line); overflow-wrap:anywhere; }
+.rd-change-table thead th { color:var(--muted); font-weight:600; }
+.app-shell button:disabled { opacity:.5; cursor:not-allowed; }
+.app-shell :focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.rd-embedded section[aria-label="Calendar export preview"] > h2 { display:none; }

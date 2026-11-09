@@ -857,7 +857,12 @@ function FilterHelp() {
     <button type="button" className="text-link" aria-label="About these filters" aria-expanded={open} aria-controls={id}
       onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(true)}
       onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false) } }}>About these filters (i)</button>
-    {open && <span id={id} role="tooltip">Exact sender/domain inclusions combine with OR. Exact exclusions and literal subject exclusions override access. Domains do not include subdomains. Topics describe semantic relevance after permitted content reaches Gemini, so semantic exclusions cannot prevent transmission.</span>}
+    {open && <span id={id} role="tooltip" className="scan-help-tip">
+      <span>An email is checked if it matches <strong>any</strong> included sender or domain.</span>
+      <span>Excluded senders, domains and subject phrases <strong>always win</strong> over inclusions.</span>
+      <span>A domain does not cover its subdomains (example.edu is not mail.example.edu).</span>
+      <span>Topics are judged by Gemini <strong>after</strong> a permitted email is sent to it, so excluding a topic hides results but does not keep the email from Gemini.</span>
+    </span>}
   </span>
 }
 

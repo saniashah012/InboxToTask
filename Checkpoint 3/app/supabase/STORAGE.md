@@ -32,9 +32,11 @@ Owner-readable `scan_settings` are saved only through revision-checked
 `scan_settings_get` / `scan_settings_save`. Exact sender/domain inclusions combine
 with OR; source exclusions and literal case-insensitive subject exclusions win.
 Domains do not include subdomains. Empty source inclusions permit nothing.
-`semantic_preferences` holds separate include/exclude topics; topics never grant
-source access. Semantic relevance is Phase 3 work, after permitted content is sent
-to Gemini. Semantic exclusions cannot prevent transmission.
+`semantic_preferences` holds include and exclude topics and, since the
+[private-topic migration](migrations/20261109200000_private_topic_words.sql),
+`blockedWords`: one word list per excluded topic. Topics never grant source access.
+Included topics are judged by Gemini after permitted content is sent. Excluded topics
+are never sent: backend code checks their words before any model call.
 
 The [source/semantic migration](migrations/20261105200000_source_semantic_contract.sql)
 retains incompatible phrase rules in `legacy_phrase_rules`, pauses affected users,
@@ -98,6 +100,12 @@ stores included and excluded topics as `semantic_preferences.include` and
 `semantic_preferences.exclude`. Short suggestion names and custom phrases are
 independent semantic strings; they are not expanded into Gmail labels or source
 keyword rules. Source access remains governed separately by sender/domain rules.
+The private-topic migration converts each saved excluded topic to its starter word
+list, or to the topic's own name for a custom topic, erring toward blocking more.
+A save without `blockedWords` keeps the saved list of each topic that stays excluded;
+new topics get their starter list or name. Lists hold 1–100 words of 1–100
+characters each, at most 1,000 words in total. `private.starter_blocked_words` must match
+[private-topics.mjs](../pipeline/private-topics.mjs); the PGlite settings test compares them.
 The category-group migration used by an earlier frontend iteration was removed;
 it is unnecessary for this contract and must not be applied.
 

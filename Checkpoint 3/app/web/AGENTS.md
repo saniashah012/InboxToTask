@@ -18,7 +18,7 @@ Product onboarding must use Google sign-in without a separate password account,
 saved scanning consent/source rules, and optional Calendar connection with Skip
 for now. Add production callback/return routes before enabling hosted OAuth.
 Preserve the [custom sender/domain/subject filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan),
-using exact sender/domain access rules, optional literal subject exclusions, and separate semantic topics. Topics never grant access and are evaluated only after permitted content reaches Gemini. Preserve custom inputs and accessible help. Previous phrase rules require explicit review; never infer categories from expanded terms.
+using exact sender/domain access rules, optional literal subject exclusions, and separate topics. Topics never grant access. Topics of interest are evaluated by Gemini after permitted content reaches it. Skipped topics are word lists (`semantic_preferences.blockedWords`) checked in backend code before anything reaches Gemini; copy must say email without those words can still be sent and that a sender/domain block is the complete protection. Preserve custom inputs and accessible help. Previous phrase rules require explicit review; never infer categories from expanded terms.
 
 ## Commands
 

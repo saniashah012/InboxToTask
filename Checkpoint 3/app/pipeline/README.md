@@ -155,10 +155,16 @@ Inclusions use OR: exact case-insensitive sender/domain matches, with no implici
 subdomains. Source exclusions and literal case-insensitive `block.subjectKeywords`
 override inclusion. Phrase access rules and mailbox labels fail closed with
 `RULE_REVIEW_REQUIRED`; they never grant source access. Empty source allowlists
-produce `NO_ALLOWLIST` and zero inference. Optional `semanticPreferences` include/
-exclude topic lists are validated separately from access permissions; topic
-relevance is part of the versioned Gmail extraction contract, evaluated after source permission. Metadata rules are not semantic
-healthcare/financial classifiers.
+produce `NO_ALLOWLIST` and zero inference. Optional `semanticPreferences` are
+validated separately from access permissions. Only `include` (topics of interest)
+reaches Gemini; relevance to it is part of the versioned Gmail extraction contract.
+Each `exclude` topic is a list of literal words in `blockedWords` (suggested topics
+start from the lists in [private-topics.mjs](private-topics.mjs)). Retrieval checks the
+subject before fetching a body, then the decoded body; `prepareInput` checks again, and
+earlier thread messages and existing-task candidates get the same check. A matching
+email makes no model call and stores nothing; scan counts record only `privateTopic`.
+Matching ignores case, accents and punctuation but needs whole words, with no stemming.
+Metadata rules and word lists are not semantic healthcare/financial classifiers.
 
 The [Gmail retriever](./gmail-retrieval.mjs) is canonical and packaged by
 `supabase:prepare`. Its separate, disabled-by-default Edge endpoint currently

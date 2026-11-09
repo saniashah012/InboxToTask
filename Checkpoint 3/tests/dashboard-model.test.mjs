@@ -17,10 +17,16 @@ function snapshot() {
     { id: 'src-1', namespace: 'gmail', message_id: 'm1', sender: 'prof@example.edu', subject: 'Week 6', sent_at: '2026-11-08T10:00:00Z' },
     { id: 'src-2', namespace: 'gmail', message_id: 'm2', sender: 'lab@example.edu', subject: 'Deleted', deleted_at: '2026-11-08T11:00:00Z' },
     { id: 'src-fx', namespace: 'fixture', message_id: 'E01' },
+    { id: 'src-info', namespace: 'gmail', message_id: 'm3', sender: 'library@example.edu', subject: 'Library hours' },
+    { id: 'src-became-task', namespace: 'gmail', message_id: 'm4', sender: 'lab@example.edu', subject: 'Room change' },
   ];
   s.extractions = [
-    { id: 'ex-1', source_id: 'src-1', created_at: '2026-11-08T10:01:00Z', summary: 'Older summary', topic_relevance: 'relevant', digest_expires_at: future },
-    { id: 'ex-1b', source_id: 'src-1', created_at: '2026-11-09T10:01:00Z', summary: 'Newer summary', topic_relevance: 'relevant', digest_expires_at: future, needs_review: true },
+    { id: 'ex-1', source_id: 'src-1', category: 'Actionable', created_at: '2026-11-08T10:01:00Z', summary: 'Actionable summary', topic_relevance: 'relevant', digest_expires_at: future },
+    { id: 'ex-1b', source_id: 'src-1', category: 'Actionable', created_at: '2026-11-09T10:01:00Z', summary: 'Newer actionable summary', topic_relevance: 'relevant', digest_expires_at: future, needs_review: true },
+    { id: 'ex-info', source_id: 'src-info', category: 'Passive', created_at: '2026-11-08T09:00:00Z', summary: 'Older summary', topic_relevance: 'relevant', digest_expires_at: future },
+    { id: 'ex-info-b', source_id: 'src-info', category: 'Passive', created_at: '2026-11-09T09:00:00Z', summary: 'Newer summary', topic_relevance: 'relevant', digest_expires_at: future },
+    { id: 'ex-task-a', source_id: 'src-became-task', category: 'Passive', created_at: '2026-11-08T09:00:00Z', summary: 'Was informational', digest_expires_at: future },
+    { id: 'ex-task-b', source_id: 'src-became-task', category: 'Actionable', created_at: '2026-11-09T09:00:00Z', summary: 'Now has a task', digest_expires_at: future },
     { id: 'ex-2', source_id: 'src-2', created_at: '2026-11-08T11:01:00Z', summary: 'Hidden', digest_expires_at: future },
     { id: 'ex-fx', source_id: 'src-fx', created_at: '2026-11-08T11:01:00Z', summary: 'Fixture', digest_expires_at: future },
   ];
@@ -109,8 +115,10 @@ test('waiting items carry their follow-ups, open first', () => {
   assert.deepEqual(open.followups.map(f => f.id), ['f-1']);
 });
 
-test('informational summaries show the newest extraction of each source once', () => {
+test('passive communication shows only informational emails, newest analysis once', () => {
   const m = buildDashboardModel(snapshot(), links, NOW);
+  // Actionable emails stay out even though they have summaries; so does an email whose
+  // newest analysis turned Actionable.
   assert.deepEqual(m.information.map(e => e.summary), ['Newer summary']);
 });
 

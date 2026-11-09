@@ -152,7 +152,9 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
     const seen = latest.get(e.source_id)
     if (!seen || time(e.created_at) > time(seen.created_at)) latest.set(e.source_id, e)
   }
-  const information = [...latest.values()].filter(e => e.summary && e.topic_relevance !== "irrelevant" && time(e.digest_expires_at) > nowMs)
+  // Passive communication is informational email only: the newest analysis must be
+  // Passive (no owner obligation). Actionable emails' tasks appear under Tasks instead.
+  const information = [...latest.values()].filter(e => e.category === "Passive" && e.summary && e.topic_relevance !== "irrelevant" && time(e.digest_expires_at) > nowMs)
 
   return {
     suggestions: pending.map(suggestion).sort(byDeadline),

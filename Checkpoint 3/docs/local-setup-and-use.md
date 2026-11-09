@@ -1,6 +1,6 @@
 # Run and use InboxToTask locally (Windows)
 
-This short teammate guide complements [INSTALL.md](../app/INSTALL.md), the full reference. Google Cloud setup is in [GOOGLE_AUTH.md](../app/supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup). It was written from the manifests, templates and UI source. It has **not** been run start to finish on a clean machine, so tell the project owner if a step fails.
+This short guide is for team members who get the private Google and Gemini values from the project owner. If you're outside the team, or have no owner to ask, follow [INSTALL.md](../app/INSTALL.md) instead: it's the full reference, and there you create your own Google projects, encryption key and Gemini key. Google Cloud setup is in [GOOGLE_AUTH.md](../app/supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup). This guide was written from the manifests, templates and UI source. It has **not** been run start to finish on a clean machine, so tell the project owner if a step fails.
 
 Real Gmail connection and scanning work **only locally**. The hosted site cannot do either.
 
@@ -9,12 +9,14 @@ Real Gmail connection and scanning work **only locally**. The hosted site cannot
 | Need | Detail |
 | --- | --- |
 | Docker Desktop | Linux containers, running (the local database and Edge runtime use it) |
-| Node.js | 22 or later (`engines` in `app/package.json`; `web/.mise.toml` pins 22) |
-| pnpm | 10.34.3, pinned in `web/package.json`. Use `corepack pnpm ...`; do not install pnpm separately |
+| Node.js | 22.6 or later. `engines` in `app/package.json` and `web/.mise.toml` say 22, but `npm.cmd run test:calendar` needs 22.6 |
+| pnpm | 10.34.3, pinned in `web/package.json`. Use `corepack pnpm ...`; do not install pnpm separately. Corepack ships with Node before 25.0.0; see [INSTALL requirements](../app/INSTALL.md#requirements) for later versions |
 | Repo access | A clone of the repository on `main`, which has the Gmail scan work (PR #22 is merged) |
 | Google test user | The project owner must add your **dedicated test Gmail address** under Test users in **both** Google Cloud projects (sign-in and Gmail) |
 
 **Private values you must get from the project owner through a private channel** (never chat, email or Git). Names only here:
+
+Three of the four templates matter here. The fourth, `Checkpoint 3/app/.env.example`, is only for the pipeline CLI, so you can skip it.
 
 | File (all ignored by Git) | Variables |
 | --- | --- |
@@ -22,7 +24,7 @@ Real Gmail connection and scanning work **only locally**. The hosted site cannot
 | `Checkpoint 3/app/supabase/functions/.env` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_KEYS`, `GEMINI_API_KEY` |
 | `Checkpoint 3/app/web/.env` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. These are not secret and come from your own local stack in step 6 |
 
-Also set in `supabase/functions/.env`: `GOOGLE_TOKEN_ACTIVE_KEY=v1`, `ENABLE_GOOGLE_CONNECTION=true`, and keep the template values for `GOOGLE_CALLBACK_URL`, `GOOGLE_RETURN_URL` (`http://127.0.0.1:5173/`) and `APP_ORIGINS`. Do not generate a new `GOOGLE_TOKEN_KEYS` if the owner gives you one. You can also create your own Google Cloud projects by following GOOGLE_AUTH.md; then you need only your own secrets.
+Also set in `supabase/functions/.env`: `GOOGLE_TOKEN_ACTIVE_KEY=v1`, `ENABLE_GOOGLE_CONNECTION=true` once `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_TOKEN_KEYS` are filled (leave it on), and keep the template values for `GOOGLE_CALLBACK_URL`, `GOOGLE_RETURN_URL` (`http://127.0.0.1:5173/`) and `APP_ORIGINS`. Do not generate a new `GOOGLE_TOKEN_KEYS` if the owner gives you one. You can also create your own Google Cloud projects by following [INSTALL step 5](../app/INSTALL.md#5-set-up-google); then you need only your own secrets.
 
 ## 2. Setup
 
@@ -46,7 +48,7 @@ Use PowerShell and run each block from the named folder. Quote paths that contai
    corepack pnpm install --frozen-lockfile
    ```
 
-4. **Create the three private files** by copying each template only if the private file does not already exist: `supabase/.env.example` to `supabase/.env`, `supabase/functions/.env.example` to `supabase/functions/.env`, and `web/.env.example` to `web/.env` (all under `Checkpoint 3/app`). Fill them from section 1. Leave `ENABLE_GMAIL_SCAN=false` for now.
+4. **Create the three private files you need** by copying each template only if the private file does not already exist: `supabase/.env.example` to `supabase/.env`, `supabase/functions/.env.example` to `supabase/functions/.env`, and `web/.env.example` to `web/.env` (all under `Checkpoint 3/app`). Fill them from section 1. Leave `ENABLE_GMAIL_SCAN=false` for now.
 5. **Start Supabase** (from `Checkpoint 3/app`; Docker must be running):
 
    ```powershell
@@ -89,7 +91,7 @@ Use only the dedicated test account.
 2. **Connect Gmail.** Open **Connection and permissions**, click **Connect Google**, and approve with the same address. Connecting reads no mail. The status should read connected with your address.
 3. **Save allowed senders and exclusions.** Under **Scanning permission and sources**, enter exact addresses under **Sender email addresses** and domains under **Sender domains** (one per line; domains do not include subdomains). Under **Subject exclusions**, list literal phrases to block, such as `Confidential`. An empty allowlist processes nothing. Keep it narrow: everything it permits can go to Gemini.
 4. **Give consent and unpause.** Check *I consent to processing permitted Gmail content under the disclosure above.*, uncheck **Pause scanning**, then click **Save scanning settings**. The form collapses to a summary; **Edit settings** reopens it.
-5. **Turn scanning on (deliberate).** In `supabase/functions/.env` set `ENABLE_GMAIL_SCAN=true` and `ENABLE_GOOGLE_CONNECTION=true`, with `GEMINI_API_KEY` set. Restart Terminal 1. Without all three, scans return "Manual Gmail scanning is disabled in the backend".
+5. **Turn scanning on (deliberate).** In `supabase/functions/.env` set `ENABLE_GMAIL_SCAN=true`, with `GEMINI_API_KEY` set and `ENABLE_GOOGLE_CONNECTION=true` still on from section 1. Restart Terminal 1. Without all three, scans return "Manual Gmail scanning is disabled in the backend".
 6. **Scan.** Under **Check Gmail**, click **Scan past seven days**. Counts appear under **Last batch**. Click **Scan more** when work remains. **Reload saved results** re-reads what is saved.
 7. **Review and approve.** In **Review**, each suggestion shows an evidence quote and **Open conversation in Gmail**. Click **Approve task** (or **Dismiss**). Approval makes no model call and creates no Calendar event.
 8. **Update proposals.** When a reply changes an accepted task, **Review** shows a before/after table (**Accepted at inference** vs **Proposed**). Click **Approve edit** (or **Approve cancellation**), or **Dismiss**. If the task changed meanwhile, use **Review against current revision** first. The update must be a reply in the same thread as an approved task.

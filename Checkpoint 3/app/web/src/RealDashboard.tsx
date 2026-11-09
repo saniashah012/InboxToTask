@@ -33,8 +33,8 @@ const formatWhen = (value?: string | null) => {
 }
 const initials = (text: string) => text.replace(/<.*>/, "").split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?"
 
-// A success message that stays 8 s, fades for 0.6 s, then closes. Hovering or
-// focusing it holds it; leaving restarts the 8 s. Timers, not animation events,
+// A success message that stays 4 s, fades for 0.6 s, then closes. Hovering or
+// focusing it holds it; leaving restarts the 4 s. Timers, not animation events,
 // so it also closes when the page is in a background tab.
 function FadeAway({ onDone, className, children, ...rest }: { onDone: () => void; className: string; children: ReactNode; role?: string; "aria-live"?: "polite" }) {
   const [fading, setFading] = useState(false)
@@ -43,8 +43,8 @@ function FadeAway({ onDone, className, children, ...rest }: { onDone: () => void
   done.current = onDone
   useEffect(() => {
     if (held) { setFading(false); return }
-    const fade = window.setTimeout(() => setFading(true), 8000)
-    const close = window.setTimeout(() => done.current(), 8600)
+    const fade = window.setTimeout(() => setFading(true), 4000)
+    const close = window.setTimeout(() => done.current(), 4600)
     return () => { window.clearTimeout(fade); window.clearTimeout(close) }
   }, [held])
   return (

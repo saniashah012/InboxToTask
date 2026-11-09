@@ -41,8 +41,8 @@ a.gmail-open-button { display:inline-flex; align-items:center; gap:8px; min-heig
 a.gmail-open-button:hover { background:var(--green); color:#fff; }
 a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
 .manual-timeline a.gmail-open-button { min-height:32px; padding:0 12px; font-size:13px; margin-top:6px; }
-/* Success messages and the Undo pop-up stay 8 seconds, then fade out over 0.6 s.
-   Hovering or focusing one pauses the countdown so it can still be read or used. */
+/* Success messages and the Undo pop-up stay 4 seconds, then fade out over 0.6 s.
+   Hovering or focusing one holds it so it can still be read or used. */
 .rd-fade { transition: opacity .6s ease-in; }
 .rd-fade.is-fading { opacity:0; }
 @media (prefers-reduced-motion: reduce) { .rd-fade { transition:none; } }

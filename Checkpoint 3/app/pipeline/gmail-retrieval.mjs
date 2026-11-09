@@ -122,8 +122,34 @@ export function gmailMetadata(data) {
   return { id: data.id, threadId: data.threadId, from, subject, sentAt: sentAt.toISOString(), labels: [] };
 }
 
+const VOID_TAGS = new Set(['area','base','br','col','embed','hr','img','input','link','meta','source','track','wbr']);
+const hiddenElement = attrs => {
+  if (/(?:^|\s)hidden(?:\s|=|\/|$)/i.test(attrs)) return true;
+  const style = attrs.match(/(?:^|\s)style\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+  const css = style ? (style[1] ?? style[2] ?? style[3]) : '';
+  return /display\s*:\s*none|visibility\s*:\s*hidden|(?:^|[;\s])(?:font-size|opacity|max-height)\s*:\s*0(?![.\d]*[1-9])/i.test(css);
+};
+// Drop markup a mail client does not show, so extraction sees what the reader sees.
+function visibleHtml(html) {
+  html = html.replace(/<!--[\s\S]*?(?:-->|$)/g,' ').replace(/<(head|title|template|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ');
+  const tag = /<\s*(\/)?\s*([a-z][a-z0-9-]*)\b([^>]*)>/gi;
+  let out = '', last = 0, hiddenTag = null, depth = 0, m;
+  while ((m = tag.exec(html))) {
+    const [all, close, rawName, attrs] = m, name = rawName.toLowerCase();
+    const opens = !close && !VOID_TAGS.has(name) && !/\/\s*$/.test(attrs);
+    if (hiddenTag === null) {
+      out += html.slice(last, m.index);
+      if (opens && hiddenElement(attrs)) { hiddenTag = name; depth = 1; } else out += all;
+    } else if (name === hiddenTag) {
+      if (close) depth--; else if (opens) depth++;
+      if (!depth) { hiddenTag = null; out += ' '; }
+    }
+    last = tag.lastIndex;
+  }
+  return hiddenTag === null ? out + html.slice(last) : out;
+}
 function htmlText(html) {
-  return html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ')
+  return visibleHtml(html).replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ')
     .replace(/<\s*(br|\/p|\/div|\/li)\b[^>]*>/gi,'\n').replace(/<[^>]*>/g,' ')
     .replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (all, entity) => {
       if (entity.startsWith('#')) {

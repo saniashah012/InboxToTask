@@ -208,3 +208,18 @@ test('unauthenticated senders are blocked before bodies and excluded from thread
  assert.deepEqual(s.inputs[0].threadContext.map(m=>m.id),['older']);
  assert.ok(s.inputs[0].retrievalWarnings.some(w=>w.includes('excluded')));
 });
+test('HTML text that a mail client hides never reaches extraction',()=>{
+ const html=['<html><head><title>Ignore this title</title></head><body>',
+  '<p>Submit the lab report.</p><!-- comment instruction -->',
+  '<div style="display: none"><p>hidden instruction one</p><div>nested hidden</div></div>',
+  '<span style="font-size:0px;color:#fff">hidden instruction two</span>',
+  '<p hidden>hidden instruction three</p><div style=\'visibility:hidden\'>hidden instruction four</div>',
+  '<span style="opacity: 0">hidden instruction five</span><span style="font-size:0.9em">Small but visible.</span>',
+  '<br><img src="x.png" style="display:none"><p>Due Friday.</p></body></html>'].join('');
+ const data=message('m');data.payload={mimeType:'text/html',body:{data:base64url(html)}};
+ const text=gmailBody(data,1000);
+ for(const kept of ['Submit the lab report.','Small but visible.','Due Friday.']) assert.ok(text.includes(kept),kept);
+ for(const dropped of ['title','comment','hidden','nested']) assert.ok(!text.toLowerCase().includes(dropped),dropped);
+ data.payload={mimeType:'text/html',body:{data:base64url('<p>Visible.</p><div style="display:none">unclosed hidden')}};
+ assert.equal(gmailBody(data,100),'Visible.');
+});

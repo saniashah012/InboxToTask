@@ -1,4 +1,7 @@
-import { uniqueTerms, preferenceScope } from "./filterPresets"
+import {
+  excludedTopicSuggestions,
+  includedTopicSuggestions,
+} from "./filterPresets"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import gmailLogo from "./assets/gmail-logo.svg"
 import googleG from "./assets/google-g.svg"
@@ -609,9 +612,9 @@ function App() {
           setProcessingEnabled(true)
           setSavedPreferences({
             ...emptyOnboardingPreferences,
-            includedTypes: ["School"],
+            includedTypes: ["school"],
             selectedSenders: ["professor@illinois.edu"],
-            excludedTypes: ["Financial"],
+            excludedTypes: ["financial"],
           })
           setScreen("dashboard")
         }}
@@ -1719,6 +1722,7 @@ function Onboarding({
   )
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
   const hasPreferences =
+    preferences.includedTypes.length +
       preferences.selectedSenders.length +
       preferences.selectedDomains.length >
     0
@@ -2125,7 +2129,14 @@ function FooterActions({
   )
 }
 
-type RuleKey = Exclude<keyof OnboardingPreferences, "scanRevision">
+type RuleKey =
+  | "includedTypes"
+  | "selectedSenders"
+  | "selectedDomains"
+  | "excludedTypes"
+  | "excludedSenders"
+  | "excludedDomains"
+  | "excludedSubjects"
 
 type RuleField = {
   key: RuleKey
@@ -2137,7 +2148,10 @@ type RuleChip = {
   key: RuleKey
   value: string
   raw?: string
-  prefix: string
+  prefix?: string
+  selected?: boolean
+  id?: string
+  removeIndex?: number
 }
 
 type RetentionRowProps = {
@@ -2237,8 +2251,8 @@ function RulesEditor({
         <CategorySelector
           label="Add an included email category"
           categoryKey="includedTypes"
-          suggestions={["School", "Job applications", "Research", "Meetings"]}
-          value={rules.includedTypes}
+          suggestions={includedTopicSuggestions}
+          customKeywords={rules.includedTypes}
           onChange={(includedTypes) => onChange({ ...rules, includedTypes })}
         />
         <div className="rule-heading">
@@ -2278,8 +2292,8 @@ function RulesEditor({
         <CategorySelector
           label="Add an excluded email category"
           categoryKey="excludedTypes"
-          suggestions={["Financial", "Health", "Promotions", "Family & friends"]}
-          value={rules.excludedTypes}
+          suggestions={excludedTopicSuggestions}
+          customKeywords={rules.excludedTypes}
           onChange={(excludedTypes) => onChange({ ...rules, excludedTypes })}
         />
         <div className="rule-heading">
@@ -2311,7 +2325,6 @@ function RulesEditor({
         })}
       </div>}
       <FilterHelp />
-      <div className="scope-summary live" aria-live="polite"><span>Effective scope</span><strong>{preferenceScope(rules)}</strong></div>
       {ruleError && <p className="notice warning" role="alert">{ruleError}</p>}
     </div>
   )
@@ -2321,14 +2334,14 @@ function CategorySelector({
   label,
   categoryKey,
   suggestions,
-  value,
+  customKeywords,
   onChange,
 }: {
   label: string
   categoryKey: "includedTypes" | "excludedTypes"
   suggestions: string[]
-  value: string[]
-  onChange: (value: string[]) => void
+  customKeywords: string[]
+  onChange: (customKeywords: string[]) => void
 }) {
   const [draft, setDraft] = useState("")
   const [error, setError] = useState("")
@@ -2336,15 +2349,42 @@ function CategorySelector({
   const add = (rawValue = draft) => {
     const category = rawValue.trim()
     if (!category) return
-    if (category.length > 254 || /[\x00-\x1f\x7f]/.test(category) || value.length >= 200) { setError("Use up to 200 terms, each 1-254 characters without control characters."); return }
-    if (value.some((current) => current.toLowerCase() === category.toLowerCase())) {
-      setError("That word or phrase is already selected.")
+    if (
+      category.length > 254 ||
+      /[\x00-\x1f\x7f]/.test(category) ||
+      customKeywords.length >= 200
+    ) {
+      setError("Use up to 200 terms, each 1-254 characters without control characters.")
       return
     }
-    onChange([...value, category])
+    onChange([...customKeywords, category])
     setDraft("")
     setError("")
   }
+
+  const toggleSuggestion = (suggestion: string) => {
+    const selected = customKeywords.some(
+      (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
+    )
+    onChange(
+      selected
+        ? customKeywords.filter(
+            (keyword) => keyword.toLowerCase() !== suggestion.toLowerCase(),
+          )
+        : [...customKeywords, suggestion],
+    )
+    setError("")
+  }
+
+  const visibleCustomKeywords = customKeywords
+    .map((keyword, index) => ({ keyword, index }))
+    .filter(
+      ({ keyword }) =>
+        !suggestions.some(
+          (suggestion) =>
+            suggestion.toLowerCase() === keyword.toLowerCase(),
+        ),
+    )
 
   return (
     <div className="category-preferences">
@@ -2353,7 +2393,7 @@ function CategorySelector({
         <div>
           <input
             aria-label={label}
-            placeholder="Type a word or phrase"
+            placeholder="Type a word or phrase."
             value={draft}
             onChange={(event) => {
               setDraft(event.target.value)
@@ -2377,40 +2417,61 @@ function CategorySelector({
         </div>
       </div>
       <Chips
-        entries={value.map((category) => ({
+        entries={visibleCustomKeywords.map(({ keyword, index }) => ({
           key: categoryKey,
-          value: category,
-          prefix: "Topic",
+          value: keyword,
+          selected: true,
+          id: `${categoryKey}-${index}`,
+          removeIndex: index,
         }))}
-        onRemove={(_key, category) =>
-          onChange(value.filter((current) => current !== category))
+        onRemove={(_key, _category, index) =>
+          onChange(
+            customKeywords.filter(
+              (_current, currentIndex) => currentIndex !== index,
+            ),
+          )
         }
       />
-      {suggestions.some(
-        (suggestion) =>
-          !value.some((selected) => selected.toLowerCase() === suggestion.toLowerCase()),
-      ) && (
-        <div className="category-suggestions">
-          <p className="suggestions-label">Suggestions — unselected by default.</p>
-          <div className="selection-chips">
-            {suggestions
-              .filter(
-                (suggestion) =>
-                !value.some((selected) => selected.toLowerCase() === suggestion.toLowerCase()),
-              )
-              .map((suggestion) => (
+      <div className="category-suggestions">
+        <p className="suggestions-label">Suggestions</p>
+        <div className="type-selection-chips">
+          {suggestions.map((suggestion) => {
+            const selected = customKeywords.some(
+              (keyword) => keyword.toLowerCase() === suggestion.toLowerCase(),
+            )
+            return (
+              <span
+                className={`type-chip ${selected ? "selected" : ""}`}
+                key={suggestion}
+              >
                 <button
-                  key={suggestion}
-                  onClick={() => { const next = uniqueTerms([...value, suggestion]); if (next.length > 200) { setError("Use up to 200 terms."); return } onChange(next); setError("") }}
+                  aria-pressed={selected}
+                  className="type-chip-toggle"
+                  onClick={() => toggleSuggestion(suggestion)}
                   type="button"
                 >
-                  <span aria-hidden="true" className="chip-plus">+</span>
+                  {!selected && (
+                    <span aria-hidden="true" className="chip-plus">
+                      +
+                    </span>
+                  )}
                   {suggestion}
                 </button>
-              ))}
-          </div>
+                {selected && (
+                  <button
+                    aria-label={`Remove ${suggestion}`}
+                    className="type-chip-remove"
+                    onClick={() => toggleSuggestion(suggestion)}
+                    type="button"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                )}
+              </span>
+            )
+          })}
         </div>
-      )}
+      </div>
       {error && <p className="notice warning" role="alert">{error}</p>}
     </div>
   )
@@ -2460,18 +2521,23 @@ function Chips({
   onRemove,
 }: {
   entries: RuleChip[]
-  onRemove: (key: RuleKey, value: string) => void
+  onRemove: (key: RuleKey, value: string, index: number) => void
 }) {
   if (!entries.length) return null
   return (
     <div className="rule-chips">
-      {entries.map((entry) => (
-        <span className="rule-chip" key={`${entry.key}-${entry.value}`}>
-          <small>{entry.prefix}</small>
+      {entries.map((entry, index) => (
+        <span
+          className={`rule-chip ${entry.selected ? "selected" : ""}`}
+          key={entry.id ?? `${entry.key}-${entry.value}-${index}`}
+        >
+          {entry.prefix && <small>{entry.prefix}</small>}
           <span className="rule-chip-value">{entry.value}</span>
           <button
             aria-label={`Remove ${entry.value}`}
-            onClick={() => onRemove(entry.key, entry.raw ?? entry.value)}
+            onClick={() =>
+              onRemove(entry.key, entry.raw ?? entry.value, entry.removeIndex ?? index)
+            }
             type="button"
           >
             <Icon name="close" size={12} />

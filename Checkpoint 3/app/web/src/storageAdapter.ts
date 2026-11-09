@@ -28,10 +28,16 @@ export async function saveScanSettings(settings: ScanSettings): Promise<ScanSett
     p_consent: settings.consent, p_paused: settings.paused,
     p_disclosure: settings.consent ? "gmail-scan-v1" : null,
   })
-  if (error) throw new Error(error.code === "PT409"
-    ? "Settings changed in another window. Reload saved settings before saving again."
-    : "Settings were not saved. Check addresses, domains, list sizes, and context limits, then retry.")
+  if (error) throw new ScanSettingsSaveError(error.code === "PT409")
   return data
+}
+// Fixed text only, so screens may show the message as written.
+export class ScanSettingsSaveError extends Error {
+  constructor(readonly stale: boolean) {
+    super(stale
+      ? "Settings changed in another window. Reload saved settings before saving again."
+      : "Settings were not saved. Check addresses, domains, list sizes, and context limits, then retry.")
+  }
 }
 
 export const storageClient =

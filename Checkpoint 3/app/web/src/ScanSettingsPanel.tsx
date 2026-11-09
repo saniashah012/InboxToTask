@@ -88,7 +88,7 @@ export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: {
           {help && <span id={helpId} role="tooltip">Sender and domain controls match exactly. Optional subject exclusions match literal text without case sensitivity. Bodies are not searched for access decisions. Inclusions combine with OR; exclusions always win.</span>}
         </span>
         <p>One entry per line; up to 200 entries of 254 characters per list. Domains do not include subdomains. Words and phrases match literal text without case sensitivity.</p>
-        <p>With no topics of interest selected, all source-permitted topics qualify; semantic exclusions still apply. Semantic topics never grant access. Permitted bodies may be sent to Gemini before semantic relevance is known.</p>
+        <p>With no topics of interest selected, all source-permitted topics qualify. Topics never grant access.</p>
         {fields.map(([field, label]) => <div className="scan-rule-pair" key={field}>
           {(["allow", "block"] as const).map(group =>
             <label key={group}>{group === "allow" ? "Include" : "Exclude"}: {label}
@@ -98,9 +98,13 @@ export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: {
       </fieldset>
       <fieldset disabled={busy}><legend>Subject exclusions</legend><label>Exclude subjects containing (one literal phrase per line)
         <textarea value={settings.rules.block.subjectKeywords.join("\n")} onChange={e => list("block", "subjectKeywords", e.target.value)} /></label></fieldset>
-      <fieldset disabled={busy}><legend>Semantic preferences</legend><p>Topics are evaluated by Gemini after source permission. Semantic exclusions cannot prevent transmission to Gemini.</p>
-        {(["include", "exclude"] as const).map(group => <label key={group}>{group === "include" ? "Topics of interest" : "Topics to omit from results"}
+      <fieldset disabled={busy}><legend>Topics</legend>
+        <p>Topics of interest are sent to the AI to rank what it finds. Skipped topics are never sent to the AI: each one is a list of words that our system checks in the subject and text before anything goes to the AI, and a matching email is skipped. Email that discusses a topic without using those words can still be sent. To fully protect a source, exclude its sender or domain.</p>
+        {(["include", "exclude"] as const).map(group => <label key={group}>{group === "include" ? "Topics of interest" : "Topics to skip (never sent to the AI)"}
           <textarea value={settings.semantic_preferences[group].join("\n")} onChange={e => setSettings({ ...settings, semantic_preferences: { ...settings.semantic_preferences, [group]: e.target.value.split("\n") } })} /></label>)}
+        {Object.entries(settings.semantic_preferences.blockedWords ?? {}).map(([topic, words]) =>
+          <p key={topic}>Words blocked for {topic}: {words.join(", ")}</p>)}
+        <p>A new skipped topic uses its suggested word list, or its own name, once saved.</p>
       </fieldset>
       {settings.requires_review && <fieldset disabled={busy}><legend>Previous phrase rules require review</legend>
         <p>Scanning was paused and consent revoked. Previous phrases cannot safely be converted to source permissions or semantic topics. Review these rules and choose exact sources and subject exclusions above.</p>

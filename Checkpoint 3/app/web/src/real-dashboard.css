@@ -2,7 +2,9 @@
 .rd-embedded { min-height:0; padding:0; margin:0; max-width:none; background:transparent; }
 .rd-embedded > * { max-width:none; padding-inline:0; }
 .rd-embedded .storage-panel { margin:0 0 12px; }
-.rd-notice { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; margin:0 0 16px; }
+.rd-notice, .app-shell .rd-notice { display:flex; flex-wrap:nowrap; align-items:center; justify-content:space-between; gap:8px 16px; margin:0 0 16px; }
+.app-shell .rd-notice > span { flex:1; min-width:0; }
+.app-shell .rd-notice > button { flex-shrink:0; }
 .rd-subhead { margin:24px 0 10px; font-family:"Manrope",sans-serif; font-size:1rem; color:var(--ink); }
 .rd-sort-note { color:var(--muted); font-size:.85rem; }
 .rd-wording { color:var(--muted); font-size:.8rem; font-style:italic; overflow-wrap:anywhere; }

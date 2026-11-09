@@ -25,6 +25,29 @@ type SettingsTarget = "sources" | "processing" | "connections" | "retention"
 type Failure = { message: string }
 type SourceView = { title: string; sender?: string | null; subject?: string | null; sentAt?: string | null; quote: string | null; messageId: string | null; taskId?: string; extraction?: StoredRow; summary?: string }
 type Editing = { kind: "suggestion" | "task"; row: StoredRow; fields: TaskFields }
+type Category = "suggestions" | "active" | "completed" | "dismissed"
+const categoryLabel: Record<Category, string> = { suggestions: "Suggestions", active: "Active", completed: "Completed", dismissed: "Dismissed" }
+
+// Moves an item between any two categories using the backend's own steps, so an
+// accidental click can be reversed. Suggestions and dismissed items are suggestion
+// rows; active and completed items are tasks created from a suggestion.
+async function runMove(from: Category, row: StoredRow, to: Category) {
+  let rev = Number(row.revision)
+  if (from === "suggestions" || from === "dismissed") {
+    if (to === "dismissed") return reviewStoredRecord("suggestion", row.id, "dismiss", rev)
+    if (from === "dismissed") {
+      await reviewStoredRecord("suggestion", row.id, "restore", rev)
+      rev += 1
+      if (to === "suggestions") return
+    }
+    const added = await reviewStoredRecord("suggestion", row.id, "approve", rev) as { taskId: string }
+    if (to === "completed") await reviewStoredRecord("task", added.taskId, "complete", 0)
+    return
+  }
+  if (to === "completed") return reviewStoredRecord("task", row.id, "complete", rev)
+  if (to === "active") return reviewStoredRecord("task", row.id, "undo", rev)
+  return reviewStoredRecord("task", row.id, to === "suggestions" ? "return_to_suggestions" : "return_to_dismissed", rev)
+}
 
 const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 const formatWhen = (value?: string | null) => {
@@ -89,7 +112,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [changeId, setChangeId] = useState<string | null>(null)
   const [exportTask, setExportTask] = useState<TaskItem | null>(null)
   const [reminderFor, setReminderFor] = useState<StoredRow | null>(null)
-  const [toast, setToast] = useState<{ kind: "dismissed" | "completed"; id: string } | null>(null)
+  const [toast, setToast] = useState<{ kind: "dismissed" | "completed" | "moved"; id: string; from?: Category; to?: Category } | null>(null)
   const [activityOpen, setActivityOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   // epoch changes when this account's dashboard unmounts; sequence orders reloads.
@@ -182,6 +205,39 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     title: t.fields.action, sender: t.primary?.sender, subject: t.primary?.subject, sentAt: t.primary?.sentAt,
     quote: null, messageId: t.primary?.messageId ?? null, taskId: t.row.id,
   })
+
+  // Where an item is now, found by its suggestion ID (tasks keep it as origin_suggestion_id).
+  const locate = (suggestionId: string): { cat: Category; row: StoredRow } | null => {
+    const s = model.suggestions.find((x) => x.row.id === suggestionId); if (s) return { cat: "suggestions", row: s.row }
+    const d = model.dismissed.find((x) => x.row.id === suggestionId); if (d) return { cat: "dismissed", row: d.row }
+    const a = model.active.find((x) => x.row.origin_suggestion_id === suggestionId); if (a) return { cat: "active", row: a.row }
+    const c = model.closed.find((x) => !x.cancelled && x.row.origin_suggestion_id === suggestionId); if (c) return { cat: "completed", row: c.row }
+    return null
+  }
+  // Categories an item can move to. Tasks need their original, unexpired suggestion to
+  // go back to review; a suggestion whose excerpt expired cannot become a task.
+  const moveTargets = (from: Category, row: StoredRow, hasQuote = true): Category[] => {
+    const all: Category[] = ["suggestions", "active", "completed", "dismissed"]
+    return all.filter((to) => {
+      if (to === from) return false
+      // Suggestions already have "Dismiss suggestion" in the same menu.
+      if (from === "suggestions" && to === "dismissed") return false
+      if (from === "active" || from === "completed") {
+        if (to === "active" || to === "completed") return true
+        const origin = snapshot.suggestions.find((s) => s.id === row.origin_suggestion_id)
+        return Boolean(origin && origin.state === "approved" && (!origin.expires_at || Date.parse(origin.expires_at) > Date.now()))
+      }
+      return hasQuote || to === "suggestions" || to === "dismissed"
+    })
+  }
+  const move = (from: Category, row: StoredRow, to: Category, suggestionId: string) =>
+    void perform(() => runMove(from, row, to), `Moved to ${categoryLabel[to]}.`, () => { setNotice(""); setToast({ kind: "moved", id: suggestionId, from, to }) })
+  const moveItems = (from: Category, row: StoredRow, suggestionId: string | null | undefined, hasQuote = true) => {
+    if (!suggestionId) return null
+    const targets = moveTargets(from, row, hasQuote)
+    if (!targets.length) return null
+    return <>{targets.map((to) => <button key={to} onClick={() => { setMenuId(null); move(from, row, to, suggestionId) }}>Move to {categoryLabel[to]}</button>)}</>
+  }
 
   const blockers = {
     sources: settings.rules.allow.senders.length + settings.rules.allow.domains.length === 0,
@@ -295,6 +351,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                         primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
                           onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added. No Calendar event was created.")}>Add task</button>}
                         menu={<><button onClick={() => { setMenuId(null); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
+                          {moveItems("suggestions", s.row, s.row.id, Boolean(s.quote))}
                           <button className="danger-action" onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) })}>Dismiss suggestion</button></>}
                       />))}</div>}
                     {model.changes.length > 0 && <>
@@ -333,7 +390,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                         onMenu={() => setMenuId((c) => (c === t.row.id ? null : t.row.id))}
                         onSource={() => setSource(sourceForTask(t))}
                         primary={<button className="calendar-button" disabled={busy} onClick={() => setExportTask(t)}><Icon name="calendar" size={16} />Export calendar file</button>}
-                        menu={<button onClick={() => { setMenuId(null); setEditing({ kind: "task", row: t.row, fields: t.fields }) }}>Edit task</button>}
+                        menu={<><button onClick={() => { setMenuId(null); setEditing({ kind: "task", row: t.row, fields: t.fields }) }}>Edit task</button>
+                          {moveItems("active", t.row, t.row.origin_suggestion_id)}</>}
                       />))}</div>}
                     <WaitingSection items={model.waiting} openCount={openWaiting} busy={busy} today={today}
                       onSource={(w) => setSource(sourceForSuggestion(w, w.row.action))}
@@ -345,7 +403,9 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                   {view === "completed" && <>
                     {model.closed.length > 0 && <div className="task-list">{model.closed.map((t) => (
                       <RealTaskRow key={t.row.id} kind={t.cancelled ? "cancelled" : "completed"} fields={t.fields} today={today} busy={busy}
-                        context={t.primary?.sender ?? ""} menuOpen={false}
+                        context={t.primary?.sender ?? ""} menuOpen={menuId === t.row.id}
+                        onMenu={t.cancelled ? undefined : () => setMenuId((c) => (c === t.row.id ? null : t.row.id))}
+                        menu={t.cancelled ? undefined : moveItems("completed", t.row, t.row.origin_suggestion_id) ?? undefined}
                         onComplete={t.cancelled ? undefined : () => void perform(() => reviewStoredRecord("task", t.row.id, "undo", t.row.revision), "Completion undone. The task is open again.")}
                         onSource={() => setSource(sourceForTask(t))}
                         primary={<span className="deletion-date">{t.cancelled ? "Cancelled" : t.row.delete_after ? `Removed after ${formatWhen(t.row.delete_after)}` : "Completed"}</span>}
@@ -356,7 +416,9 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                   {view === "dismissed" && <>
                     {model.dismissed.length > 0 && <div className="task-list">{model.dismissed.map((s) => (
                       <RealTaskRow key={s.row.id} kind="dismissed" fields={s.fields} today={today} busy={busy}
-                        context={s.source?.sender ?? ""} menuOpen={false}
+                        context={s.source?.sender ?? ""} menuOpen={menuId === s.row.id}
+                        onMenu={() => setMenuId((c) => (c === s.row.id ? null : s.row.id))}
+                        menu={moveItems("dismissed", s.row, s.row.id, Boolean(s.quote)) ?? undefined}
                         onSource={() => setSource(sourceForSuggestion(s, s.fields.action))}
                         primary={<button className="secondary-button row-button" disabled={busy} onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "restore", s.row.revision), "Suggestion restored to Suggestions.")}>Restore</button>}
                       />))}</div>}
@@ -404,8 +466,16 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         const row = dismissedRow ?? completedRow
         return (
           <FadeAway aria-live="polite" className="undo-toast" key={`${toast.kind}-${toast.id}`} onDone={() => setToast(null)}>
-            <span>{toast.kind === "dismissed" ? "Suggestion dismissed" : "Task completed"}</span>
-            {row && <button disabled={busy} onClick={() => {
+            <span>{toast.kind === "moved" ? `Moved to ${categoryLabel[toast.to ?? "suggestions"]}` : toast.kind === "dismissed" ? "Suggestion dismissed" : "Task completed"}</span>
+            {toast.kind === "moved" && toast.from && (() => {
+              const here = locate(toast.id)
+              const back = toast.from
+              return here ? <button disabled={busy} onClick={() => {
+                setToast(null)
+                void perform(() => runMove(here.cat, here.row, back), `Moved back to ${categoryLabel[back]}.`)
+              }}>Undo</button> : null
+            })()}
+            {toast.kind !== "moved" && row && <button disabled={busy} onClick={() => {
               setToast(null)
               void (toast.kind === "dismissed"
                 ? perform(() => reviewStoredRecord("suggestion", row.id, "restore", row.revision), "Suggestion restored.")

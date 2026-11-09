@@ -18,14 +18,14 @@ test('AES-GCM binds ciphertext to account, purpose and key; supports old keys du
   assert.match(await rotated.seal(user.id,'credentials',{}),/^v2\./);
 });
 
-function trial({identity={subject:'12345',email:user.email},scopes=[GMAIL_SCOPE],refreshToken='fictional-refresh',finish='connected',previous=false}={}) {
+function trial({identity={subject:'12345',email:user.email},scopes=[GMAIL_SCOPE],refreshToken='fictional-refresh',finish='connected',previous=false,connectionState='connected',previousScopes=[GMAIL_SCOPE],previousCipher=null}={}) {
   const c=cipher(); let pending; let state; let exchanges=0; let saved;
   const provider={authorization(s,ch,email){state=s; assert.equal(ch.length,43); assert.equal(email,user.email); return 'https://accounts.google.com/o/oauth2/v2/auth';},
     async exchange(code,verifier){ exchanges++; assert.equal(code,'fictional-code'); assert.equal(verifier.length,43); return {accessToken:'fictional-access',refreshToken,scopes,expiresAt:'2026-11-05T12:00:00Z'}; },
     async identity(){return identity;}};
   const rpc=async(uid,action,data)=>{
     if(action==='start'){pending={...data,userId:uid,generation:1};return {state:'started'};}
-    if(action==='consume'){if(!pending || pending.hash!==data.hash)return {state:'invalid_state'}; const result=pending;pending=null;return {...result,state:'consumed',...(previous?{subject:'12345',scopes:[GMAIL_SCOPE],credentials:await c.seal(user.id,'credentials',{accessToken:'old-access',refreshToken:'old-refresh'})}:{})};}
+    if(action==='consume'){if(!pending || pending.hash!==data.hash)return {state:'invalid_state'}; const result=pending;pending=null;return {...result,state:'consumed',...(previous?{subject:'12345',scopes:previousScopes,connectionState,credentials:await (previousCipher??c).seal(user.id,'credentials',{accessToken:'old-access',refreshToken:'old-refresh'})}:{})};}
     if(action==='finish'){saved=data;return {state:finish};}
     throw new Error('Unexpected RPC');
   };
@@ -81,6 +81,50 @@ test('Calendar scope checks do not acquire a Gmail refresh lease; refreshed gran
   rpc:async(_,action,data)=>{if(action==='refresh_claim')return {state:'refresh',credentials:saved,scopes:[GMAIL_SCOPE,CALENDAR_SCOPE],generation:1,lease:'lease'};assert.equal(action,'refresh_finish');finished=data;return {state:'ready'};}});
  await assert.rejects(connection.accessToken(user.id,CALENDAR_SCOPE),{code:'GOOGLE_CALENDAR_SCOPE_REQUIRED'});
  assert.deepEqual(finished.scopes,[GMAIL_SCOPE]);assert.equal((await c.open(user.id,'credentials',finished.credentials)).refreshToken,'preserved');
+});
+
+test('Gmail-only reconnect succeeds after a revoked Calendar grant and drops Calendar',async()=>{
+ const t=trial({previous:true,connectionState:'reconnect_required',previousScopes:[GMAIL_SCOPE,CALENDAR_SCOPE]});
+ await t.connection.start(user);
+ await t.connection.callback(new URLSearchParams({state:t.state,code:'fictional-code'}));
+ assert.deepEqual(t.saved.scopes,[GMAIL_SCOPE]);
+ assert.equal((await t.c.open(user.id,'credentials',t.saved.credentials)).refreshToken,'fictional-refresh');
+});
+
+test('reconnect after a token-key rotation uses the fresh grant and never needs the old ciphertext',async()=>{
+ const retired=createTokenCipher({keys:JSON.stringify({v0:Buffer.alloc(32,9).toString('base64')}),activeKey:'v0'});
+ const t=trial({previous:true,previousCipher:retired});
+ await t.connection.start(user);
+ await t.connection.callback(new URLSearchParams({state:t.state,code:'fictional-code'}));
+ assert.equal((await t.c.open(user.id,'credentials',t.saved.credentials)).refreshToken,'fictional-refresh');
+ const none=trial({previous:true,previousCipher:retired,refreshToken:null});
+ await none.connection.start(user);
+ await assert.rejects(none.connection.callback(new URLSearchParams({state:none.state,code:'fictional-code'})),{code:'GOOGLE_OFFLINE_ACCESS_REQUIRED'});
+ assert.equal(none.saved,undefined);
+});
+
+test('a revoked refresh token is never reused when Google omits a new one',async()=>{
+ for(const connectionState of ['reconnect_required','disconnected','disconnecting']) {
+  const t=trial({previous:true,connectionState,refreshToken:null});
+  await t.connection.start(user);
+  await assert.rejects(t.connection.callback(new URLSearchParams({state:t.state,code:'fictional-code'})),{code:'GOOGLE_OFFLINE_ACCESS_REQUIRED'});
+  assert.equal(t.saved,undefined);
+ }
+});
+
+test('Calendar-only disconnect revokes the whole grant, then starts a Gmail-only authorization',async()=>{
+ const c=cipher(),calls=[];let authorizedCalendar;
+ const credentials=await c.seal(user.id,'credentials',{accessToken:'a',refreshToken:'to-revoke'});
+ const connection=createGoogleConnection({cipher:c,
+  provider:{async revoke(token){calls.push(`revoke:${token}`);},authorization(_s,_c,_e,calendar){authorizedCalendar=calendar;return 'https://accounts.google.com/o/oauth2/v2/auth';}},
+  rpc:async(_,action,data)=>{calls.push(action);
+   if(action==='disconnect')return {state:'disconnecting',generation:2,credentials};
+   if(action==='disconnect_finish')return {state:'disconnected'};
+   if(action==='start'){assert.equal(data.calendar,false);return {state:'started'};}
+   throw new Error('Unexpected RPC');}});
+ const result=await connection.disconnectCalendar(user);
+ assert.deepEqual(calls,['disconnect','revoke:to-revoke','disconnect_finish','start']);
+ assert.equal(authorizedCalendar,false);assert.match(result.authorizationUrl,/^https:\/\/accounts\.google\.com\//);
 });
 
 test('wrong account, partial consent, missing offline token, stale commit never report connected',async()=>{

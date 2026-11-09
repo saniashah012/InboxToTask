@@ -156,11 +156,18 @@ export function createGoogleConnection({ rpc, cipher, provider }) {
       if(identity.email.toLowerCase()!==pending.email.toLowerCase()
         || (pending.subject && pending.subject!==identity.subject)) throw fail('GOOGLE_ACCOUNT_MISMATCH');
       if(!tokens.scopes.includes(GMAIL_SCOPE)) throw fail('GOOGLE_SCOPE_REQUIRED');
-      if ((pending.calendar || pending.scopes?.includes(CALENDAR_SCOPE)) && !tokens.scopes.includes(CALENDAR_SCOPE)) throw fail('GOOGLE_CALENDAR_SCOPE_REQUIRED');
-      // Reauthorization often omits the refresh token. Reuse only credentials
-      // bound to the same verified account and fenced OAuth generation.
-      const previous = pending.credentials ? await cipher.open(pending.userId,'credentials',pending.credentials) : null;
-      const refreshToken = tokens.refreshToken ?? previous?.refreshToken;
+      // Require Calendar only when this sign-in asked for it. A Gmail-only
+      // reconnect after revocation simply drops the old Calendar grant.
+      if (pending.calendar && !tokens.scopes.includes(CALENDAR_SCOPE)) throw fail('GOOGLE_CALENDAR_SCOPE_REQUIRED');
+      // Reauthorization often omits the refresh token. Reuse the saved one only
+      // when Google sent none and the connection is still healthy: never after
+      // revocation (reconnect_required), and never fail when an old ciphertext
+      // no longer opens, for example after a token-key rotation.
+      let refreshToken = tokens.refreshToken;
+      if (!refreshToken && pending.credentials && pending.connectionState==='connected') {
+        try { refreshToken = (await cipher.open(pending.userId,'credentials',pending.credentials)).refreshToken; }
+        catch { /* unreadable old credentials: require a fresh offline grant */ }
+      }
       if(!refreshToken) throw fail('GOOGLE_OFFLINE_ACCESS_REQUIRED');
       const credentials=await cipher.seal(pending.userId,'credentials',{accessToken:tokens.accessToken,refreshToken});
       const result=await rpc(pending.userId,'finish',{generation:pending.generation,...identity,
@@ -171,6 +178,13 @@ export function createGoogleConnection({ rpc, cipher, provider }) {
         // A crashed callback expires automatically; generations fence late release.
         try { await rpc(pending.userId,'oauth_release',{generation:pending.generation}); } catch { /* bounded lease */ }
       }
+    },
+    // Google revokes a whole grant, not one scope. Removing Calendar therefore
+    // revokes everything, then starts a Gmail-only authorization. If the user
+    // cancels that consent, Google stays disconnected.
+    async disconnectCalendar(user) {
+      await this.disconnect(user.id);
+      return this.start(user,false);
     },
     async disconnect(user) {
       const claim=await rpc(user,'disconnect');
@@ -205,11 +219,12 @@ export function createGoogleHandler({ connection, verifyUser, allowedOrigins=/**
     let body;
     try {
       body=await readJsonBody(request,256);
-      if(!body || Array.isArray(body) || Object.keys(body).length!==1 || !['connect','connect_calendar','check','disconnect'].includes(body.action)) throw fail('INVALID_REQUEST');
+      if(!body || Array.isArray(body) || Object.keys(body).length!==1 || !['connect','connect_calendar','check','disconnect','disconnect_calendar'].includes(body.action)) throw fail('INVALID_REQUEST');
     } catch { return json(400,{error:'INVALID_REQUEST'}); }
     try {
       if(body.action==='connect') return json(200,await connection.start(user));
       if(body.action==='connect_calendar') return json(200,await connection.start(user,true));
+      if(body.action==='disconnect_calendar') return json(200,await connection.disconnectCalendar(user));
       if(body.action==='disconnect') { await connection.disconnect(user.id); return json(200,{state:'disconnected',scanningEnabled:false}); }
       await connection.accessToken(user.id);
       return json(200,{state:'connected',scanningEnabled:false});

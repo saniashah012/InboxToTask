@@ -38,7 +38,7 @@ begin
  elsif p_action='consume' and result->>'state'='consumed' then
   update private.google_connections set oauth_callback_until=now()+interval '45 seconds' where user_id=(result->>'userId')::uuid;
   select * into c from private.google_connections where user_id=(result->>'userId')::uuid;
-  result:=result||jsonb_build_object('calendar',pending.calendar,'scopes',c.scopes,'credentials',c.credentials);
+  result:=result||jsonb_build_object('calendar',pending.calendar,'scopes',c.scopes,'credentials',c.credentials,'connectionState',c.state);
  elsif p_action='refresh_claim' and result->>'state' in ('ready','refresh') then
   select * into c from private.google_connections where user_id=p_user;
   result:=result||jsonb_build_object('scopes',c.scopes);

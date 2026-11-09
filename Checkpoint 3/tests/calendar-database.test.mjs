@@ -61,6 +61,7 @@ test('Calendar SQL authorization, leases, duplicate protection, revisions and OA
    const start=await as('service_role',A,()=>call('google_connection_service',[A,'start',{hash:'a'.repeat(64),email:'a@example.org',verifier:'encrypted-verifier',calendar:true}]));assert.equal(start.state,'started');
    const pending=await as('service_role',A,()=>call('google_connection_service',[null,'consume',{hash:'a'.repeat(64)}]));assert.equal(pending.calendar,true);assert.equal(pending.credentials,'encrypted');
    assert.deepEqual(pending.scopes,scopes);
+   assert.equal(pending.connectionState,'connected');
    const status=await as('authenticated',A,()=>call('google_connection_status',[]));assert.equal(status.state,'connected');assert.ok(!JSON.stringify(status).includes('encrypted'));
    assert.equal((await call('google_connection_service',[null,'consume',{hash:'a'.repeat(64)}])).state,'invalid_state');
    assert.equal((await call('google_connection_service',[A,'refresh_claim',{}])).state,'busy');

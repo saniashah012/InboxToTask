@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import gmailLogo from "./assets/gmail-logo.svg"
 import type { OnboardingPreferences } from "./supabase"
 import GoogleConnectionPanel from "./GoogleConnectionPanel"
-import { ScanSettingsSaveError, type ScanSettings } from "./storageAdapter"
+import type { ScanSettings } from "./storageAdapter"
 import {
   accessScopeSummary,
   contextLimitError,
@@ -21,7 +21,7 @@ import {
 } from "./scanConsent"
 import { Brand } from "./AppChrome"
 import RulesEditor from "./RulesEditor"
-import { ContextLimitInputs, SaveFailure, useGmailState } from "./settingsForm"
+import { ContextLimitInputs, SaveFailure, useGmailState, useSettingsSave } from "./settingsForm"
 
 // Signed-in onboarding reads and writes saved scan settings.
 type RealOnboarding = {
@@ -58,14 +58,8 @@ export default function Onboarding({
   // Unchecked unless consent is already saved; connecting Google never checks it.
   const initialConsent = real.settings.consent
   const [consentChecked, setConsentChecked] = useState(initialConsent)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<{ message: string; stale: boolean } | null>(null)
+  const { saving, saveError, setSaveError, run } = useSettingsSave()
   const gmail = useGmailState(step === 4, step)
-  const live = useRef(true)
-  useEffect(() => {
-    live.current = true
-    return () => { live.current = false }
-  }, [])
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
   // Topics alone permit nothing, so a sender or domain is required to continue.
   const hasPreferences = hasSourcePermission(preferences)
@@ -77,24 +71,10 @@ export default function Onboarding({
       setSaveError({ message: contextError, stale: false })
       return
     }
-    setSaving(true)
-    setSaveError(null)
-    try {
-      const next = withConsentDecision(
-        settingsWithPreferences(real.settings, preferences, context),
-        consentDecision(initialConsent, consentChecked),
-      )
-      await real.onSave(next)
-    } catch (error) {
-      if (!live.current) return
-      setSaveError(
-        error instanceof ScanSettingsSaveError
-          ? { message: error.message, stale: error.stale }
-          : { message: "Settings were not saved. Check your connection and retry.", stale: false },
-      )
-    } finally {
-      if (live.current) setSaving(false)
-    }
+    await run(() => real.onSave(withConsentDecision(
+      settingsWithPreferences(real.settings, preferences, context),
+      consentDecision(initialConsent, consentChecked),
+    )))
   }
 
   return (

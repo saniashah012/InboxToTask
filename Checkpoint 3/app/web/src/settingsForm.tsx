@@ -1,8 +1,40 @@
 // Pieces shared by the onboarding and settings screens, which edit the same
 // saved scan settings through scan_settings_save.
-import { useEffect, useState } from "react"
-import { googleConnectionStatus } from "./storageAdapter"
+import { useEffect, useRef, useState } from "react"
+import { googleConnectionStatus, ScanSettingsSaveError } from "./storageAdapter"
 import { contextLimitFields, type ContextLimits, type GmailState } from "./scanSetup"
+
+export type SaveError = { message: string; stale: boolean }
+
+// Save state for a settings form. Results and errors apply only while the form
+// is mounted; busy state clears in finally.
+export function useSettingsSave() {
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<SaveError | null>(null)
+  const live = useRef(true)
+  useEffect(() => {
+    live.current = true
+    return () => { live.current = false }
+  }, [])
+  const run = async <T,>(operation: () => Promise<T>, onSaved?: (result: T) => void) => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const result = await operation()
+      if (live.current) onSaved?.(result)
+    } catch (error) {
+      if (!live.current) return
+      setSaveError(
+        error instanceof ScanSettingsSaveError
+          ? { message: error.message, stale: error.stale }
+          : { message: "Settings were not saved. Check your connection and retry.", stale: false },
+      )
+    } finally {
+      if (live.current) setSaving(false)
+    }
+  }
+  return { saving, saveError, setSaveError, run }
+}
 
 export function useGmailState(enabled: boolean, refreshKey: unknown) {
   const [state, setState] = useState<{ state: GmailState; email?: string; checking: boolean }>({ state: "unknown", checking: enabled })
@@ -60,7 +92,7 @@ export function SaveFailure({
   onReload,
   reloading,
 }: {
-  error: { message: string; stale: boolean } | null
+  error: SaveError | null
   onReload: () => void
   reloading: boolean
 }) {

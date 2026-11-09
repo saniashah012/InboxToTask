@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { Icon } from "./designedUi"
 import GoogleConnectionPanel from "./GoogleConnectionPanel"
-import { ScanSettingsSaveError, type ScanSettings } from "./storageAdapter"
+import type { ScanSettings } from "./storageAdapter"
 import {
   accessScopeSummary,
   contextLimitError,
@@ -18,7 +18,7 @@ import {
 } from "./scanConsent"
 import { Brand } from "./AppChrome"
 import RulesEditor from "./RulesEditor"
-import { ContextLimitInputs, SaveFailure, useGmailState } from "./settingsForm"
+import { ContextLimitInputs, SaveFailure, useGmailState, useSettingsSave } from "./settingsForm"
 
 export type SettingsSection = "sources" | "processing" | "connections" | "retention"
 
@@ -48,14 +48,8 @@ export default function RealSettingsScreen({
   const [context, setContext] = useState<ContextLimits>(() => ({ ...settings.context_limits }))
   const [consent, setConsent] = useState(settings.consent)
   const [paused, setPaused] = useState(settings.paused)
-  const [saving, setSaving] = useState(false)
+  const { saving, saveError, setSaveError, run } = useSettingsSave()
   const [savedRevision, setSavedRevision] = useState<number | null>(null)
-  const [saveError, setSaveError] = useState<{ message: string; stale: boolean } | null>(null)
-  const live = useRef(true)
-  useEffect(() => {
-    live.current = true
-    return () => { live.current = false }
-  }, [])
   // A confirmed save or a reload replaces the draft with what is actually stored.
   useEffect(() => {
     setPreferences(preferencesFromSettings(settings))
@@ -76,22 +70,8 @@ export default function RealSettingsScreen({
       setSaveError({ message: contextError, stale: false })
       return
     }
-    setSaving(true)
-    setSaveError(null)
     setSavedRevision(null)
-    try {
-      const result = await onSave(draft)
-      if (live.current) setSavedRevision(result.revision)
-    } catch (error) {
-      if (!live.current) return
-      setSaveError(
-        error instanceof ScanSettingsSaveError
-          ? { message: error.message, stale: error.stale }
-          : { message: "Settings were not saved. Check your connection and retry.", stale: false },
-      )
-    } finally {
-      if (live.current) setSaving(false)
-    }
+    await run(() => onSave(draft), (result) => setSavedRevision(result.revision))
   }
 
   const sections: [SettingsSection, string][] = [

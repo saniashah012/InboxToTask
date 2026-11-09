@@ -7,6 +7,7 @@ import {
 } from "./filterPresets"
 import { Icon } from "./designedUi"
 import type { OnboardingPreferences } from "./supabase"
+import { parseRuleInput, topicInputError, type RuleInputKey } from "./scanSetup"
 
 type RuleKey =
   | "includedTypes"
@@ -18,7 +19,7 @@ type RuleKey =
   | "excludedSubjects"
 
 type RuleField = {
-  key: RuleKey
+  key: RuleInputKey
   label: string
   placeholder: string
 }
@@ -71,27 +72,14 @@ export default function RulesEditor({
   })
 
   const [ruleError, setRuleError] = useState("")
-  const add = (key: RuleKey, rawValue?: string) => {
-    let value = (rawValue ?? drafts[key]).trim()
-    if (!value) return
-    const isSender = key === "selectedSenders" || key === "excludedSenders"
-    const isDomain = key === "selectedDomains" || key === "excludedDomains"
-    if (isSender || isDomain) value = value.toLowerCase()
-    if (isDomain) value = value.replace(/^@/, "")
-    if (key === "excludedSubjects" && (value.length > 254 || /[\x00-\x1f\x7f]/.test(value))) {
-      setRuleError("Subject phrases must be 1-254 characters without control characters.")
+  const add = (key: RuleInputKey) => {
+    const parsed = parseRuleInput(key, drafts[key], rules[key])
+    if (!parsed) return
+    if ("error" in parsed) {
+      setRuleError(parsed.error)
       return
     }
-    if ((isSender && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) ||
-        (isDomain && !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(value))) {
-      setRuleError(isSender ? "Enter a complete sender email address." : "Enter a valid domain, such as example.edu.")
-      return
-    }
-    if (rules[key].some((item) => item.toLowerCase() === value.toLowerCase())) {
-      setRuleError("That rule is already included.")
-      return
-    }
-    onChange({ ...rules, [key]: [...rules[key], value] })
+    onChange({ ...rules, [key]: [...rules[key], parsed.value] })
     setDrafts((current) => ({ ...current, [key]: "" }))
     setRuleError("")
   }
@@ -127,6 +115,23 @@ export default function RulesEditor({
     },
   ]
 
+  const renderField = (field: RuleField) => (
+    <div className="rule-field" key={field.key}>
+      <RuleInput
+        field={field}
+        onAdd={() => add(field.key)}
+        onChange={(value) =>
+          setDrafts((current) => ({ ...current, [field.key]: value }))
+        }
+        value={drafts[field.key]}
+      />
+      <Chips
+        entries={rules[field.key].map((value) => ({ key: field.key, value, prefix: field.label }))}
+        onRemove={remove}
+      />
+    </div>
+  )
+
   return (
     <div className={`rules-editor ${compact ? "compact" : ""}`}>
       {section !== "excluded" && <div className="rule-group">
@@ -149,26 +154,7 @@ export default function RulesEditor({
             <span>Exact address or domain matches. Domains do not include subdomains.</span>
           </div>
         </div>
-        {fields.slice(0, 2).map((field) => {
-          const entries = rules[field.key].map((value) => ({
-            key: field.key,
-            value,
-            prefix: field.label,
-          }))
-          return (
-            <div className="rule-field" key={field.key}>
-              <RuleInput
-                field={field}
-                onAdd={() => add(field.key)}
-                onChange={(value) =>
-                  setDrafts((current) => ({ ...current, [field.key]: value }))
-                }
-                value={drafts[field.key]}
-              />
-              <Chips entries={entries} onRemove={remove} />
-            </div>
-          )
-        })}
+        {fields.slice(0, 2).map(renderField)}
       </div>}
       {section !== "allowed" && <div className="rule-group exclusion">
         <div className="rule-heading">
@@ -190,26 +176,7 @@ export default function RulesEditor({
             <span>Exact address or domain matches; domains do not include subdomains. Subject phrases match literal text in the subject only, ignoring case.</span>
           </div>
         </div>
-        {fields.slice(2, 5).map((field) => {
-          const entries = rules[field.key].map((value) => ({
-            key: field.key,
-            value,
-            prefix: field.label,
-          }))
-          return (
-            <div className="rule-field" key={field.key}>
-              <RuleInput
-                field={field}
-                onAdd={() => add(field.key)}
-                onChange={(value) =>
-                  setDrafts((current) => ({ ...current, [field.key]: value }))
-                }
-                value={drafts[field.key]}
-              />
-              <Chips entries={entries} onRemove={remove} />
-            </div>
-          )
-        })}
+        {fields.slice(2, 5).map(renderField)}
       </div>}
       <FilterHelp />
       {ruleError && <p className="notice warning" role="alert">{ruleError}</p>}
@@ -236,12 +203,9 @@ function CategorySelector({
   const add = (rawValue = draft) => {
     const category = rawValue.trim()
     if (!category) return
-    if (
-      category.length > 254 ||
-      /[\x00-\x1f\x7f]/.test(category) ||
-      customKeywords.length >= 200
-    ) {
-      setError("Use up to 200 terms, each 1-254 characters without control characters.")
+    const termError = topicInputError(category, customKeywords.length)
+    if (termError) {
+      setError(termError)
       return
     }
     onChange([...customKeywords, category])

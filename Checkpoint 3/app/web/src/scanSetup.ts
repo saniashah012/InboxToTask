@@ -153,3 +153,42 @@ export function sameSavedFields(a: ScanSettings, b: ScanSettings): boolean {
   const pick = (s: ScanSettings) => stable([s.rules, s.semantic_preferences, s.context_limits, s.consent, s.paused])
   return pick(a) === pick(b)
 }
+
+// Chip inputs for exact access rules and literal subject exclusions.
+export type RuleInputKey = "selectedSenders" | "selectedDomains" | "excludedSenders" | "excludedDomains" | "excludedSubjects"
+
+const CONTROL_CHARS = /[\x00-\x1f\x7f]/
+
+// Checks one typed sender, domain or subject rule before it becomes a chip.
+// Returns the normalized value to add, an error to show, or null for blank
+// input. The backend validates again on save; this is early feedback only.
+export function parseRuleInput(
+  key: RuleInputKey,
+  raw: string,
+  existing: string[],
+): { value: string } | { error: string } | null {
+  let value = raw.trim()
+  if (!value) return null
+  const isSender = key === "selectedSenders" || key === "excludedSenders"
+  const isDomain = key === "selectedDomains" || key === "excludedDomains"
+  if (isSender || isDomain) value = value.toLowerCase()
+  if (isDomain) value = value.replace(/^@/, "")
+  if (key === "excludedSubjects" && (value.length > 254 || CONTROL_CHARS.test(value))) {
+    return { error: "Subject phrases must be 1-254 characters without control characters." }
+  }
+  if ((isSender && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) ||
+      (isDomain && !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(value))) {
+    return { error: isSender ? "Enter a complete sender email address." : "Enter a valid domain, such as example.edu." }
+  }
+  if (existing.some((item) => item.toLowerCase() === value.toLowerCase())) {
+    return { error: "That rule is already included." }
+  }
+  return { value }
+}
+
+// Topic terms are semantic only and never grant access.
+export function topicInputError(term: string, count: number): string | null {
+  return term.length > 254 || CONTROL_CHARS.test(term) || count >= 200
+    ? "Use up to 200 terms, each 1-254 characters without control characters."
+    : null
+}

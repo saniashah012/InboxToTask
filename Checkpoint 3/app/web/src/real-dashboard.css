@@ -71,3 +71,4 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 .rd-confidence.is-medium { color:#8a5a00; }
 .rd-confidence.is-low { color:#b91c1c; }
 .rd-summary-head > span:first-child { color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+.app-shell .row-button.rd-small-button { height:28px; padding:0 10px; font-size:11px; justify-self:end; }

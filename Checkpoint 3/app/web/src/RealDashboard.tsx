@@ -217,7 +217,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   // Categories an item can move to. Tasks need their original, unexpired suggestion to
   // go back to review; a suggestion whose excerpt expired cannot become a task.
   const moveTargets = (from: Category, row: StoredRow, hasQuote = true): Category[] => {
-    const all: Category[] = ["suggestions", "active", "completed", "dismissed"]
+    // Alphabetical, so the menu reads Active, Completed, Dismissed, Suggestions.
+    const all: Category[] = ["active", "completed", "dismissed", "suggestions"]
     return all.filter((to) => {
       if (to === from) return false
       // Suggestions already have "Dismiss suggestion" in the same menu.
@@ -420,7 +421,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                         onMenu={() => setMenuId((c) => (c === s.row.id ? null : s.row.id))}
                         menu={moveItems("dismissed", s.row, s.row.id, Boolean(s.quote)) ?? undefined}
                         onSource={() => setSource(sourceForSuggestion(s, s.fields.action))}
-                        primary={<button className="secondary-button row-button" disabled={busy} onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "restore", s.row.revision), "Suggestion restored to Suggestions.")}>Restore</button>}
+                        primary={<button className="secondary-button row-button rd-small-button" disabled={busy} onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "restore", s.row.revision), "Suggestion restored to Suggestions.")}>Restore</button>}
                       />))}</div>}
                     {!model.dismissed.length && <EmptyState title="No dismissed suggestions" detail="Dismissed suggestions can be restored until they expire after 30 days." />}
                   </>}

@@ -542,6 +542,24 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
   )
 }
 
+// How sure the model was about the email's classification. Green ≥ 85%, yellow
+// 60–84%, red < 60%. The label and percentage stay visible, so color is not the
+// only signal.
+function confidenceLevel(value: number): "high" | "medium" | "low" {
+  return value >= 85 ? "high" : value >= 60 ? "medium" : "low"
+}
+function ConfidenceBadge({ category, value }: { category: string; value: number }) {
+  const level = confidenceLevel(value)
+  const kind = category === "Actionable" ? "Actionable" : "Informational"
+  const word = level === "high" ? "high" : level === "medium" ? "not sure" : "low"
+  return (
+    <span aria-label={`Classification confidence: ${word}, ${value}% ${kind.toLowerCase()}`} className={`rd-confidence is-${level}`} role="img"
+      title={`The model is ${value}% confident this email is ${kind.toLowerCase()}.`}>
+      <span aria-hidden="true" className="rd-confidence-dot" />{kind} · {value}%
+    </span>
+  )
+}
+
 // Passive communication: informational emails as cards in the Tasks style, with
 // Unread/Read tabs. Read marks stay in this browser (same storage as before).
 function PassiveSection({ userId, items, sources, evidence, onSource }: {
@@ -747,11 +765,13 @@ function SourceModal({ source, email, links, onClose }: { source: SourceView; em
         <div><span>Received</span><strong>{formatWhen(source.sentAt) ?? "Unavailable"}</strong></div>
       </div>
       {source.summary && (
-        <div className="excerpt rd-summary"><span>Executive summary</span><p>{source.summary}</p>
-          {source.extraction && <p className="rd-detail-meta">
-            Classified as informational ({Number(source.extraction.classification_confidence ?? 0)}% confidence)
-            {source.extraction.topic_relevance === "uncertain" ? " · may be outside your selected topics" : ""}
-          </p>}
+        <div className="excerpt rd-summary">
+          <div className="rd-summary-head">
+            <span>Executive summary</span>
+            {source.extraction && <ConfidenceBadge category={String(source.extraction.category ?? "")} value={Number(source.extraction.classification_confidence ?? 0)} />}
+          </div>
+          <p>{source.summary}</p>
+          {source.extraction?.topic_relevance === "uncertain" && <p className="rd-detail-meta">May be outside your selected topics.</p>}
         </div>
       )}
       {own === undefined && <div className="excerpt"><span>Saved excerpt</span><blockquote>{source.quote ? `“${source.quote}”` : "The saved excerpt has expired."}</blockquote></div>}

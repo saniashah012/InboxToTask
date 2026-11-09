@@ -62,3 +62,12 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 @media (max-width: 720px) { .app-shell .task-row.rd-info-row { grid-template-columns:1fr; } }
 /* Floating success message: same look as the Undo pop-up, but grows for longer text. */
 .undo-toast.rd-toast-message { height:auto; min-height:48px; max-width:min(560px, calc(100vw - 32px)); padding:10px 9px 10px 16px; line-height:1.45; }
+/* Classification confidence badge, top right of the summary. Green >= 85%,
+   yellow 60-84%, red < 60%. Text colors keep at least 7:1 contrast on their tint. */
+.rd-summary-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.rd-confidence { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; border:1px solid; font-size:12px; font-weight:600; letter-spacing:0; text-transform:none; white-space:nowrap; }
+.rd-confidence-dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+.rd-confidence.is-high { background:#e3f4ea; border-color:#a7d8b9; color:#14532d; }
+.rd-confidence.is-medium { background:#fff3d6; border-color:#ecd28f; color:#6b4700; }
+.rd-confidence.is-low { background:#fde4e1; border-color:#f1b3ab; color:#8f1d1d; }
+.rd-summary-head > span:first-child { color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }

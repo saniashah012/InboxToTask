@@ -12,14 +12,39 @@ import {
 } from "./demoData"
 import { previewAdapter } from "./previewAdapter"
 import {
-  loadOnboardingPreferences,
-  saveOnboardingPreferences,
   supabase,
   type OnboardingPreferences,
 } from "./supabase"
 import type { Session } from "@supabase/supabase-js"
 import ScanSettingsPanel from "./ScanSettingsPanel"
 import ManualWorkspace from "./ManualWorkspace"
+import GoogleConnectionPanel from "./GoogleConnectionPanel"
+import {
+  googleConnectionStatus,
+  ScanSettingsSaveError,
+  type ScanSettings,
+} from "./storageAdapter"
+import { useSavedScanSettings } from "./useSavedScanSettings"
+import {
+  accessScopeSummary,
+  contextLimitError,
+  contextLimitFields,
+  hasSourcePermission,
+  preferencesFromSettings,
+  sameSavedFields,
+  scanBlockers,
+  settingsWithPreferences,
+  signedInRoute,
+  withConsentDecision,
+  type ContextLimits,
+  type GmailState,
+} from "./scanSetup"
+import {
+  consentDecision,
+  SCAN_CONSENT_LABEL,
+  SCAN_DISCLOSURE,
+  SCAN_DISCLOSURE_EFFECTS,
+} from "./scanConsent"
 
 type Email = {
   sender: string
@@ -405,17 +430,33 @@ const emptyOnboardingPreferences: OnboardingPreferences = {
   excludedSubjects: [],
 }
 
+type SettingsSection = "sources" | "processing" | "connections" | "retention"
+
+// What a signed-in account sees. "auto" follows saved settings: a first save goes
+// through onboarding, otherwise the workspace. "google-return" is Google's redirect
+// back to the root after a connection attempt.
+type SignedInView =
+  | { kind: "auto" }
+  | { kind: "google-return" }
+  | { kind: "setup" }
+  | { kind: "settings"; section: SettingsSection }
+  | { kind: "workspace"; notice: string }
+
+function setupSavedNotice(result: ScanSettings) {
+  const blockers = scanBlockers(result, "connected")
+  return `Setup saved (revision ${result.revision}). No email was read. ${
+    blockers.length
+      ? `Scanning stays off: ${blockers.join(" ")}`
+      : "A scan still needs a connected Gmail account and an explicit manual request."
+  }`
+}
+
 function App() {
   const [screen, setScreen] = useState<AppScreen>("onboarding")
   const [authInitialized, setAuthInitialized] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
   const [authError, setAuthError] = useState("")
   const [authPending, setAuthPending] = useState(false)
-  const [preferenceStatus, setPreferenceStatus] =
-    useState<"idle" | "loading" | "missing" | "saved" | "error">("idle")
-  const [preferenceError, setPreferenceError] = useState("")
-  const [preferenceReloadCount, setPreferenceReloadCount] = useState(0)
-  const [savingPreferences, setSavingPreferences] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [previewGmailAccount, setPreviewGmailAccount] = useState<string | null>(
     null,
@@ -425,6 +466,23 @@ function App() {
   const [processingEnabled, setProcessingEnabled] = useState(false)
   const [savedPreferences, setSavedPreferences] =
     useState<OnboardingPreferences>(emptyOnboardingPreferences)
+  const [googleReturn] = useState(() =>
+    new URLSearchParams(window.location.search).has("google"),
+  )
+  // Tagged by account so one user's screen choice never carries to another.
+  const [viewRecord, setViewRecord] = useState<{
+    userId: string
+    view: SignedInView
+  } | null>(null)
+
+  const userId = session?.user.id ?? null
+  const saved = useSavedScanSettings(previewMode ? null : userId)
+  const view: SignedInView =
+    viewRecord && viewRecord.userId === userId
+      ? viewRecord.view
+      : googleReturn
+        ? { kind: "google-return" }
+        : { kind: "auto" }
 
   useEffect(() => {
     if (!supabase) {
@@ -441,8 +499,10 @@ function App() {
       authVersion++; setAuthInitialized(true)
       setSession(nextSession)
       setAuthError("")
+      // A real account always leaves the fictional preview.
+      if (nextSession) setPreviewMode(false)
       if (!nextSession) {
-        setPreferenceStatus("idle")
+        setViewRecord(null)
         setSavedPreferences(emptyOnboardingPreferences)
         setScreen("onboarding")
       }
@@ -458,10 +518,11 @@ function App() {
           setSession(null)
         } else {
           setSession(data.session)
+          if (data.session) setPreviewMode(false)
         }
         setAuthInitialized(true)
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (!active) return
         setAuthError("Could not restore your sign-in session.")
         setAuthInitialized(true)
@@ -472,37 +533,6 @@ function App() {
       subscription.unsubscribe()
     }
   }, [])
-
-  useEffect(() => {
-    if (!session || !previewMode) return
-    let active = true
-    setPreferenceStatus("loading")
-    setPreferenceError("")
-    void loadOnboardingPreferences(session.user.id)
-      .then((preferences) => {
-        if (!active) return
-        if (preferences) {
-          setSavedPreferences(preferences)
-          setPreferenceStatus("saved")
-          setScreen("dashboard")
-        } else {
-          setSavedPreferences(emptyOnboardingPreferences)
-          setPreferenceStatus("missing")
-          setScreen("onboarding")
-        }
-      })
-      .catch((error: unknown) => {
-        if (!active) return
-        setPreferenceError(
-          "Could not load your preferences. Check that the database migration has been applied, then retry.",
-        )
-        setPreferenceStatus("error")
-      })
-
-    return () => {
-      active = false
-    }
-  }, [session?.user.id, preferenceReloadCount, previewMode])
 
   const signInWithGoogle = async () => {
     if (!supabase) return
@@ -523,31 +553,6 @@ function App() {
     }
   }
 
-  const persistOnboardingPreferences = async (
-    preferences: OnboardingPreferences,
-  ) => {
-    if (!session) throw new Error("A signed-in session is required.")
-    setSavingPreferences(true)
-    setPreferenceError("")
-    try {
-      const saved = await saveOnboardingPreferences(
-        session.user.id,
-        preferences,
-      )
-      setSavedPreferences(saved)
-      setPreferenceStatus("saved")
-      setProcessingEnabled(false)
-      setScreen("dashboard")
-    } catch (error) {
-      setPreferenceError(
-        error instanceof Error ? error.message : "Preferences were not saved. Check your connection and try again.",
-      )
-      throw error
-    } finally {
-      setSavingPreferences(false)
-    }
-  }
-
   const signOut = async () => {
     if (previewMode) {
       setScreen("onboarding")
@@ -565,23 +570,108 @@ function App() {
     }
   }
 
-  if (authInitialized && session && !previewMode) return <ManualWorkspace key={session.user.id} userId={session.user.id} email={session.user.email ?? "Signed-in account"} onSignOut={() => void signOut()} />
-
-  if (
-    !authInitialized ||
-    (session && !["missing", "saved", "error"].includes(preferenceStatus))
-  ) {
+  if (!authInitialized) {
     return <AppStatus message="Restoring your InboxToTask session…" />
   }
 
-  if (session && preferenceStatus === "error") {
+  if (session && !previewMode) {
+    const owner = session.user.id
+    const email = session.user.email ?? "Signed-in account"
+    const show = (next: SignedInView, reload = false) => {
+      setViewRecord({ userId: owner, view: next })
+      if (reload) saved.reload()
+    }
+    if (saved.status === "error") {
+      return (
+        <AppStatus
+          actionLabel="Retry"
+          message="Could not load your saved settings. Nothing was changed. Check your connection, then retry."
+          onAction={saved.reload}
+          secondaryActionLabel="Sign out"
+          onSecondaryAction={() => void signOut()}
+        />
+      )
+    }
+    if (!saved.settings) {
+      return <AppStatus message="Loading your saved settings…" />
+    }
+    const settings = saved.settings
+    const route = signedInRoute(settings)
+    let kind = view.kind
+    if (kind === "google-return") kind = route === "onboarding" ? "setup" : "settings"
+    if (kind === "auto") kind = route === "onboarding" ? "setup" : "workspace"
+    // Only the workspace form can confirm review of previous phrase rules.
+    if (route === "review-legacy") kind = "workspace"
+
+    if (kind === "setup") {
+      return (
+        <Onboarding
+          key={`${owner}-${settings.revision}`}
+          authConfigured
+          authEmail={email}
+          authError={authError}
+          authPending={false}
+          isAuthenticated
+          previewMode={false}
+          real={{
+            settings,
+            refreshing: saved.refreshing,
+            onSave: async (next) => {
+              const result = await saved.save(next)
+              show({
+                kind: "workspace",
+                notice: setupSavedNotice(result),
+              })
+            },
+            // Stay in setup after a stale-save reload, even if another tab's
+            // save means this account now has saved settings.
+            onReload: () => show({ kind: "setup" }, true),
+            leaveLabel:
+              settings.revision === 0
+                ? "Skip setup for now"
+                : "Back to workspace without saving",
+            onLeave: () => show({ kind: "workspace", notice: "" }),
+          }}
+          onConnectGmail={() => {}}
+          onSignIn={() => {}}
+          onSignOut={() => void signOut()}
+          onFinish={() => {}}
+          onExplore={() => {}}
+          onPreviewOnboarding={() => {}}
+        />
+      )
+    }
+    if (kind === "settings") {
+      return (
+        <RealSettingsScreen
+          key={owner}
+          settings={settings}
+          email={email}
+          refreshing={saved.refreshing}
+          initialSection={view.kind === "settings" ? view.section : "connections"}
+          onSave={saved.save}
+          onReload={saved.reload}
+          onRunSetup={() => show({ kind: "setup" }, true)}
+          onBack={() => show({ kind: "workspace", notice: "" })}
+        />
+      )
+    }
     return (
-      <AppStatus
-        actionLabel="Retry"
-        message={preferenceError}
-        onAction={() => setPreferenceReloadCount((count) => count + 1)}
-        secondaryActionLabel="Sign out"
-        onSecondaryAction={() => void signOut()}
+      <ManualWorkspace
+        key={owner}
+        userId={owner}
+        email={email}
+        onSignOut={() => void signOut()}
+        onOpenSettings={() => show({ kind: "settings", section: "sources" }, true)}
+        onRunSetup={() => show({ kind: "setup" }, true)}
+        initialTab={route === "review-legacy" ? "settings" : "review"}
+        initialNotice={
+          route === "review-legacy"
+            ? "Previous phrase rules need your review before scanning. Review them under Scanning permission and sources below."
+            : view.kind === "workspace"
+              ? view.notice
+              : ""
+        }
       />
     )
   }
@@ -589,13 +679,13 @@ function App() {
   if (screen === "onboarding" || (!previewMode && !session)) {
     return (
       <Onboarding
+        key="public"
         authConfigured={Boolean(supabase)}
-        authEmail={session?.user.email ?? null}
+        authEmail={null}
         authError={authError}
         authPending={authPending}
-        isAuthenticated={Boolean(session)}
+        isAuthenticated={false}
         onConnectGmail={setPreviewGmailAccount}
-        onSavePreferences={persistOnboardingPreferences}
         onSignIn={() => void signInWithGoogle()}
         onSignOut={() => void signOut()}
         onFinish={(preferences) => {
@@ -604,7 +694,6 @@ function App() {
           setScreen("dashboard")
         }}
         previewMode={previewMode}
-        savingPreferences={savingPreferences}
         onExplore={() => {
           setPreviewMode(true)
           setPreviewGmailAccount(null)
@@ -623,32 +712,23 @@ function App() {
     )
   }
 
+  // Fictional preview only: signed-in accounts never reach this dashboard yet.
   return (
     <Dashboard
-      key={previewMode ? "preview" : session?.user.id ?? "signed-out"}
+      key="preview"
       calendarAccount={previewCalendarAccount}
       gmailAccount={previewGmailAccount}
       onCalendarAccountChange={setPreviewCalendarAccount}
       onGmailAccountChange={setPreviewGmailAccount}
       onProcessingChange={setProcessingEnabled}
       onPreferencesChange={(preferences) => {
-        if (previewMode || !session) {
-          setSavedPreferences(preferences)
-          return Promise.resolve()
-        }
-        return saveOnboardingPreferences(session.user.id, preferences)
-          .then((saved) => {
-            setSavedPreferences(saved)
-            setPreferenceError("")
-          })
-          .catch((error: unknown) => {
-            throw error
-          })
+        setSavedPreferences(preferences)
+        return Promise.resolve()
       }}
       previewMode={previewMode}
       processingEnabled={processingEnabled}
       preferences={savedPreferences}
-      userEmail={session?.user.email ?? null}
+      userEmail={null}
       onSignOut={() => void signOut()}
     />
   )
@@ -1681,6 +1761,98 @@ function Brand() {
   )
 }
 
+// Signed-in onboarding reads and writes saved scan settings. Preview onboarding
+// (no `real`) stays fictional and never touches Supabase.
+type RealOnboarding = {
+  settings: ScanSettings
+  refreshing: boolean
+  onSave: (next: ScanSettings) => Promise<void>
+  onReload: () => void
+  leaveLabel: string
+  onLeave: () => void
+}
+
+function gmailStateLabel(state: GmailState, email?: string) {
+  if (state === "connected") return `Connected${email ? ` · ${email}` : ""}`
+  if (state === "reconnect_required") return "Reconnect required"
+  if (state === "disconnecting") return "Disconnect pending"
+  if (state === "disconnected") return "Not connected"
+  return "Status unavailable"
+}
+
+function useGmailState(enabled: boolean, refreshKey: unknown) {
+  const [state, setState] = useState<{ state: GmailState; email?: string; checking: boolean }>({ state: "unknown", checking: enabled })
+  useEffect(() => {
+    if (!enabled) return
+    let active = true
+    setState((current) => ({ ...current, checking: true }))
+    googleConnectionStatus()
+      .then((status) => { if (active) setState({ state: status.state, email: status.email, checking: false }) })
+      .catch(() => { if (active) setState({ state: "unknown", checking: false }) })
+    return () => { active = false }
+  }, [enabled, refreshKey])
+  return state
+}
+
+function ContextLimitInputs({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: ContextLimits
+  onChange: (value: ContextLimits) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="context-fields">
+      {contextLimitFields.map((field) => (
+        <label key={field.key}>
+          <span>
+            {field.label} ({field.min}–{field.max})
+          </span>
+          <div className={field.suffix ? "input-suffix" : undefined}>
+            <input
+              disabled={disabled}
+              max={field.max}
+              min={field.min}
+              onChange={(event) =>
+                onChange({ ...value, [field.key]: event.target.valueAsNumber })
+              }
+              required
+              step="1"
+              type="number"
+              value={Number.isNaN(value[field.key]) ? "" : value[field.key]}
+            />
+            {field.suffix && <span>{field.suffix}</span>}
+          </div>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+function SaveFailure({
+  error,
+  onReload,
+  reloading,
+}: {
+  error: { message: string; stale: boolean } | null
+  onReload: () => void
+  reloading: boolean
+}) {
+  if (!error) return null
+  return (
+    <div className="notice warning" role="alert">
+      <span>{error.message}</span>
+      {error.stale && (
+        <button className="secondary-button" disabled={reloading} onClick={onReload} type="button">
+          {reloading ? "Reloading…" : "Reload saved settings (discards unsaved edits)"}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function Onboarding({
   authConfigured,
   authEmail,
@@ -1693,9 +1865,8 @@ function Onboarding({
   onConnectGmail,
   onSignIn,
   onSignOut,
-  onSavePreferences,
   onFinish,
-  savingPreferences,
+  real,
 }: {
   authConfigured: boolean
   authEmail: string | null
@@ -1708,24 +1879,61 @@ function Onboarding({
   onConnectGmail: (email: string | null) => void
   onSignIn: () => void
   onSignOut: () => void
-  onSavePreferences: (preferences: OnboardingPreferences) => Promise<void>
   onFinish: (preferences: OnboardingPreferences) => void
-  savingPreferences: boolean
+  real?: RealOnboarding
 }) {
   const [step, setStep] = useState(isAuthenticated ? 1 : 0)
   const [gmailConnected, setGmailConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [starting, setStarting] = useState(false)
   const [setupError, setSetupError] = useState("")
-  const [preferences, setPreferences] = useState<OnboardingPreferences>(
-    emptyOnboardingPreferences,
+  const [preferences, setPreferences] = useState<OnboardingPreferences>(() =>
+    real ? preferencesFromSettings(real.settings) : emptyOnboardingPreferences,
   )
+  const [context, setContext] = useState<ContextLimits>(() =>
+    real ? { ...real.settings.context_limits } : { maxMessages: 5, maxAgeDays: 90, maxMessageChars: 12000, maxTotalChars: 24000 },
+  )
+  // Unchecked unless consent is already saved; connecting Google never checks it.
+  const initialConsent = real ? real.settings.consent : false
+  const [consentChecked, setConsentChecked] = useState(initialConsent)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<{ message: string; stale: boolean } | null>(null)
+  const gmail = useGmailState(Boolean(real) && step === 4, step)
+  const live = useRef(true)
+  useEffect(() => {
+    live.current = true
+    return () => { live.current = false }
+  }, [])
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
-  const hasPreferences =
-    preferences.includedTypes.length +
-      preferences.selectedSenders.length +
-      preferences.selectedDomains.length >
-    0
+  // Topics alone permit nothing, so a sender or domain is required to continue.
+  const hasPreferences = hasSourcePermission(preferences)
+  const contextError = real ? contextLimitError(context) : null
+
+  const saveReal = async () => {
+    if (!real || saving) return
+    if (contextError) {
+      setSaveError({ message: contextError, stale: false })
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const next = withConsentDecision(
+        settingsWithPreferences(real.settings, preferences, context),
+        consentDecision(initialConsent, consentChecked),
+      )
+      await real.onSave(next)
+    } catch (error) {
+      if (!live.current) return
+      setSaveError(
+        error instanceof ScanSettingsSaveError
+          ? { message: error.message, stale: error.stale }
+          : { message: "Settings were not saved. Check your connection and retry.", stale: false },
+      )
+    } finally {
+      if (live.current) setSaving(false)
+    }
+  }
 
   return (
     <div className="onboarding-shell">
@@ -1736,6 +1944,11 @@ function Onboarding({
             <span className="demo-mode-badge">
               Signed in{authEmail ? ` · ${authEmail}` : ""}
             </span>
+            {real && (
+              <button className="text-link onboarding-return" disabled={saving} onClick={real.onLeave}>
+                {real.leaveLabel}
+              </button>
+            )}
             <button className="text-link" onClick={onSignOut}>
               Sign out
             </button>
@@ -1823,7 +2036,29 @@ function Onboarding({
             </div>
           )}
 
-          {step === 1 && (
+          {step === 1 && real && (
+            <>
+              <div className="setup-icon">
+                <img alt="" src={gmailLogo} />
+              </div>
+              <h2>Connect your inbox</h2>
+              <p className="setup-description">
+                Gmail read access is separate from Google sign-in. Connecting
+                Gmail does not give scanning consent, start a scan, or send
+                email to a model.
+              </p>
+              <div className="storage-page onboarding-google">
+                <GoogleConnectionPanel />
+              </div>
+              <p className="setup-helper">
+                You can save your sources and consent before or after
+                connecting. Google Calendar is not connected in this release.
+              </p>
+              <FooterActions back={real.onLeave} backLabel={real.leaveLabel} next={() => setStep(2)} />
+            </>
+          )}
+
+          {step === 1 && !real && (
             <>
               <div className="setup-icon">
                 <img alt="" src={gmailLogo} />
@@ -1882,16 +2117,12 @@ function Onboarding({
               <p className="setup-helper">
                 {gmailConnected
                   ? "This fictional connection is isolated from real Gmail."
-                  : isAuthenticated
-                    ? "You can save preferences now. Scanning stays off until Gmail is separately authorized."
-                    : "Nothing is scanned until you finish setup and start."}
+                  : "Nothing is scanned until you finish setup and start."}
               </p>
               <FooterActions
                 back={() => setStep(0)}
                 next={() => setStep(2)}
-                nextDisabled={
-                  !isAuthenticated && !(previewMode && gmailConnected)
-                }
+                nextDisabled={!(previewMode && gmailConnected)}
               />
             </>
           )}
@@ -1904,7 +2135,8 @@ function Onboarding({
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" />
               <p className="setup-helper requirement-helper">
-                Choose at least one sender or domain. Topics alone permit nothing. Real Gmail scanning is not connected yet.
+                Choose at least one sender or domain. Topics alone permit nothing.
+                {real ? " Nothing is saved until the last step." : " Real Gmail scanning is not connected in this preview."}
               </p>
               <FooterActions
                 back={() => setStep(1)}
@@ -1918,23 +2150,37 @@ function Onboarding({
             <>
               <h2>What would you like to keep private?</h2>
               <p className="setup-description">
-                Add semantic topics, exact senders, or domains to exclude from your
-                preferences.
+                Add semantic topics, exact senders, domains, or subject phrases to exclude.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="excluded" />
               <p className="setup-helper requirement-helper">
-                Any matching exclusion blocks an email, even if it matches an inclusion. Real Gmail scanning is not connected yet.
+                Any matching sender, domain, or subject exclusion blocks an email, even if it matches an inclusion.
               </p>
+              {real && (
+                <div className="settings-card onboarding-context">
+                  <div className="card-heading">
+                    <div>
+                      <strong>Earlier messages in a thread</strong>
+                      <span>
+                        Each earlier message must pass these same rules on its
+                        own before its text is read. Zero turns off earlier
+                        context. Quoted-text removal is imperfect.
+                      </span>
+                    </div>
+                  </div>
+                  <ContextLimitInputs value={context} onChange={setContext} disabled={saving} />
+                  {contextError && <p className="notice warning" role="alert">{contextError}</p>}
+                </div>
+              )}
               <details className="privacy-disclosure">
                 <summary>How privacy filtering works</summary>
                 <ul>
-                  <li>Exact source exclusions override inclusions before body retrieval. Semantic topics are evaluated after Gemini receives permitted content.</li>
-                  <li>The extraction pipeline supports metadata rules; real Gmail scanning and authorization are not connected here.</li>
+                  <li>Exact source and subject exclusions override inclusions before an email body is retrieved. Semantic topics are evaluated after Gemini receives permitted content.</li>
                   <li>Metadata rules cannot guarantee that all health or financial content is excluded.</li>
-                  <li>This preview uses fictional data and does not retrieve or send real email.</li>
+                  {!real && <li>This preview uses fictional data and does not retrieve or send real email.</li>}
                 </ul>
               </details>
-              <FooterActions back={() => setStep(2)} next={() => setStep(4)} />
+              <FooterActions back={() => setStep(2)} next={() => setStep(4)} nextDisabled={Boolean(contextError)} />
             </>
           )}
 
@@ -1942,17 +2188,19 @@ function Onboarding({
             <>
               <h2>Ready to organize your inbox?</h2>
               <p className="setup-description">
-                {previewMode
-                  ? "Review your choices before the simulated preview checks begin."
-                  : "Review your choices. Saving preferences does not authorize Gmail or start scanning."}
+                {real
+                  ? "Review your choices. Saving stores them on your account; it does not start a scan."
+                  : "Review your choices before the simulated preview checks begin."}
               </p>
               <div className="review-preferences">
                 <ReviewPreference
                   label="Gmail status"
                   onEdit={() => setStep(1)}
                   values={[
-                    isAuthenticated
-                      ? "Not authorized · Gmail access requires separate consent"
+                    real
+                      ? gmail.checking
+                        ? "Checking…"
+                        : gmailStateLabel(gmail.state, gmail.email)
                       : gmailConnected
                         ? "Fictional preview account · no real mailbox accessed"
                         : "Unavailable in this deployment",
@@ -1962,7 +2210,7 @@ function Onboarding({
                   label="Topics of interest"
                   onEdit={() => setStep(2)}
                   values={preferences.includedTypes}
-                  emptyLabel="No words or phrases selected"
+                  emptyLabel="None, so every permitted topic qualifies"
                 />
                 <ReviewPreference
                   label="Included senders and domains"
@@ -1971,16 +2219,16 @@ function Onboarding({
                     ...preferences.selectedSenders.map((value) => `From: ${value}`),
                     ...preferences.selectedDomains.map((value) => `Domain: ${value}`),
                   ]}
-                  emptyLabel="No senders or domains selected"
+                  emptyLabel="None, so nothing will be processed"
                 />
                 <ReviewPreference
                   label="Semantic topics to omit"
                   onEdit={() => setStep(3)}
                   values={preferences.excludedTypes}
-                  emptyLabel="No words or phrases excluded"
+                  emptyLabel="No topics omitted"
                 />
                 <ReviewPreference
-                  label="Excluded senders and domains"
+                  label="Excluded senders, domains, and subjects"
                   onEdit={() => setStep(3)}
                   values={[
                     ...preferences.excludedSenders.map((value) => `From: ${value}`),
@@ -1989,53 +2237,76 @@ function Onboarding({
                   ]}
                   emptyLabel="No senders, domains, or subjects excluded"
                 />
+                {real && (
+                  <ReviewPreference
+                    label="Earlier messages in a thread"
+                    onEdit={() => setStep(3)}
+                    values={[
+                      `Up to ${context.maxMessages} within ${context.maxAgeDays} days`,
+                      `${context.maxMessageChars} characters each, ${context.maxTotalChars} total`,
+                    ]}
+                  />
+                )}
               </div>
               <p className="setup-helper requirement-helper">
-                Topics never grant source access. Real Gmail scanning
-                is not connected yet.
+                {accessScopeSummary(preferences)} Topics never grant source access.
               </p>
-              <div className="scan-plan">
-                <div>
-                  <span>Initial scan</span>
-                  <strong>
-                    {previewMode
-                      ? "Past 7 days · simulated preview only"
-                      : "Not started · Gmail authorization required"}
-                  </strong>
+              {real ? (
+                <div className="onboarding-consent">
+                  <p>{SCAN_DISCLOSURE}</p>
+                  <p>{SCAN_DISCLOSURE_EFFECTS}</p>
+                  <label>
+                    <input
+                      checked={consentChecked}
+                      disabled={saving}
+                      onChange={(event) => setConsentChecked(event.target.checked)}
+                      type="checkbox"
+                    />
+                    {SCAN_CONSENT_LABEL}
+                  </label>
+                  <p className="setup-helper">
+                    {consentChecked
+                      ? initialConsent
+                        ? "Consent is already saved. Your saved pause setting is kept."
+                        : "Saving records your consent and unpauses scanning. Nothing is scanned until you start a manual scan."
+                      : initialConsent
+                        ? "Saving will revoke your saved consent."
+                        : "Without consent you can save your rules now; scanning stays off."}
+                  </p>
                 </div>
-                <div>
-                  <span>Automatic checks</span>
-                  <strong>
-                    {previewMode
-                      ? "Simulated preview checks"
-                      : "Off until Gmail is separately authorized"}
-                  </strong>
+              ) : (
+                <div className="scan-plan">
+                  <div>
+                    <span>Initial scan</span>
+                    <strong>Past 7 days · simulated preview only</strong>
+                  </div>
+                  <div>
+                    <span>Automatic checks</span>
+                    <strong>Simulated preview checks</strong>
+                  </div>
                 </div>
-              </div>
+              )}
               <p className="approval-reminder">
                 You review task suggestions before approving them. Calendar
                 entries require separate approval.
               </p>
               <p className="setup-helper">
-                {previewMode
-                  ? "Preview only. No account is accessed and these preferences are not saved to Supabase."
-                  : "Google sign-in does not grant Gmail access. Scanning remains disabled until Gmail is separately authorized."}
+                {real
+                  ? "Google sign-in and Gmail connection do not grant scanning consent. Google Calendar is not connected."
+                  : "Preview only. No account is accessed and these preferences are not saved to Supabase."}
               </p>
+              {real && real.refreshing && <p className="save-confirmation" role="status">Reloading saved settings…</p>}
+              {real && saving && <p className="save-confirmation" role="status">Saving settings…</p>}
+              {real && <SaveFailure error={saveError} onReload={real.onReload} reloading={real.refreshing} />}
               <FooterActions
                 back={() => setStep(3)}
                 next={async () => {
-                  if (starting || savingPreferences) return
-                  setSetupError("")
-                  if (isAuthenticated) {
-                    try {
-                      await onSavePreferences(preferences)
-                    } catch {
-                      setSetupError(
-                        "Could not save your preferences. Please try again.",
-                      )
-                    }
+                  if (real) {
+                    await saveReal()
                     return
                   }
+                  if (starting) return
+                  setSetupError("")
                   if (previewMode) {
                     setStarting(true)
                     try {
@@ -2050,14 +2321,14 @@ function Onboarding({
                     }
                   }
                 }}
-                nextDisabled={!hasPreferences || starting || savingPreferences}
+                nextDisabled={!hasPreferences || starting || saving || Boolean(real?.refreshing) || Boolean(contextError)}
                 nextLabel={
-                  savingPreferences
-                    ? "Saving preferences…"
+                  saving
+                    ? "Saving…"
                     : starting
                       ? "Starting preview…"
-                      : isAuthenticated
-                        ? "Save preferences"
+                      : real
+                        ? "Save settings"
                         : "Review and start"
                 }
               />
@@ -2108,11 +2379,13 @@ function ReviewPreference({
 
 function FooterActions({
   back,
+  backLabel = "Back",
   next,
   nextDisabled = false,
   nextLabel = "Continue",
 }: {
   back: () => void
+  backLabel?: string
   next: () => void
   nextDisabled?: boolean
   nextLabel?: string
@@ -2120,7 +2393,7 @@ function FooterActions({
   return (
     <div className="step-actions">
       <button className="secondary-button" onClick={back}>
-        Back
+        {backLabel}
       </button>
       <button className="primary-button" disabled={nextDisabled} onClick={next}>
         {nextLabel}
@@ -2199,6 +2472,10 @@ function RulesEditor({
     const isDomain = key === "selectedDomains" || key === "excludedDomains"
     if (isSender || isDomain) value = value.toLowerCase()
     if (isDomain) value = value.replace(/^@/, "")
+    if (key === "excludedSubjects" && (value.length > 254 || /[\x00-\x1f\x7f]/.test(value))) {
+      setRuleError("Subject phrases must be 1-254 characters without control characters.")
+      return
+    }
     if ((isSender && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) ||
         (isDomain && !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(value))) {
       setRuleError(isSender ? "Enter a complete sender email address." : "Enter a valid domain, such as example.edu.")
@@ -2236,6 +2513,11 @@ function RulesEditor({
       key: "excludedDomains",
       label: "Blocked domain",
       placeholder: "example.com",
+    },
+    {
+      key: "excludedSubjects",
+      label: "Subject contains",
+      placeholder: "Literal phrase, such as payroll",
     },
   ]
 
@@ -2298,12 +2580,11 @@ function RulesEditor({
         />
         <div className="rule-heading">
           <div>
-            <strong>Excluded senders and domains</strong>
-            <span>Exact address or domain matches. Domains do not include subdomains.</span>
+            <strong>Excluded senders, domains, and subjects</strong>
+            <span>Exact address or domain matches; domains do not include subdomains. Subject phrases match literal text in the subject only, ignoring case.</span>
           </div>
         </div>
-        {rules.excludedSubjects.length > 0 && <div className="notice"><p>Previous subject-only exclusions (kept at their original scope):</p><Chips entries={rules.excludedSubjects.map(value => ({ key: "excludedSubjects" as RuleKey, value, prefix: "Subject only" }))} onRemove={remove} /></div>}
-        {fields.slice(2, 4).map((field) => {
+        {fields.slice(2, 5).map((field) => {
           const entries = rules[field.key].map((value) => ({
             key: field.key,
             value,
@@ -3041,6 +3322,263 @@ function SettingsScreen({
                   No stored data
                 </button>
               </div>
+            </>
+          )}
+        </section>
+      </main>
+    </div>
+  )
+}
+
+// The designed settings screen for a signed-in account. It edits the same saved
+// scan settings as onboarding and the workspace form, through scan_settings_save.
+function RealSettingsScreen({
+  settings,
+  email,
+  refreshing,
+  initialSection,
+  onSave,
+  onReload,
+  onRunSetup,
+  onBack,
+}: {
+  settings: ScanSettings
+  email: string
+  refreshing: boolean
+  initialSection: SettingsSection
+  onSave: (next: ScanSettings) => Promise<ScanSettings>
+  onReload: () => void
+  onRunSetup: () => void
+  onBack: () => void
+}) {
+  const [section, setSection] = useState<SettingsSection>(initialSection)
+  const [preferences, setPreferences] = useState(() => preferencesFromSettings(settings))
+  const [context, setContext] = useState<ContextLimits>(() => ({ ...settings.context_limits }))
+  const [consent, setConsent] = useState(settings.consent)
+  const [paused, setPaused] = useState(settings.paused)
+  const [saving, setSaving] = useState(false)
+  const [savedRevision, setSavedRevision] = useState<number | null>(null)
+  const [saveError, setSaveError] = useState<{ message: string; stale: boolean } | null>(null)
+  const live = useRef(true)
+  useEffect(() => {
+    live.current = true
+    return () => { live.current = false }
+  }, [])
+  // A confirmed save or a reload replaces the draft with what is actually stored.
+  useEffect(() => {
+    setPreferences(preferencesFromSettings(settings))
+    setContext({ ...settings.context_limits })
+    setConsent(settings.consent)
+    setPaused(settings.paused)
+  }, [settings])
+  const gmail = useGmailState(true, section)
+
+  const draft = { ...settingsWithPreferences(settings, preferences, context), consent, paused }
+  const dirty = !sameSavedFields(draft, settings)
+  const contextError = contextLimitError(context)
+  const blockers = scanBlockers(settings, gmail.checking ? "unknown" : gmail.state)
+
+  const save = async () => {
+    if (saving || !dirty) return
+    if (contextError) {
+      setSaveError({ message: contextError, stale: false })
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    setSavedRevision(null)
+    try {
+      const result = await onSave(draft)
+      if (live.current) setSavedRevision(result.revision)
+    } catch (error) {
+      if (!live.current) return
+      setSaveError(
+        error instanceof ScanSettingsSaveError
+          ? { message: error.message, stale: error.stale }
+          : { message: "Settings were not saved. Check your connection and retry.", stale: false },
+      )
+    } finally {
+      if (live.current) setSaving(false)
+    }
+  }
+
+  const sections: [SettingsSection, string][] = [
+    ["sources", "Sources & exclusions"],
+    ["processing", "Consent & context"],
+    ["connections", "Connections"],
+    ["retention", "Data & retention"],
+  ]
+
+  const saveBar = (
+    <div className="real-settings-save">
+      {refreshing && <p className="save-confirmation" role="status">Reloading saved settings…</p>}
+      {saving && <p className="save-confirmation" role="status">Saving settings…</p>}
+      {!saving && savedRevision !== null && !dirty && (
+        <p className="save-confirmation" role="status">
+          Saved (revision {savedRevision}). No email was read and no scan was started.
+        </p>
+      )}
+      {dirty && !saving && <p className="settings-footnote" role="status">Unsaved changes on this page.</p>}
+      <SaveFailure error={saveError} onReload={() => { setSaveError(null); onReload() }} reloading={refreshing} />
+      <div className="step-actions">
+        <button
+          className="secondary-button"
+          disabled={saving || refreshing}
+          onClick={() => { setSaveError(null); setSavedRevision(null); onReload() }}
+          type="button"
+        >
+          Reload saved settings
+        </button>
+        <button
+          className="primary-button"
+          disabled={!dirty || saving || refreshing || Boolean(contextError)}
+          onClick={() => void save()}
+          type="button"
+        >
+          {saving ? "Saving…" : "Save settings"}
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="settings-shell">
+      <header className="topbar">
+        <Brand />
+        <div className="topbar-actions">
+          <span className="demo-mode-badge">Signed in · {email}</span>
+          <button className="secondary-button" onClick={onBack}>
+            <Icon name="arrow" size={15} /> {dirty ? "Back to workspace (discard changes)" : "Back to workspace"}
+          </button>
+        </div>
+      </header>
+      <main className="settings-main">
+        <aside className="settings-nav">
+          <p className="kicker">Account</p>
+          <h1>Settings</h1>
+          <nav aria-label="Settings sections">
+            {sections.map(([key, label]) => (
+              <button
+                aria-current={section === key ? "page" : undefined}
+                className={section === key ? "active" : ""}
+                key={key}
+                onClick={() => setSection(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+        <section className="settings-content">
+          <div className={`notice ${blockers.length ? "warning" : "neutral"}`} role="status">
+            <strong>{blockers.length ? "Scanning is off" : "Saved settings permit a manual scan"}</strong>
+            <span>
+              {blockers.length
+                ? blockers.join(" ")
+                : "Scans still start only when you request one from the workspace."}
+            </span>
+          </div>
+          {section === "sources" && (
+            <>
+              <SettingsHeading
+                title="Email preferences"
+                description="Saved to your account. Exact sender and domain permissions control access; topics are evaluated by Gemini afterward."
+              />
+              <RulesEditor rules={preferences} onChange={setPreferences} />
+              <p className="settings-footnote">{accessScopeSummary(preferences)} Topics never grant access.</p>
+              {saveBar}
+            </>
+          )}
+          {section === "processing" && (
+            <>
+              <SettingsHeading
+                title="Consent and thread context"
+                description="Consent, pause, and context limits are saved with your source rules."
+              />
+              <div className="settings-card">
+                <div className="card-heading">
+                  <div>
+                    <strong>Scanning consent</strong>
+                    <span>{SCAN_DISCLOSURE}</span>
+                  </div>
+                </div>
+                <p className="settings-footnote">{SCAN_DISCLOSURE_EFFECTS}</p>
+                <label className="real-settings-check">
+                  <input checked={consent} disabled={saving} onChange={(event) => setConsent(event.target.checked)} type="checkbox" />
+                  {SCAN_CONSENT_LABEL}
+                </label>
+                <label className="real-settings-check">
+                  <input checked={paused} disabled={saving} onChange={(event) => setPaused(event.target.checked)} type="checkbox" />
+                  Pause scanning
+                </label>
+              </div>
+              <div className="settings-card">
+                <div className="card-heading">
+                  <div>
+                    <strong>Earlier permitted messages</strong>
+                    <span>
+                      Each earlier message independently passes current source
+                      rules before its body is retrieved. Zero turns off earlier
+                      context. Quoted-text removal is imperfect.
+                    </span>
+                  </div>
+                </div>
+                <ContextLimitInputs value={context} onChange={setContext} disabled={saving} />
+                {contextError && <p className="notice warning" role="alert">{contextError}</p>}
+              </div>
+              {saveBar}
+            </>
+          )}
+          {section === "connections" && (
+            <>
+              <SettingsHeading
+                title="Connections"
+                description="Gmail access is separate from sign-in and from scanning consent."
+              />
+              <div className="storage-page onboarding-google">
+                <GoogleConnectionPanel />
+              </div>
+              <div className="settings-card connection-setting">
+                <div>
+                  <span className="service-icon calendar-service">
+                    <Icon name="calendar" size={17} />
+                  </span>
+                  <div>
+                    <strong>Google Calendar</strong>
+                    <span>Not connected · planned for a later release</span>
+                  </div>
+                </div>
+                <button className="secondary-button" disabled>
+                  Unavailable
+                </button>
+              </div>
+              <p className="settings-footnote">
+                Accepted tasks can be exported as calendar files from the
+                workspace. Nothing is written to Google Calendar.
+              </p>
+              <div className="settings-card split-card">
+                <div>
+                  <strong>Guided setup</strong>
+                  <span>Walk through connection, sources, exclusions, and consent again, starting from your saved settings.</span>
+                </div>
+                <button className="secondary-button" disabled={saving} onClick={onRunSetup}>
+                  Run setup again
+                </button>
+              </div>
+            </>
+          )}
+          {section === "retention" && (
+            <>
+              <SettingsHeading
+                title="Data and retention"
+                description="What is kept when a manual scan processes permitted email."
+              />
+              <p>{SCAN_DISCLOSURE}</p>
+              <p className="settings-footnote">
+                Completing or deleting an InboxToTask record does not delete
+                Gmail messages. Account deletion is not available in this
+                release.
+              </p>
             </>
           )}
         </section>

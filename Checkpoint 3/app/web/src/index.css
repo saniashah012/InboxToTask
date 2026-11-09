@@ -3441,6 +3441,29 @@ textarea:focus-visible {
   gap: 6px;
 }
 
+/* Thread-context limits: two even rows of two, so labels stay on one line
+   and every input box has the same width and height. */
+.context-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+
+.context-fields label {
+  align-content: start;
+}
+
+.context-fields .input-suffix input {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 620px) {
+  .context-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .settings-footnote {
   margin: 15px 0 0;
   color: var(--muted);

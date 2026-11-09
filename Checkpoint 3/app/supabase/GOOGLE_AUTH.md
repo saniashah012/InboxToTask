@@ -91,6 +91,8 @@ not a validated scanning consent/allowlist contract. Do not infer consent from t
 
 ## Step-by-step local Google setup
 
+For a self-contained version written for anyone reproducing the project, see [INSTALL.md step 5](../INSTALL.md#5-set-up-google-cloud). The walkthrough below is the original team setup, including its hand-off to a coding agent.
+
 This walkthrough uses two Google Cloud projects and the existing local Supabase
 stack. Keep the existing Gemini project unchanged. No hosted deployment is needed
 for these steps. Use `127.0.0.1` consistently for this walkthrough.

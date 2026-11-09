@@ -8,7 +8,7 @@ import { googleConnectionStatus, loadStorageSnapshot, reviewStoredRecord, type D
 import { manualScan, manualScanStatus, resolveTaskChange, reviewTaskChange, scanStopMessage, type ScanStatus } from "./manualScanAdapter"
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
 import { loadTaskSourceLinks, OpenInGmail, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
-import InformationTab from "./InformationTab"
+import { loadRead, saveRead } from "./InformationTab"
 import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
 import type { GmailState } from "./scanSetup"
@@ -23,7 +23,7 @@ import "./real-dashboard.css"
 type View = "suggestions" | "active" | "completed" | "dismissed"
 type SettingsTarget = "sources" | "processing" | "connections" | "retention"
 type Failure = { message: string }
-type SourceView = { title: string; sender?: string | null; subject?: string | null; sentAt?: string | null; quote: string | null; messageId: string | null; taskId?: string; extraction?: StoredRow }
+type SourceView = { title: string; sender?: string | null; subject?: string | null; sentAt?: string | null; quote: string | null; messageId: string | null; taskId?: string; extraction?: StoredRow; summary?: string }
 type Editing = { kind: "suggestion" | "task"; row: StoredRow; fields: TaskFields }
 
 const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -370,7 +370,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
           </div>
         ) : (
           loading ? <div className="empty-state" role="status"><span className="spinner" aria-hidden="true" /><h3>Loading summaries…</h3></div>
-            : model.information.length ? <Embedded><InformationTab key={`info-${userId}`} userId={userId} email={email} items={model.information} sources={snapshot.sources} loading={loading} /></Embedded>
+            : model.information.length ? <PassiveSection key={`info-${userId}`} userId={userId} items={model.information} sources={snapshot.sources} evidence={snapshot.evidence} onSource={setSource} />
               : <EmptyState title="No informational summaries" detail="Summaries of permitted emails that don’t need action appear here after a manual check." />
         )}
       </main>
@@ -464,6 +464,65 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
         </div>
       )}
     </article>
+  )
+}
+
+// Passive communication: informational emails as cards in the Tasks style, with
+// Unread/Read tabs. Read marks stay in this browser (same storage as before).
+function PassiveSection({ userId, items, sources, evidence, onSource }: {
+  userId: string
+  items: StoredRow[]
+  sources: StoredRow[]
+  evidence: StoredRow[]
+  onSource: (view: SourceView) => void
+}) {
+  const [read, setRead] = useState(() => loadRead(userId))
+  const [view, setView] = useState<"unread" | "read">("unread")
+  const mark = (sourceId: string, isRead: boolean) => {
+    const next = new Set(read)
+    if (isRead) next.add(sourceId); else next.delete(sourceId)
+    setRead(next); saveRead(userId, next)
+  }
+  const cards = items.map((e) => {
+    const src = sources.find((s) => s.id === e.source_id)
+    const quote = evidence.find((q) => q.extraction_id === e.id && q.quote)
+    return { e, src, quote }
+  }).sort((a, b) => Date.parse(b.src?.sent_at ?? b.e.created_at) - Date.parse(a.src?.sent_at ?? a.e.created_at))
+  const shown = cards.filter((c) => read.has(c.e.source_id) === (view === "read"))
+  const counts = { unread: cards.filter((c) => !read.has(c.e.source_id)).length, read: cards.filter((c) => read.has(c.e.source_id)).length }
+  return (
+    <section className="task-section">
+      <div className="review-tabs" role="tablist" aria-label="Read status">
+        {(["unread", "read"] as const).map((v) => (
+          <button aria-selected={view === v} className={view === v ? "review-tab active" : "review-tab"} key={v} onClick={() => setView(v)} role="tab">
+            {v === "unread" ? "Unread" : "Read"}<span>{counts[v]}</span>
+          </button>
+        ))}
+      </div>
+      <p className="rd-sort-note">Newest first · read marks are remembered in this browser</p>
+      {shown.length > 0 ? <div className="task-list">{shown.map(({ e, src, quote }) => {
+        const isRead = read.has(e.source_id)
+        const title = src?.subject || "(no subject)"
+        return (
+          <article className={`task-row rd-info-row${isRead ? " rd-is-read" : ""}`} key={e.id}>
+            <div className="task-main">
+              <div className="task-title-line">
+                <h3>{title}</h3>
+                {src?.sender && <span className="task-context">{src.sender}</span>}
+                {e.needs_review && <span className="rd-chip">Needs verification</span>}
+              </div>
+              <p className="task-caption rd-info-summary">{e.summary}</p>
+              {src?.sent_at && <div className="task-meta"><span className="date">Received {friendlyTime(src.sent_at)}</span></div>}
+            </div>
+            <button className="email-link" onClick={() => {
+              onSource({ title, sender: src?.sender, subject: src?.subject, sentAt: src?.sent_at, quote: quote?.quote ?? null, messageId: quote?.message_id ?? src?.message_id ?? null, extraction: e, summary: e.summary })
+              if (!isRead) mark(e.source_id, true)
+            }}>View source email</button>
+            <button className="secondary-button row-button" onClick={() => mark(e.source_id, !isRead)}>{isRead ? "Mark as unread" : "Mark as read"}</button>
+          </article>
+        )
+      })}</div> : <EmptyState title={view === "unread" ? "No unread summaries" : "No read summaries"} detail={view === "unread" ? "You’re caught up. Summaries you open or mark as read move to Read." : "Summaries you open or mark as read appear here."} />}
+    </section>
   )
 }
 
@@ -612,6 +671,14 @@ function SourceModal({ source, email, links, onClose }: { source: SourceView; em
         <div><span>Subject</span><strong>{source.subject || "(no subject)"}</strong></div>
         <div><span>Received</span><strong>{formatWhen(source.sentAt) ?? "Unavailable"}</strong></div>
       </div>
+      {source.summary && (
+        <div className="excerpt rd-summary"><span>Executive summary</span><p>{source.summary}</p>
+          {source.extraction && <p className="rd-detail-meta">
+            Classified as informational ({Number(source.extraction.classification_confidence ?? 0)}% confidence)
+            {source.extraction.topic_relevance === "uncertain" ? " · may be outside your selected topics" : ""}
+          </p>}
+        </div>
+      )}
       {own === undefined && <div className="excerpt"><span>Saved excerpt</span><blockquote>{source.quote ? `“${source.quote}”` : "The saved excerpt has expired."}</blockquote></div>}
       <div className="rd-modal-body">
         {source.extraction && <Embedded><ExtractionReview extraction={source.extraction} /></Embedded>}

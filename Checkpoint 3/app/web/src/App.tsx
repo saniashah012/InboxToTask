@@ -336,14 +336,21 @@ function LegacyReviewScreen({ email, onSaved, onSignOut }: { email: string; onSa
   )
 }
 
-function Brand() {
-  return (
-    <div className="brand-lockup">
+// With onHome, the logo and name become a button back to the dashboard.
+function Brand({ onHome }: { onHome?: () => void }) {
+  const lockup = (
+    <>
       <div className="brand-mark">
         <img alt="" src={inboxToTaskLogo} />
       </div>
       <span className="brand-name">InboxToTask</span>
-    </div>
+    </>
+  )
+  if (!onHome) return <div className="brand-lockup">{lockup}</div>
+  return (
+    <button aria-label="InboxToTask: back to dashboard" className="brand-lockup brand-home" onClick={onHome} type="button">
+      {lockup}
+    </button>
   )
 }
 
@@ -1366,7 +1373,10 @@ function RealSettingsScreen({
   return (
     <div className="settings-shell">
       <header className="topbar">
-        <Brand />
+        <Brand onHome={() => {
+          if (dirty && !window.confirm("Leave settings? Your unsaved changes will be discarded.")) return
+          onBack()
+        }} />
         <div className="topbar-actions">
           <span className="demo-mode-badge">Signed in · {email}</span>
           <button className="secondary-button" onClick={onBack}>

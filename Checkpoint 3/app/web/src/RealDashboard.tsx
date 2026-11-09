@@ -33,6 +33,29 @@ const formatWhen = (value?: string | null) => {
 }
 const initials = (text: string) => text.replace(/<.*>/, "").split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?"
 
+// A success message that stays 8 s, fades for 0.6 s, then closes. Hovering or
+// focusing it holds it; leaving restarts the 8 s. Timers, not animation events,
+// so it also closes when the page is in a background tab.
+function FadeAway({ onDone, className, children, ...rest }: { onDone: () => void; className: string; children: ReactNode; role?: string; "aria-live"?: "polite" }) {
+  const [fading, setFading] = useState(false)
+  const [held, setHeld] = useState(false)
+  const done = useRef(onDone)
+  done.current = onDone
+  useEffect(() => {
+    if (held) { setFading(false); return }
+    const fade = window.setTimeout(() => setFading(true), 8000)
+    const close = window.setTimeout(() => done.current(), 8600)
+    return () => { window.clearTimeout(fade); window.clearTimeout(close) }
+  }, [held])
+  return (
+    <div {...rest} className={`${className} rd-fade${fading ? " is-fading" : ""}`}
+      onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)}
+      onFocus={() => setHeld(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false) }}>
+      {children}
+    </div>
+  )
+}
+
 // Embedded working components keep the workspace's styling, scoped to this wrapper.
 const Embedded = ({ children }: { children: ReactNode }) => <div className="storage-page manual-workspace rd-embedded">{children}</div>
 
@@ -111,11 +134,6 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     }, 3000)
     return () => window.clearInterval(timer)
   }, [scanning, status?.running])
-  useEffect(() => {
-    if (!toast) return
-    const timer = window.setTimeout(() => setToast(null), 8000)
-    return () => window.clearTimeout(timer)
-  }, [toast])
 
   // Messages appear only after the backend confirms the save. Every outcome reloads saved state.
   async function perform(operation: () => Promise<unknown>, message: string, after?: () => void) {
@@ -239,7 +257,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
             <button className="text-link" disabled={busy} onClick={() => { setFailure(null); void reload() }}>Reload saved results</button>
           </div>
         )}
-        {notice && !failure && <div className="notice neutral rd-notice" role="status"><span>{notice}</span><button aria-label="Dismiss message" className="text-link" onClick={() => setNotice("")}>Dismiss</button></div>}
+        {notice && !failure && <FadeAway key={notice} className="notice neutral rd-notice" role="status" onDone={() => setNotice("")}>
+          <span>{notice}</span><button aria-label="Dismiss message" className="text-link" onClick={() => setNotice("")}>Dismiss</button></FadeAway>}
         {loadFailed && (
           <div className="notice warning rd-notice" role="alert">
             <span>{snapshot.tasks.length ? "Could not refresh saved results. Showing what was last loaded." : "Could not load your saved results. Nothing was changed."}</span>
@@ -379,7 +398,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         const completedRow = toast.kind === "completed" ? model.closed.find((t) => t.row.id === toast.id)?.row : undefined
         const row = dismissedRow ?? completedRow
         return (
-          <div aria-live="polite" className="undo-toast">
+          <FadeAway aria-live="polite" className="undo-toast" key={`${toast.kind}-${toast.id}`} onDone={() => setToast(null)}>
             <span>{toast.kind === "dismissed" ? "Suggestion dismissed" : "Task completed"}</span>
             {row && <button disabled={busy} onClick={() => {
               setToast(null)
@@ -388,7 +407,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                 : perform(() => reviewStoredRecord("task", row.id, "undo", row.revision), "Completion undone."))
             }}>Undo</button>}
             <button aria-label="Close" className="toast-close" onClick={() => setToast(null)}><Icon name="close" size={16} /></button>
-          </div>
+          </FadeAway>
         )
       })()}
     </div>

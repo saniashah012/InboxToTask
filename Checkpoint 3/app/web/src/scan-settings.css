@@ -15,3 +15,8 @@
 .scan-rule-pair { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 .scan-help { position: relative; display: inline-block; }
 .scan-help [role=tooltip] { display: block; position: absolute; z-index: 5; background: #262626; color: white; padding: 1rem; width: min(22rem, 75vw); box-shadow: 0 2px 8px #0004; }
+/* Designed onboarding/settings help: wide and short, as four scannable points. */
+.scan-help .scan-help-tip { display: grid; gap: 6px; top: calc(100% + 6px); left: 0; width: min(40rem, calc(100vw - 48px)); padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; }
+.scan-help .scan-help-tip > span { display: block; padding-left: 14px; position: relative; }
+.scan-help .scan-help-tip > span::before { content: "•"; position: absolute; left: 0; }
+.scan-help .scan-help-tip strong { font-weight: 700; }

@@ -7,8 +7,8 @@ Updated November 5, 2026. This describes the code in this repository and its ver
 | Part | State | Evidence |
 | --- | --- | --- |
 | Manual Gmail scan → Gemini → storage → review | Works locally | Live local on fictional mail ([UC8](use-cases.md#uc8-real-gmail-to-review-workflow)) and automated tests |
-| Signed-in product page | Separate `ManualWorkspace` page ([App.tsx line 565](../app/web/src/App.tsx)) | Seeded local browser and live local |
-| Designed dashboard and onboarding | **Not yet connected to real data.** Reachable only as a fictional preview. Onboarding work is on `claude/onboarding-connect-0e9360` (`91234dd`), not merged | Code |
+| Signed-in product page | Designed onboarding (first save), then the designed dashboard ([RealDashboard](../app/web/src/RealDashboard.tsx)) on saved records. `ManualWorkspace` stays as a development-only screen | Seeded local browser with fictional records; no live Gmail check of the designed dashboard |
+| Fictional preview and demo | **Removed.** Signed-out visitors see Google sign-in only | Code |
 | Automatic scheduled scans | **Not implemented** | Code: no schedule exists |
 | Hosted (Vercel and hosted Supabase) | **Gmail scanning not deployed; signed-in checks partial** | Reported by the hosted session: 20 ledger versions through `20261106040000`, applied 03:50 UTC November 6. Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Vercel's production branch is `main`, per Sania. PR #22 merged there at `59461b6`; CI passed on that commit and production returned a new build. See also [current state](../CURRENT_STATE.md) |
 | Google Calendar event creation | **Postponed to CP4** by user decision, and not on `main`. The rebased `mzheng/calendar-rebase` (`da4417d`, migration `20261106050000`) is on GitHub, not merged, and its recorded OAuth reconnect failures block release; Sania's original branch is on origin | Offline tests passed per the rebase session (reported); no live test |
@@ -21,7 +21,7 @@ Solid lines exist on `main`. Dotted lines are off by default or, where labeled, 
 ```mermaid
 flowchart LR
   subgraph Client["Client UI: React and Vite"]
-    Product["Product page /<br/>Signed in: ManualWorkspace<br/>Signed out: sign-in or fictional preview"]
+    Product["Product page /<br/>Signed in: designed onboarding and dashboard<br/>Signed out: Google sign-in"]
     Dev["/storage development tester<br/>Local Vite only, not in production builds"]
   end
 
@@ -116,7 +116,7 @@ The handler rechecks the scan lease and saved permission before each external re
 | Layer | Component | Responsibility |
 | --- | --- | --- |
 | Client UI | [ManualWorkspace](../app/web/src/ManualWorkspace.tsx), [manual scan adapter](../app/web/src/manualScanAdapter.ts), [source emails](../app/web/src/SourceEmails.tsx) | Scan status and counts, review, before/after changes, manual resolution, email history with Gmail links, ICS export, [Information tab](../app/web/src/InformationTab.tsx) |
-| Client UI | [App](../app/web/src/App.tsx) and preview adapter | Sign-in, routing, fictional preview with simulated actions |
+| Client UI | [App](../app/web/src/App.tsx), [RealDashboard](../app/web/src/RealDashboard.tsx) | Google sign-in, routing, designed onboarding, settings and dashboard on saved records |
 | Client UI | [StorageDashboard](../app/web/src/StorageDashboard.tsx) | Development only: fixture trials, activity totals, ICS export, task deletion |
 | Backend | [gmail_scan](../app/supabase/functions/gmail_scan/index.ts) | Authenticated manual scan, disabled by default |
 | Backend | [Google connection](../app/supabase/functions/_shared/google-connection.mjs) | Separate Gmail OAuth, encrypted tokens, refresh and revocation |

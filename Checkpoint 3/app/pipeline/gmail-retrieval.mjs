@@ -1,4 +1,5 @@
-import { address, cleanBody, filterMessage } from './core.mjs';
+import { address, cleanBody, filterMessage, PRIVATE_CONTEXT_WARNING, semanticPreferences } from './core.mjs';
+import { containsBlockedWord } from './private-topics.mjs';
 
 const problem = code => Object.assign(new Error(code), { code });
 // Raw decoded text before quote cleanup; configured caps apply to the cleaned text.
@@ -192,7 +193,15 @@ export function gmailBody(data, maxChars) {
 // consume is backend-only; the retrieval endpoint supplies a no-model consumer.
 export async function retrieveGmail({ gmail, work, check, consume, now = Date.now }) {
   const started = now(); const limits = work.contextLimits;
-  const counts = { candidates:0, permitted:0, blocked:0, skipped:0, prepared:0, reused:0, failed:0, contextBodies:0, modelCalls:0 };
+  const counts = { candidates:0, permitted:0, blocked:0, privateTopic:0, skipped:0, prepared:0, reused:0, failed:0, contextBodies:0, modelCalls:0 };
+  // Private-topic words are checked here, in backend code, before anything reaches a
+  // model: the subject before the body is fetched, then the decoded body. Counts
+  // record only that an email was skipped, never which topic or word matched.
+  let terms;
+  try { terms = work.semanticPreferences === undefined ? [] : semanticPreferences(work.semanticPreferences).terms; }
+  catch { return { counts, error:'SCAN_SETTINGS_INVALID', backlog:!!work.continuation, failures:{}, unresolved:0, continuation:work.continuation ?? null }; }
+  const privateTopic = () => { counts.privateTopic++; retry.delete(messageId); pending.shift(); };
+  let messageId;
   let pending = [...(work.continuation?.pending ?? [])]; let next = work.continuation?.next ?? null;
   let listed = !!work.continuation && !work.continuation.unlisted; let lastError = null; let requests = 0; let metadataRecords = 0;
   // Failed IDs stay retryable on the next explicit request, up to a fixed attempt count.
@@ -209,7 +218,7 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       catch (error) { lastError = error.code; break; }
       if (!pending.length) { if (!next) break; continue; }
     }
-    const messageId = pending[0];
+    messageId = pending[0];
     if (suppressed.has(messageId)) { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
     try {
       await boundary();
@@ -226,10 +235,13 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       counts.candidates++; metadataRecords++;
       if (!permitted(raw,current,work.rules)) { counts.blocked++; retry.delete(messageId); pending.shift(); continue; }
       if (Date.parse(current.sentAt)<Date.parse(work.start) || Date.parse(current.sentAt)>Date.parse(work.end)) { retry.delete(messageId); pending.shift(); continue; }
+      if (containsBlockedWord([current.subject], terms)) { privateTopic(); continue; }
       counts.permitted++;
       await boundary(); const full = await gmail.full(messageId);
       if (JSON.stringify(gmailMetadata(full)) !== JSON.stringify(current)) throw problem('GMAIL_METADATA_CHANGED');
       const body = gmailBody(full,RAW_BODY_CHARS);
+      // The whole decoded body, quoted history included, so this blocks at least as much as the cleaned text.
+      if (containsBlockedWord([body], terms)) { privateTopic(); continue; }
       const cleanedChars = cleanBody(body).body.length;
       if (!cleanedChars) throw problem('GMAIL_BODY_EMPTY');
       if (cleanedChars > limits.maxMessageChars || cleanedChars > limits.maxTotalChars) throw problem('GMAIL_BODY_LIMIT');
@@ -238,7 +250,7 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       if (limits.maxMessages) {
         await boundary(); const thread = await gmail.thread(current.threadId); metadataRecords += thread.length;
         if (metadataRecords > 500) throw problem('SCAN_RETRIEVAL_LIMIT');
-        let excluded = false;
+        let excluded = false, privateExcluded = false;
         const threadMetadata = thread.flatMap(item => {
           try {
             if (item.id !== messageId && hiddenFromScans(item)) {
@@ -251,10 +263,15 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
               if (Date.parse(meta.sentAt) <= Date.parse(current.sentAt)) excluded = true;
               return [];
             }
+            if (meta.id !== messageId && containsBlockedWord([meta.subject], terms)) {
+              if (Date.parse(meta.sentAt) <= Date.parse(current.sentAt)) privateExcluded = true;
+              return [];
+            }
             return [meta];
           } catch { excluded = true; return []; }
         });
         if (excluded) retrievalWarnings.push('Some thread history was excluded by current source permissions.');
+        if (privateExcluded) retrievalWarnings.push(PRIVATE_CONTEXT_WARNING);
         const eligible = threadMetadata.filter(m => m.id !== messageId && m.threadId === current.threadId
           && Date.parse(m.sentAt) <= Date.parse(current.sentAt)
           && Date.parse(current.sentAt)-Date.parse(m.sentAt) <= limits.maxAgeDays*86400000)
@@ -273,6 +290,7 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
             if (!CONTEXT_OMISSIONS.has(error?.code)) throw error;
             retrievalWarnings.push('Some permitted history could not fit or decode within message limits.'); continue;
           }
+          if (containsBlockedWord([text], terms)) { retrievalWarnings.push(PRIVATE_CONTEXT_WARNING); continue; }
           const chars = cleanBody(text).body.length;
           if (chars > limits.maxMessageChars) { retrievalWarnings.push('Some permitted history could not fit or decode within message limits.'); continue; }
           if (used+chars>limits.maxTotalChars) {retrievalWarnings.push('Some earlier history was omitted by the total character limit.');continue;}
@@ -281,7 +299,9 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       }
       await boundary();
       const result = await consume({ message:{...current,body},threadContext:context.reverse(),rules:work.rules,contextLimits:limits,retrievalWarnings:[...new Set(retrievalWarnings)] },{remainingMs:90000-(now()-started)});
-      counts.modelCalls += result?.modelCalls ?? 0; counts.prepared++; if (result?.reused) counts.reused++;
+      counts.modelCalls += result?.modelCalls ?? 0;
+      if (result?.privateTopic) counts.privateTopic++; else counts.prepared++;
+      if (result?.reused) counts.reused++;
       retry.delete(messageId); pending.shift();
     } catch (error) {
       const code = error?.code ?? 'GMAIL_UNAVAILABLE';

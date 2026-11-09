@@ -24,7 +24,7 @@ Three of the four templates matter here. The fourth, `Checkpoint 3/app/.env.exam
 | `Checkpoint 3/app/supabase/functions/.env` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_KEYS`, `GEMINI_API_KEY` |
 | `Checkpoint 3/app/web/.env` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. These are not secret and come from your own local stack in step 6 |
 
-Also set in `supabase/functions/.env`: `GOOGLE_TOKEN_ACTIVE_KEY=v1`, `ENABLE_GOOGLE_CONNECTION=true` once `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_TOKEN_KEYS` are filled (leave it on), and keep the template values for `GOOGLE_CALLBACK_URL`, `GOOGLE_RETURN_URL` (`http://127.0.0.1:5173/`) and `APP_ORIGINS`. Do not generate a new `GOOGLE_TOKEN_KEYS` if the owner gives you one. You can also create your own Google Cloud projects by following [INSTALL step 5](../app/INSTALL.md#5-set-up-google); then you need only your own secrets.
+Also set in `supabase/functions/.env`: `GOOGLE_TOKEN_ACTIVE_KEY=v1`, `ENABLE_GOOGLE_CONNECTION=true` once `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_TOKEN_KEYS` are filled (leave it on), and keep the template values for `GOOGLE_CALLBACK_URL`, `GOOGLE_RETURN_URL` (`http://127.0.0.1:5173/`) and `APP_ORIGINS`. Do not generate a new `GOOGLE_TOKEN_KEYS` if the owner gives you one. You can also create your own Google Cloud projects by following [INSTALL step 5](../app/INSTALL.md#5-set-up-google-cloud); then you need only your own secrets.
 
 ## 2. Setup
 

@@ -32,9 +32,11 @@ Owner-readable `scan_settings` are saved only through revision-checked
 `scan_settings_get` / `scan_settings_save`. Exact sender/domain inclusions combine
 with OR; source exclusions and literal case-insensitive subject exclusions win.
 Domains do not include subdomains. Empty source inclusions permit nothing.
-`semantic_preferences` holds separate include/exclude topics; topics never grant
-source access. Semantic relevance is Phase 3 work, after permitted content is sent
-to Gemini. Semantic exclusions cannot prevent transmission.
+`semantic_preferences` holds include and exclude topics and, since the
+[private-topic migration](migrations/20261109200000_private_topic_words.sql),
+`blockedWords`: one word list per excluded topic. Topics never grant source access.
+Included topics are judged by Gemini after permitted content is sent. Excluded topics
+are never sent: backend code checks their words before any model call.
 
 The [source/semantic migration](migrations/20261105200000_source_semantic_contract.sql)
 retains incompatible phrase rules in `legacy_phrase_rules`, pauses affected users,
@@ -93,12 +95,26 @@ the 30-day read limits, so it derives ownership from `auth.uid()` and omits dele
 and sources, fixture rows and expired quotes. Limitations and verification status are in
 [current state](../../CURRENT_STATE.md#source-email-access-naive-implementation).
 
+The [semantic contract migration](migrations/20261105200000_source_semantic_contract.sql)
+stores included and excluded topics as `semantic_preferences.include` and
+`semantic_preferences.exclude`. Short suggestion names and custom phrases are
+independent semantic strings; they are not expanded into Gmail labels or source
+keyword rules. Source access remains governed separately by sender/domain rules.
+The private-topic migration converts each saved excluded topic to its starter word
+list, or to the topic's own name for a custom topic, erring toward blocking more.
+A save without `blockedWords` keeps the saved list of each topic that stays excluded;
+new topics get their starter list or name. Lists hold 1–100 words of 1–100
+characters each, at most 1,000 words in total. `private.starter_blocked_words` must match
+[private-topics.mjs](../pipeline/private-topics.mjs); the PGlite settings test compares them.
+The category-group migration used by an earlier frontend iteration was removed;
+it is unnecessary for this contract and must not be applied.
+
 ## Trial limits and lifecycle
 
 - Per-user defaults: 20 requests and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.
 - At most one live job per user, 90-second leases, three attempts per extraction identity, and a 60-second failure retry delay. There is no automatic retry dispatcher.
 - Token reservation estimates are conservative byte-based estimates, not exact provider tokenization. Unknown usage keeps the reservation. Reservations are reconciled when usage is reported.
-- Evidence, digest summaries, unapproved suggestions, and waiting items default to 30 days. Completed tasks become eligible for deletion after 30 days; undo cancels eligibility. Attempt diagnostics expire after 14 days.
+- Evidence, digest summaries, unapproved suggestions, and waiting items default to 30 days. Completed tasks become eligible for deletion after 30 days; undo cancels eligibility. A task created from a suggestion can return to Suggestions or Dismissed (task actions `return_to_suggestions` and `return_to_dismissed`, migration `20261109120000`) while that suggestion is unexpired; the suggestion keeps the task's current values, including any accepted incoming update, and the task row, its source links and its pending change proposals are removed. Incoming-update suggestions for that task, pending or already accepted, become `deleted` with their task references cleared, as the 30-day task cleanup does; nothing records that an update was once accepted. Attempt diagnostics expire after 14 days.
 - Source deletion removes extracted content and hides the source; approved tasks remain independently accepted values. Task/source deletion records suppressions so stale work cannot recreate deleted results, including a new configuration against the same source.
 - Minimal source identifiers and suppressions remain until account deletion. Finalize this retention choice before real-email processing.
 - Processing pause increments a generation and cancels current jobs. Late commits cannot override pause/deletion or newer leases.

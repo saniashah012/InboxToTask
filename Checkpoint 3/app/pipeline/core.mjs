@@ -1,6 +1,9 @@
 // Runtime-independent logic: no env/file access, credentials, database, or SDK.
 import schema, { gmailSchema } from '../prompts/extraction.schema.mjs';
+import { blockedTerms, containsBlockedWord, defaultWords, MAX_WORDS_PER_TOPIC, storedWord, textValues, validWord } from './private-topics.mjs';
 
+// Generic on purpose: it reaches the model and saved warnings, so it never names a topic or word.
+export const PRIVATE_CONTEXT_WARNING = 'Some thread history was excluded by your settings.';
 export class PipelineError extends Error {
   constructor(code) { super(code); this.name = 'PipelineError'; this.code = code; }
 }
@@ -71,15 +74,29 @@ export function cleanBody(body) {
   }
   return { body: kept.join('\n').trim(), removed };
 }
+// Topics of interest go to the model. Excluded topics never do: each one is a
+// list of literal words checked in backend code before any model call. A saved
+// value without blockedWords (older clients and fixtures) gets each topic's
+// starter list, or the topic name itself, so it errs toward blocking more.
 export function semanticPreferences(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)
-    || Object.keys(value).length !== 2 || !Object.hasOwn(value,'include') || !Object.hasOwn(value,'exclude')) fail('INVALID_SEMANTIC_PREFERENCES');
+  const keys = value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value) : [];
+  if (!keys.length || !keys.every(k => ['include','exclude','blockedWords'].includes(k))
+    || !Object.hasOwn(value,'include') || !Object.hasOwn(value,'exclude')) fail('INVALID_SEMANTIC_PREFERENCES');
   const result = {};
   for (const group of ['include','exclude']) {
     if (!Array.isArray(value[group]) || value[group].length > 200
       || !value[group].every(s => typeof s === 'string' && s.trim().length >= 1 && s.trim().length <= 254 && !/[\x00-\x1f\x7f]/.test(s))) fail('INVALID_SEMANTIC_PREFERENCES');
     result[group] = [...new Set(value[group].map(s=>s.trim().toLowerCase()))];
   }
+  const saved = value.blockedWords ?? {};
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) fail('INVALID_SEMANTIC_PREFERENCES');
+  result.blockedWords = {};
+  for (const topic of result.exclude) {
+    const words = Object.hasOwn(saved, topic) ? saved[topic] : defaultWords(topic);
+    if (!Array.isArray(words) || !words.length || words.length > MAX_WORDS_PER_TOPIC || !words.every(validWord)) fail('INVALID_SEMANTIC_PREFERENCES');
+    result.blockedWords[topic] = [...new Set(words.map(storedWord))];
+  }
+  try { result.terms = blockedTerms(result); } catch { fail('INVALID_SEMANTIC_PREFERENCES'); }
   return result;
 }
 export function prepareInput(input, defaults) {
@@ -100,6 +117,11 @@ export function prepareInput(input, defaults) {
     || !bounded(limits.maxMessageChars, 100, 30000) || !bounded(limits.maxTotalChars, 100, 60000)) fail('INVALID_LIMITS');
   const decision = filterMessage(m, input.rules);
   if (decision !== 'PERMITTED') return { status: 'skipped', messageId: m.id, reason: decision };
+  // Retrieval already checked this; repeating it here keeps every model path behind it.
+  const terms = semantic?.terms ?? [];
+  if (containsBlockedWord([m.subject, m.body], terms)) return { status: 'skipped', messageId: m.id, reason: 'PRIVATE_TOPIC' };
+  // Accepted task values can repeat words from their source email.
+  const taskContext = existing && existing.filter(t => !containsBlockedWord(textValues(t.acceptedFields), terms));
   if (Date.parse(m.sentAt) > Date.parse(input.analysisTime)) fail('FUTURE_MESSAGE');
   if (!Array.isArray(input.threadContext) || input.threadContext.length > 100) fail('INVALID_CONTEXT');
   const warnings = [];
@@ -121,6 +143,7 @@ export function prepareInput(input, defaults) {
     if (ids.has(c.id) || !m.threadId || c.threadId !== m.threadId) fail('INVALID_CONTEXT_ID_OR_THREAD');
     ids.add(c.id);
     if (filterMessage(c, input.rules) !== 'PERMITTED') { warnings.push('Some context excluded by privacy rules.'); continue; }
+    if (containsBlockedWord([c.subject, c.body], terms)) { warnings.push(PRIVATE_CONTEXT_WARNING); continue; }
     const age = Date.parse(m.sentAt) - Date.parse(c.sentAt);
     if (age < 0 || age > limits.maxAgeDays * 86400000) { warnings.push('Some context outside permitted time range.'); continue; }
     candidates.push(c);
@@ -138,8 +161,9 @@ export function prepareInput(input, defaults) {
   }
   context.reverse();
   return { status: 'prepared', messageId: m.id, payload: {
-    ...(gmail ? { contract:'gmail-v1',existingTaskContext:existing } : {}),
-    ...(semantic ? { semanticPreferences: semantic } : {}),
+    ...(gmail ? { contract:'gmail-v1',existingTaskContext:taskContext } : {}),
+    // Only topics of interest reach the model; excluded topics and their words never do.
+    ...(semantic ? { semanticPreferences: { include: semantic.include } } : {}),
     user: { email, timeZone: input.user.timeZone }, analysisTime: input.analysisTime,
     currentMessage: view(m, current.body), threadContext: context,
     contextWarnings: [...new Set(warnings)],
@@ -215,7 +239,7 @@ export function validateExtraction(value, payload) {
       }
     }
     const prefs=payload.semanticPreferences;
-    if (prefs && !prefs.include.length && !prefs.exclude.length && (value.topicRelevance.decision!=='relevant'
+    if (prefs && !prefs.include.length && (value.topicRelevance.decision!=='relevant'
       || [...value.tasks,...value.waitingFor,...value.suggestedFollowUps,...value.taskChanges].some(i=>i.topicRelevance!=='relevant'))) fail('INVALID_TOPIC_RELEVANCE');
   }
   for (const t of value.tasks) {

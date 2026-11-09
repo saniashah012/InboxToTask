@@ -1,7 +1,8 @@
 # Current implementation and verification state
 
 Updated the evening of November 5, 2026 (Central), after live local manual-scan testing, two
-hosted database rollouts and the merge of PR #22 to `main` at `59461b6`. This is the resumption index, not a claim that
+hosted database rollouts and the merge of PR #22 to `main` at `59461b6`. Migration state was
+rechecked on November 9 (see below); other sections were not. This is the resumption index, not a claim that
 services are running. Check Git status and local runtime/migration state before new work.
 
 ## Read in this order
@@ -31,7 +32,16 @@ reports describe their own run, not today's runtime or later code.
 | 7: automatic scans | Not implemented | Not started; no schedule authorized or installed |
 
 Empty semantic inclusions mean no topic inclusion restriction within source-permitted
-content; semantic exclusions still apply. The user explicitly accepted that behavior.
+content; skipped topics still apply. The user explicitly accepted that behavior.
+
+**Skipped topics block before Gemini (November 9, user decision).** Each skipped topic is a
+literal word list checked in backend code before any model call; a matching email (subject,
+body, earlier thread message or existing-task context) is never sent to Gemini. Suggested
+topics turn on starter lists; a typed word blocks that literal word. Code, migration
+`20261109200000_private_topic_words` and offline tests were merged into
+`integration/designed-frontend` (PR #31) on November 9. That migration is **not applied**
+locally or on hosted, and pgTAP and Deno checks were not run for it. Designed-UI word-list
+editing is a separate follow-up.
 Edit/cancel proposals use conservative review and stale-target rebase; that was the
 recommended option and was not separately confirmed by the user. **The user explicitly
 decided** that ambiguous updates show the source and let the user enter what is correct. No source inclusions
@@ -57,11 +67,32 @@ The app does not fetch or display email bodies on demand.
 
 ## Local migration and feature state last observed
 
+- **Pending migrations, rechecked November 9 with `supabase migration list`:**
+
+  | Migration | From | Branch | Local | Hosted |
+  | --- | --- | --- | --- | --- |
+  | `20261109000000_onboarding_preference_limits` | PR #29 | `main` | Not applied | Not applied |
+  | `20261109000100_calendar_preview_replace` | PR #29 | `main` | Not applied | Not applied |
+  | `20261109120000_task_return_to_review` | PR #28 | `integration/designed-frontend` | Applied, corrected function re-run (see below) | Not applied |
+  | `20261109200000_private_topic_words` | PR #31 | `integration/designed-frontend` | Not applied | Not applied |
+
+  The two #29 migrations are dated earlier than one already applied locally, so the local
+  database needs `migration up --include-all`. Read-only aggregate counts on hosted on
+  November 9 found no rows that the onboarding limits or the topic-word backfill would
+  reject (3 settings rows, no excluded topics) and no pending calendar operations.
+- **`20261109120000` was corrected in place** before reaching hosted: Return to review failed
+  with a foreign-key error for a task that had an accepted incoming update, because that
+  update kept `approved_task_id`. A PGlite test now covers it. Because the local database had
+  already applied the earlier version, the corrected file was re-run there with
+  `supabase db query -f` on November 9 (it only replaces the function). Any other database
+  that applied the earlier version needs the same.
 - All migrations through [gmail_token_recheck](app/supabase/migrations/20261106040000_gmail_token_recheck.sql)
   are applied to the local database, without reset.
 - **Hosted (`IS492_c3`) has migrations through `20261106040000_gmail_token_recheck`** (20 versions),
   applied November 6 at 03:26 and 03:50 UTC; see the [first](docs/hosted-backup-verification-2026-11-06.md)
-  and [second](docs/hosted-rollout-2-manifest-2026-11-06.md) rollout records.
+  and [second](docs/hosted-rollout-2-manifest-2026-11-06.md) rollout records. Rechecked unchanged
+  on November 9. Production `main` already includes the two #29 migrations unapplied; neither
+  is needed by the deployed UI.
 - **Hosted Gmail functions are not deployed.** Only `analysis_email` is deployed, and the scan,
   retrieval and Google connection flags are unset, so Connect Gmail and Scan cannot work on the
   live site.

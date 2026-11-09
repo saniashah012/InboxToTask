@@ -41,8 +41,9 @@ Updated November 5, 2026. This covers local behavior on `main`. **Hosted Gmail e
 ### PII handling and content filtering
 
 - **No PII is removed or masked.** Permitted bodies are sent to Gemini with their text intact, apart from quote cleanup, along with sender, subject and the user's address. The protection is sending less mail, not redacting it.
-- **No sensitive-content classifier exists.** "Content filtering" here means source rules, subject exclusions, and topic preferences.
-- **Topics are preferences, never access controls.** Gemini judges relevance after it has received the text, so a topic exclusion cannot prevent transmission. The consent screen says this. A campus bakery email was marked relevant to `School` (F7).
+- **No sensitive-content classifier exists.** "Content filtering" here means source rules, subject exclusions, skipped-topic words and topics of interest.
+- **Skipped topics are word lists checked before Gemini.** Each skipped topic (for example Health) is a list of literal words and phrases. Backend code checks the subject before fetching the body, then the body, and the same for earlier thread messages and existing-task context. An email containing one of the words is never sent to Gemini and nothing is stored about it beyond a scan count. Email about the topic that uses none of the words can still be sent; excluding the sender or domain is the complete protection. The word lists themselves are never sent to Gemini.
+- **Topics of interest are preferences, never access controls.** Gemini judges relevance after it has received the text. A campus bakery email was marked relevant to `School` (F7).
 - **Provider terms are not verified.** The Gemini service tier's data use and retention have not been reviewed, so this document makes no retention promise. Do not use a real mailbox.
 
 ### Prompt injection: live case L06

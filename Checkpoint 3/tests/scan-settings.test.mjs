@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '../app/node_modules/@electric-sql/pglite/dist/index.js';
+import {STARTER_BLOCKED_WORDS} from '../app/pipeline/private-topics.mjs';
 
 test('saved scanning settings: permissions, validation, revisions, and stale-work fencing',async(t)=>{
   const db=new PGlite();
-  const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
+  const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222',C='44444444-4444-4444-8444-444444444444';
   const q=async(sql,args=[]) => (await db.query(sql,args)).rows;
   const scalar=async(sql,args=[])=>Object.values((await q(sql,args))[0])[0];
   const as=async(role,user,fn)=>{
@@ -16,21 +17,26 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
   const rules={allow:{labels:[],keywords:[],senders:[' Teacher@Example.org ','teacher@example.org'],domains:[]},block:{labels:[],senders:[],domains:[],subjectKeywords:[' Newsletter ','newsletter']}};
   const context={maxMessages:0,maxAgeDays:30,maxMessageChars:12000,maxTotalChars:24000};
   const get=(user=A)=>as('authenticated',user,()=>scalar('select public.scan_settings_get()'));
-  const save=(revision=0,r=rules,c=context,consent=false,paused=true,disclosure=null,user=A)=>as('authenticated',user,()=>scalar('select public.scan_settings_save($1,$2,$3,$4,$5,$6,$7)',[revision,r,c,consent,paused,disclosure,{include:[' School ','school'],exclude:[]}]));
+  const save=(revision=0,r=rules,c=context,consent=false,paused=true,disclosure=null,user=A,semantic={include:[' School ','school'],exclude:[]})=>as('authenticated',user,()=>scalar('select public.scan_settings_save($1,$2,$3,$4,$5,$6,$7)',[revision,r,c,consent,paused,disclosure,semantic]));
   try {
     await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
       create schema auth;grant usage on schema auth to anon,authenticated,service_role;
       create table auth.users(id uuid primary key,email text);
       create function auth.uid() returns uuid language sql stable as $$select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid$$;`);
-    await q('insert into auth.users values($1,$2),($3,$4)',[A,'student@example.org',B,'b@example.org']);
+    await q('insert into auth.users values($1,$2),($3,$4),($5,$6)',[A,'student@example.org',B,'b@example.org',C,'c@example.org']);
     const path=new URL('../app/supabase/migrations/',import.meta.url);
-    const legacyUser='33333333-3333-4333-8333-333333333333';
+    const legacyUser='33333333-3333-4333-8333-333333333333',convertedUser='55555555-5555-4555-8555-555555555555';
     for(const name of (await readdir(path)).filter(n=>n.endsWith('.sql')).sort()) {
       if(name==='20261105160000_phrase_filters.sql') {
         await q('insert into auth.users values($1,$2)',[legacyUser,'legacy@example.test']);
         await q('insert into public.storage_preferences(user_id) values($1)',[legacyUser]);
         await q(`insert into public.scan_settings(user_id,consent,consent_at,disclosure_version,paused,rules)
           values($1,true,now(),'gmail-scan-v1',false,$2)`,[legacyUser,{allow:{labels:['School'],senders:[],domains:[],subjectKeywords:['assignment']},block:{labels:['Private'],senders:[],domains:[],subjectKeywords:['receipt']}}]);
+      }
+      if(name==='20261109200000_private_topic_words.sql') {
+        await q('insert into auth.users values($1,$2)',[convertedUser,'converted@example.test']);
+        await q('insert into public.storage_preferences(user_id) values($1)',[convertedUser]);
+        await q(`insert into public.scan_settings(user_id,semantic_preferences) values($1,'{"include":["school"],"exclude":["health","rowing team"]}')`,[convertedUser]);
       }
       if(name==='20261105200000_source_semantic_contract.sql') {
         await q("update public.scan_settings set rules=jsonb_set(rules,'{block,keywords}','[\"bank\"]'),context_limits=$1 where user_id=$2",[context,legacyUser]);
@@ -50,9 +56,68 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
     });
     await t.test('new users default to no consent, pause, empty rules and five prior messages',async()=>{
       const settings=await get();assert.equal(settings.revision,0);assert.equal(settings.consent,false);assert.equal(settings.paused,true);
-      assert.deepEqual(settings.rules.allow,{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[]});assert.equal(settings.context_limits.maxMessages,5);
-      assert.equal(await scalar('select count(*) from public.scan_settings'),0);
+    assert.deepEqual(settings.rules.allow,{labels:[],senders:[],domains:[],subjectKeywords:[],keywords:[]});assert.equal(settings.context_limits.maxMessages,5);
+    assert.equal(await scalar('select count(*) from public.scan_settings where user_id=$1',[A]),0);
+  });
+  await t.test('semantic category names and overlapping phrases save, reload, and remove independently',async()=>{
+    const saved=await save(0,rules,context,false,true,null,C,{
+      include:['School','homework','my custom phrase'],
+      exclude:['Financial','invoice','custom exclusion'],
     });
+    assert.deepEqual(saved.semantic_preferences,{include:['school','homework','my custom phrase'],exclude:['financial','invoice','custom exclusion'],
+      blockedWords:{financial:STARTER_BLOCKED_WORDS.financial,invoice:['invoice'],'custom exclusion':['custom exclusion']}});
+    const loaded=await get(C);
+    assert.deepEqual(loaded.semantic_preferences,saved.semantic_preferences);
+
+    const removedSuggestion=await save(1,rules,context,false,true,null,C,{
+      include:['homework','my custom phrase'],
+      exclude:['invoice','custom exclusion'],
+    });
+    assert.deepEqual(removedSuggestion.semantic_preferences,{
+      include:['homework','my custom phrase'],
+      exclude:['invoice','custom exclusion'],
+      blockedWords:{invoice:['invoice'],'custom exclusion':['custom exclusion']},
+    });
+    assert.deepEqual((await get(C)).semantic_preferences,removedSuggestion.semantic_preferences);
+
+    const removedCustom=await save(2,rules,context,false,true,null,C,{
+      include:['School','homework'],
+      exclude:['Financial','invoice'],
+    });
+    assert.deepEqual(removedCustom.semantic_preferences,{
+      include:['school','homework'],
+      exclude:['financial','invoice'],
+      blockedWords:{financial:STARTER_BLOCKED_WORDS.financial,invoice:['invoice']},
+    });
+    assert.deepEqual((await get(C)).semantic_preferences,removedCustom.semantic_preferences);
+  });
+  await t.test('private topic word lists: starter parity, conversion, round trip, carry-over and revision fencing',async()=>{
+    for(const [topic,words] of Object.entries(STARTER_BLOCKED_WORDS))
+      assert.deepEqual(await scalar('select private.starter_blocked_words($1)',[topic]),words,topic);
+    // Saved names converted to starter lists, or the name itself, erring toward blocking.
+    assert.deepEqual((await get(convertedUser)).semantic_preferences,{include:['school'],exclude:['health','rowing team'],
+      blockedWords:{health:STARTER_BLOCKED_WORDS.health,'rowing team':['rowing team']}});
+    const D='66666666-6666-4666-8666-666666666666';
+    await q('insert into auth.users values($1,$2)',[D,'d@example.org']);
+    assert.deepEqual((await get(D)).semantic_preferences,{include:[],exclude:[],blockedWords:{}});
+    const edited=await save(0,rules,context,false,true,null,D,{include:[],exclude:[' Health ','Clubs'],
+      blockedWords:{Health:[' Lab   Results ','diagnosis','DIAGNOSIS'],clubs:['chess club']}});
+    assert.deepEqual(edited.semantic_preferences.blockedWords,{health:['lab results','diagnosis'],clubs:['chess club']});
+    assert.deepEqual((await get(D)).semantic_preferences,edited.semantic_preferences);
+    // An older client that sends names only keeps the edited lists of topics that stay excluded.
+    const older=await save(1,rules,context,false,true,null,D,{include:[],exclude:['health','new topic']});
+    assert.deepEqual(older.semantic_preferences.blockedWords,{health:['lab results','diagnosis'],'new topic':['new topic']});
+    await as('authenticated',D,()=>assert.rejects(q('select public.scan_settings_save($1,$2,$3,false,true,null,$4)',
+      [1,rules,context,{include:[],exclude:['health'],blockedWords:{health:['x']}}]),{code:'PT409'}));
+    assert.deepEqual((await get(D)).semantic_preferences.blockedWords.health,['lab results','diagnosis']);
+    for(const bad of [{health:[]},{health:['!!!']},{health:['a'.repeat(101)]},{health:['tab	here']},{health:'diagnosis'},
+      {health:Array.from({length:101},(_,i)=>`w${i}`)}])
+      await as('authenticated',D,()=>assert.rejects(q('select public.scan_settings_save($1,$2,$3,false,true,null,$4)',
+        [2,rules,context,{include:[],exclude:['health'],blockedWords:bad}]),{code:'22023'},JSON.stringify(bad)));
+    await as('authenticated',D,()=>assert.rejects(q('select public.scan_settings_save($1,$2,$3,false,true,null,$4)',
+      [2,rules,context,{include:[],exclude:[],extra:[]}]),{code:'22023'}));
+    await as('authenticated',D,()=>assert.rejects(q('select private.starter_blocked_words($1)',['health']),{code:'42501'}));
+  });
     await t.test('anonymous, owner injection and direct writes cannot bypass the RPC',async()=>{
       await as('anon',A,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
       await as('authenticated',null,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
@@ -63,7 +128,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       const saved=await save();assert.equal(saved.revision,1);assert.equal(saved.consent,false);assert.equal(saved.consent_at,null);
       assert.deepEqual(saved.rules.allow.keywords,[]);assert.deepEqual(saved.rules.allow.senders,['teacher@example.org']);assert.deepEqual(saved.rules.allow.subjectKeywords,[]);
       assert.deepEqual(saved.rules.block.subjectKeywords,['newsletter']);
-      assert.deepEqual(saved.semantic_preferences,{include:['school'],exclude:[]});
+      assert.deepEqual(saved.semantic_preferences,{include:['school'],exclude:[],blockedWords:{}});
       assert.equal((await get()).revision,1);assert.equal((await get(B)).revision,0);
       assert.deepEqual(await as('authenticated',B,()=>q('select * from public.scan_settings')),[]);
     });
@@ -130,7 +195,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       await assert.rejects(scan('assert',{lease:fresh.lease}),{code:'PT409'});
     });
     await t.test('account deletion removes saved privacy settings',async()=>{
-      await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings'),0);
+      await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings where user_id=$1',[A]),0);
     });
   } finally {await db.close();}
 });

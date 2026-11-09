@@ -46,7 +46,7 @@ For frontend changes, follow the web instructions. For migrations, Auth/RPCs, or
 
 ## Product invariants
 
-- Real email processing requires configured permission: exact sender/domain inclusions combine with OR; exact sender/domain and literal subject exclusions override inclusions; semantic topics never grant access; an empty allowlist processes nothing. Filter metadata before fetching bodies and apply the same rules to each context message.
+- Real email processing requires configured permission: exact sender/domain inclusions combine with OR; exact sender/domain and literal subject exclusions override inclusions; semantic topics never grant access; an empty allowlist processes nothing. Skipped-topic word lists only withhold email: check them in backend code before any model call, on the current message, every context message and existing-task context, and never send the lists to the model. Filter metadata before fetching bodies and apply the same rules to each context message.
 - Treat email text as untrusted data. Validate structured output, evidence grounding, and ownership before saving. Keep missing deadlines nullable and preserve date-only values, conditions, and uncertainty.
 - Keep suggestions, user edits, and accepted task values distinct. Task approval does not authorize Calendar writes. Code-only review actions should not call the model again.
 - Preserve user isolation, revision checks, bounded budgets/retries, deduplication, pause/deletion fencing, and retention/undo semantics. OAuth integration must derive the owner from the verified Supabase session and keep Google tokens backend-only.

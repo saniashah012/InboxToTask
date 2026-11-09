@@ -91,6 +91,8 @@ not a validated scanning consent/allowlist contract. Do not infer consent from t
 
 ## Step-by-step local Google setup
 
+For a self-contained version written for anyone reproducing the project, see [INSTALL.md step 5](../INSTALL.md#5-set-up-google-cloud). The walkthrough below is the original team setup, including its hand-off to a coding agent.
+
 This walkthrough uses two Google Cloud projects and the local Supabase stack from
 [INSTALL step 4](../INSTALL.md#4-start-local-supabase). You can follow it with your own
 Google account, and you don't need access to any team project. It doesn't touch any
@@ -182,7 +184,7 @@ written above, even if an external tutorial uses `_CLIENT_SECRET`.
    destination, not the redirect URI to register with Google.
 5. Keep `ENABLE_FIXTURE_EXTRACTION=false`. Gemini credentials are not needed for
    sign-in/connection testing. If you came from INSTALL.md, stop here and return to
-   [INSTALL step 5](../INSTALL.md#5-set-up-google), which sets
+   [INSTALL step 5](../INSTALL.md#5-set-up-google-cloud), which sets
    `ENABLE_GOOGLE_CONNECTION` and `GOOGLE_TOKEN_KEYS`. For a team handoff (step 6),
    leave `ENABLE_GOOGLE_CONNECTION=false` and `GOOGLE_TOKEN_KEYS` blank.
 

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { loadScanSettings, saveScanSettings, type ScanRules, type ScanSettings } from "./storageAdapter"
+import { SCAN_CONSENT_LABEL, SCAN_DISCLOSURE, SCAN_DISCLOSURE_EFFECTS } from "./scanConsent"
 import "./scan-settings.css"
 
 const fields = [
@@ -88,7 +89,7 @@ export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: {
           {help && <span id={helpId} role="tooltip">Sender and domain controls match exactly. Optional subject exclusions match literal text without case sensitivity. Bodies are not searched for access decisions. Inclusions combine with OR; exclusions always win.</span>}
         </span>
         <p>One entry per line; up to 200 entries of 254 characters per list. Domains do not include subdomains. Words and phrases match literal text without case sensitivity.</p>
-        <p>With no topics of interest selected, all source-permitted topics qualify; semantic exclusions still apply. Semantic topics never grant access. Permitted bodies may be sent to Gemini before semantic relevance is known.</p>
+        <p>With no topics of interest selected, all source-permitted topics qualify. Topics never grant access.</p>
         {fields.map(([field, label]) => <div className="scan-rule-pair" key={field}>
           {(["allow", "block"] as const).map(group =>
             <label key={group}>{group === "allow" ? "Include" : "Exclude"}: {label}
@@ -98,9 +99,13 @@ export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: {
       </fieldset>
       <fieldset disabled={busy}><legend>Subject exclusions</legend><label>Exclude subjects containing (one literal phrase per line)
         <textarea value={settings.rules.block.subjectKeywords.join("\n")} onChange={e => list("block", "subjectKeywords", e.target.value)} /></label></fieldset>
-      <fieldset disabled={busy}><legend>Semantic preferences</legend><p>Topics are evaluated by Gemini after source permission. Semantic exclusions cannot prevent transmission to Gemini.</p>
-        {(["include", "exclude"] as const).map(group => <label key={group}>{group === "include" ? "Topics of interest" : "Topics to omit from results"}
+      <fieldset disabled={busy}><legend>Topics</legend>
+        <p>Topics of interest are sent to the AI to rank what it finds. Skipped topics are never sent to the AI: each one is a list of words that our system checks in the subject and text before anything goes to the AI, and a matching email is skipped. Email that discusses a topic without using those words can still be sent. To fully protect a source, exclude its sender or domain.</p>
+        {(["include", "exclude"] as const).map(group => <label key={group}>{group === "include" ? "Topics of interest" : "Topics to skip (never sent to the AI)"}
           <textarea value={settings.semantic_preferences[group].join("\n")} onChange={e => setSettings({ ...settings, semantic_preferences: { ...settings.semantic_preferences, [group]: e.target.value.split("\n") } })} /></label>)}
+        {Object.entries(settings.semantic_preferences.blockedWords ?? {}).map(([topic, words]) =>
+          <p key={topic}>Words blocked for {topic}: {words.join(", ")}</p>)}
+        <p>A new skipped topic uses its suggested word list, or its own name, once saved.</p>
       </fieldset>
       {settings.requires_review && <fieldset disabled={busy}><legend>Previous phrase rules require review</legend>
         <p>Scanning was paused and consent revoked. Previous phrases cannot safely be converted to source permissions or semantic topics. Review these rules and choose exact sources and subject exclusions above.</p>
@@ -117,9 +122,9 @@ export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: {
       </fieldset>
       <fieldset disabled={busy}>
         <legend>Consent and pause</legend>
-        <p>During an authorized manual scan, permitted bodies and selected context may be sent to the configured Gemini service for extraction. Full bodies are transient. Supporting excerpts and unreviewed results currently expire after 30 days; accepted tasks remain until completion or deletion. Minimal source identifiers and suppression records remain until account deletion. Provider and backup retention are separate and provider terms still require verification before real-email processing.</p>
-        <p>Rules affect queued and future processing. Changes cannot retract content already transmitted. Existing results remain available unless separately deleted. Task approval never authorizes Calendar writes.</p>
-        <label className="scan-checkbox"><input type="checkbox" checked={settings.consent} onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, consent: e.target.checked }) }} />I consent to processing permitted Gmail content under the disclosure above.</label>
+        <p>{SCAN_DISCLOSURE}</p>
+        <p>{SCAN_DISCLOSURE_EFFECTS}</p>
+        <label className="scan-checkbox"><input type="checkbox" checked={settings.consent} onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, consent: e.target.checked }) }} />{SCAN_CONSENT_LABEL}</label>
         <label className="scan-checkbox"><input type="checkbox" checked={settings.paused} onChange={e => { setNotice("Unsaved changes."); setSettings({ ...settings, paused: e.target.checked }) }} />Pause scanning</label>
         <p>Effective saved permission requires consent, an unpaused account, a connected Gmail account, and a nonempty inclusion list. Empty inclusions process nothing.</p>
         <button type="submit">Save scanning settings</button>

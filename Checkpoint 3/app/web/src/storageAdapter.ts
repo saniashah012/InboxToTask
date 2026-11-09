@@ -8,7 +8,8 @@ export type Snapshot = Record<string, StoredRow[]>
 export type ScanRules = Record<"allow" | "block", Record<"labels" | "senders" | "domains" | "subjectKeywords" | "keywords", string[]>>
 export type ScanSettings = {
   revision: number; consent: boolean; paused: boolean; consent_at: string | null
-  semantic_preferences: { include: string[]; exclude: string[] }
+  // blockedWords: one literal word list per skipped topic, checked before anything reaches the AI.
+  semantic_preferences: { include: string[]; exclude: string[]; blockedWords?: Record<string, string[]> }
   requires_review: boolean; legacy_phrase_rules: ScanRules | null; reviewed?: boolean
   rules: ScanRules
   context_limits: { maxMessages: number; maxAgeDays: number; maxMessageChars: number; maxTotalChars: number }
@@ -27,10 +28,16 @@ export async function saveScanSettings(settings: ScanSettings): Promise<ScanSett
     p_consent: settings.consent, p_paused: settings.paused,
     p_disclosure: settings.consent ? "gmail-scan-v1" : null,
   })
-  if (error) throw new Error(error.code === "PT409"
-    ? "Settings changed in another window. Reload saved settings before saving again."
-    : "Settings were not saved. Check addresses, domains, list sizes, and context limits, then retry.")
+  if (error) throw new ScanSettingsSaveError(error.code === "PT409")
   return data
+}
+// Fixed text only, so screens may show the message as written.
+export class ScanSettingsSaveError extends Error {
+  constructor(readonly stale: boolean) {
+    super(stale
+      ? "Settings changed in another window. Reload saved settings before saving again."
+      : "Settings were not saved. Check addresses, domains, list sizes, and context limits, then retry.")
+  }
 }
 
 export const storageClient =

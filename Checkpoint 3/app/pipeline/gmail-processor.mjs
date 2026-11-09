@@ -1,4 +1,4 @@
-import { prepareInput, extract } from './core.mjs';
+import { prepareInput, extract, semanticPreferences } from './core.mjs';
 import { selectTaskContext } from './task-context.mjs';
 import { gmailSchema } from '../prompts/extraction.schema.mjs';
 
@@ -22,11 +22,14 @@ export function filterRelevantOutput(output) {
 export function createGmailProcessor({rpc,user,work,settings,systemPrompt,generate,timeZone='America/Chicago'}) {
  let calls=0;
  return async (email,{remainingMs=60000}={})=>{
+  const topics=work.semanticPreferences===undefined?null:semanticPreferences(work.semanticPreferences);
   const rows=await rpc('gmail_task_context',{p_user:user.id,p_lease:work.lease,p_meta:email.message});
-  const context=selectTaskContext(rows,email.message,email.rules);
+  const context=selectTaskContext(rows,email.message,email.rules,undefined,topics?.terms??[]);
   const input={...email,contract:'gmail-v1',user:{email:user.email,timeZone},analysisTime:work.end,
     semanticPreferences:work.semanticPreferences,existingTaskContext:context.tasks};
   const prepared=prepareInput(input,settings.contextLimits);
+  // Retrieval normally skips these first. Nothing is claimed, stored or sent.
+  if(prepared.status==='skipped'&&prepared.reason==='PRIVATE_TOPIC') return {modelCalls:0,privateTopic:true};
   if(prepared.status!=='prepared') throw problem('GMAIL_MESSAGE_REVIEW_REQUIRED');
   if(context.omitted) prepared.payload.contextWarnings.push('Some relevant task context was omitted by task-state limits. Verify update targets.');
   // The warning enters extraction too, without caller-controlled model settings.
@@ -34,7 +37,9 @@ export function createGmailProcessor({rpc,user,work,settings,systemPrompt,genera
   // Access rules are absent on purpose: SQL rechecks current permission on every use,
   // and a rule change that alters permitted context already changes the content. The
   // scan date is absent because relative dates resolve from the message's sent date.
-  const configKey=await hash({settings,systemPrompt:effectivePrompt,schema:gmailSchema,topics:work.semanticPreferences,contextLimits:email.contextLimits});
+  // Only topics of interest affect the model. Blocked words change which content is
+  // sent, and so the content hash, without being part of the request.
+  const configKey=await hash({settings,systemPrompt:effectivePrompt,schema:gmailSchema,topics:topics&&{include:topics.include},contextLimits:email.contextLimits});
   const {existingTaskContext,analysisTime,...content}=prepared.payload;
   const base=await hash({content,configKey});
   const key=await hash({base,existingTaskContext});

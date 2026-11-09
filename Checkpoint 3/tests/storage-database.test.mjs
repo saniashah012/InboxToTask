@@ -178,6 +178,52 @@ test('PostgreSQL storage migrations, transactions, privileges and lifecycle', as
       assert.equal(await scalar('select fields->>\'action\' from public.storage_suggestions where id=$1',[row.id]),fields.action);
       assert.equal(await scalar('select title from public.tasks where id=$1',[approved.taskId]),'My reviewed action');
     });
+    await t.test('an added task can return to Suggestions or Dismissed, then be added again',async()=>{
+      const saved=await finish(A,await claim(A,17,'E17'));
+      const row=(await query('select * from public.storage_suggestions where extraction_id=$1',[saved.extractionId]))[0];
+      const first=(await action('suggestion',row.id,'approve',0)).taskId;
+      await action('task',first,'edit',0,{...fields,action:'Edited before returning'});
+      await assert.rejects(action('task',first,'return_to_suggestions',0),{code:'PT409'});
+      await action('task',first,'return_to_suggestions',1,null,B).then(()=>assert.fail('cross-user return'),e=>assert.equal(e.code,'42501'));
+      const back=await action('task',first,'return_to_suggestions',1);
+      assert.equal(back.removed,true);
+      assert.equal(await scalar('select count(*) from public.tasks where id=$1',[first]),0);
+      assert.equal(await scalar('select count(*) from public.storage_task_sources where task_id=$1',[first]),0);
+      const s1=(await query('select * from public.storage_suggestions where id=$1',[row.id]))[0];
+      assert.equal(s1.state,'pending'); assert.equal(s1.approved_task_id,null);
+      assert.equal(s1.review_fields.action,'Edited before returning','keeps the task values');
+      assert.equal(Number(s1.revision),back.suggestionRevision);
+      // Adding it again creates a fresh task; completed tasks can go straight to Dismissed.
+      const second=(await action('suggestion',row.id,'approve',back.suggestionRevision)).taskId;
+      assert.notEqual(second,first);
+      assert.equal(await scalar('select title from public.tasks where id=$1',[second]),'Edited before returning');
+      await action('task',second,'complete',0);
+      const gone=await action('task',second,'return_to_dismissed',1);
+      assert.equal(await scalar('select state from public.storage_suggestions where id=$1',[row.id]),'dismissed');
+      await action('suggestion',row.id,'restore',gone.suggestionRevision);
+      // Expired suggestions and tasks without an origin suggestion cannot return.
+      const third=(await action('suggestion',row.id,'approve',gone.suggestionRevision+1)).taskId;
+      await query("update public.storage_suggestions set expires_at=now()-interval '1 second' where id=$1",[row.id]);
+      await assert.rejects(action('task',third,'return_to_dismissed',0),{code:'22023'});
+      assert.equal(await scalar('select count(*) from public.tasks where id=$1',[third]),1);
+      await query("update public.storage_suggestions set expires_at=now()+interval '30 days' where id=$1",[row.id]);
+      const manual=await scalar("insert into public.tasks(user_id,title,status,accepted_fields) values($1,'Manual',$2,$3) returning id",[A,'approved',fields]);
+      await assert.rejects(action('task',manual,'return_to_suggestions',0),{code:'22023'});
+    });
+    await t.test('a task with an accepted incoming update can still return to review',async()=>{
+      const saved=await finish(A,await claim(A,18,'E18'));
+      const row=(await query('select * from public.storage_suggestions where extraction_id=$1',[saved.extractionId]))[0];
+      const task=(await action('suggestion',row.id,'approve',0)).taskId;
+      const update=await as('service_role',A,()=>rpc('storage_propose_update',[A,task,0,saved.extractionId,row.evidence_id,{...fields,action:'Updated by a later email'}]));
+      await action('suggestion',update,'approve',0);
+      assert.equal(await scalar('select approved_task_id from public.storage_suggestions where id=$1',[update]),task);
+      const back=await action('task',task,'return_to_suggestions',1);
+      assert.equal(back.removed,true);
+      assert.equal(await scalar('select count(*) from public.tasks where id=$1',[task]),0);
+      const u=(await query('select * from public.storage_suggestions where id=$1',[update]))[0];
+      assert.equal(u.state,'deleted'); assert.equal(u.approved_task_id,null); assert.equal(u.target_task_id,null);
+      assert.equal(await scalar('select state from public.storage_suggestions where id=$1',[row.id]),'pending');
+    });
     await t.test('incoming updates are proposals, idempotent, and reject stale acceptance',async()=>{
       const lease=await claim(B,11,'E11'); const saved=await finish(B,lease);
       const row=(await query('select * from public.storage_suggestions where extraction_id=$1',[saved.extractionId]))[0];

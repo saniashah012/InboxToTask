@@ -2,7 +2,7 @@ import {
   excludedTopicSuggestions,
   includedTopicSuggestions,
 } from "./filterPresets"
-import { useEffect, useId, useRef, useState } from "react"
+import { lazy, Suspense, useEffect, useId, useRef, useState } from "react"
 import gmailLogo from "./assets/gmail-logo.svg"
 import googleG from "./assets/google-g.svg"
 import inboxToTaskLogo from "./assets/inbox-to-task-logo.png"
@@ -13,7 +13,6 @@ import {
 } from "./supabase"
 import type { Session } from "@supabase/supabase-js"
 import ScanSettingsPanel from "./ScanSettingsPanel"
-import ManualWorkspace from "./ManualWorkspace"
 import RealDashboard from "./RealDashboard"
 import GoogleConnectionPanel from "./GoogleConnectionPanel"
 import {
@@ -42,6 +41,10 @@ import {
   SCAN_DISCLOSURE,
   SCAN_DISCLOSURE_EFFECTS,
 } from "./scanConsent"
+
+// Development builds only. Vite replaces DEV at build time, so production bundles
+// leave out the older testing workspace and the components only it uses.
+const ManualWorkspace = import.meta.env.DEV ? lazy(() => import("./ManualWorkspace")) : null
 
 type SettingsSection = "sources" | "processing" | "connections" | "retention"
 
@@ -192,7 +195,7 @@ function App() {
     if (kind === "auto") kind = route === "onboarding" ? "setup" : "workspace"
     // Only the workspace form can confirm review of previous phrase rules.
     if (route === "review-legacy") kind = "legacy-review"
-    if (kind === "dev-workspace" && !import.meta.env.DEV) kind = "workspace"
+    if (kind === "dev-workspace" && !ManualWorkspace) kind = "workspace"
 
     if (kind === "setup") {
       return (
@@ -247,17 +250,19 @@ function App() {
         />
       )
     }
-    if (kind === "dev-workspace") {
+    if (kind === "dev-workspace" && ManualWorkspace) {
       return (
-        <ManualWorkspace
-          key={owner}
-          userId={owner}
-          email={email}
-          onSignOut={() => void signOut()}
-          onOpenSettings={() => show({ kind: "settings", section: "sources" }, true)}
-          onRunSetup={() => show({ kind: "setup" }, true)}
-          initialNotice="Developer workspace: the older testing screen. Product users see the designed dashboard."
-        />
+        <Suspense fallback={<AppStatus message="Loading the developer workspace…" />}>
+          <ManualWorkspace
+            key={owner}
+            userId={owner}
+            email={email}
+            onSignOut={() => void signOut()}
+            onOpenSettings={() => show({ kind: "settings", section: "sources" }, true)}
+            onRunSetup={() => show({ kind: "setup" }, true)}
+            initialNotice="Developer workspace: the older testing screen. Product users see the designed dashboard."
+          />
+        </Suspense>
       )
     }
     return (

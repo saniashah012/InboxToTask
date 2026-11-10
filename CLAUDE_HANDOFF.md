@@ -29,12 +29,21 @@ order of commits. Several sessions share this checkout, so follow their rules: n
 checkout, rebase or merge; stage named files only; no installs in `Checkpoint 3/app`; leave others' processes running.
 
 ## Hosted rollout
+**November 9 update (checked directly, about 6:30 PM Central):** hosted Gmail is live.
+`google_connection`, `google_callback` and `gmail_scan` were deployed at 00:20 UTC November 10, and
+`ENABLE_GOOGLE_CONNECTION` and `ENABLE_GMAIL_SCAN` are true (read from secret digests). All five
+November 9 migrations, including `20261109220000`, are applied (25 versions). Who deployed it is not
+recorded. A teammate's personal Google account was signed in and connected there; the user deleted
+those accounts from hosted Auth. See [current state](<Checkpoint 3/CURRENT_STATE.md>) for details.
+The rest of this section describes November 5–6 and is superseded where it conflicts.
+
 Per the session coordinating hosted (reported, not checked here), hosted has all nine migrations below,
-through `20261106040000`, applied by 03:50 UTC on November 6. The Gmail functions are not deployed there, so
-connecting Gmail and scanning work only locally. Sania reports hosted preview checks passed on `ffa915a` for settings
+through `20261106040000`, applied by 03:50 UTC on November 6. At that time the Gmail functions were not
+deployed there, so connecting Gmail and scanning worked only locally. Sania reports hosted preview checks passed on `ffa915a` for settings
 save/reload, sign-out/in, stale-tab rejection and two-account isolation in the tested flows; they do not cover
 onboarding, chips, RLS penetration, review, manual resolution or source links. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Recheck before relying on this. Merging does not apply migrations, and Vercel production deploys
-from `main` per Sania. Keep `ENABLE_GMAIL_SCAN` off on hosted and do not deploy `gmail_scan` as part of this.
+from `main` per Sania. The earlier instruction to keep `ENABLE_GMAIL_SCAN` off on hosted was not
+followed by the November 9 deployment; whether it stays on is the user's decision.
 
 1. `20261105200000_source_semantic_contract.sql`
 2. `20261105210000_manual_gmail_retrieval.sql`
@@ -63,7 +72,7 @@ review that against the Gmail flow when Calendar resumes in CP4.
 - The local `GOOGLE_TOKEN_KEYS` value was printed into a session transcript by a script error,
   then rotated to `v2`. Stored local Gmail connections were cleared, so accounts show
   `reconnect_required` and must reconnect.
-- **Open:** check whether hosted uses the same value. If so, rotate it there too.
+- The hosted key's status is not recorded here, because this repository is public.
 - Clearing credentials could not revoke the test account's Google grant. The user can remove it
   on Google's permissions page.
 

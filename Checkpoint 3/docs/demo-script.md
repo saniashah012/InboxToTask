@@ -37,7 +37,7 @@ dedicated test account only.
 | B, **reply** in the existing "Riverton capstone deliverables" thread | Re: Riverton capstone deliverables | The written report is now due Tuesday, November 24. The slides deadline has not changed. Dana Whitfield | Proposal moving the report from Nov 20 to Nov 24 |
 | C, blocked | Confidential: advisor notes | Please review the advisor notes by November 12. Dana Whitfield | Blocked by the subject rule, nothing saved |
 
-A and B use the batch's two model calls. C uses none. Draft B has to be a real reply, or the update
+A and B use two of the batch's three model calls. C uses none. Draft B has to be a real reply, or the update
 has no task to target. Send from a window that shows only the drafts, and don't show that account's
 inbox on screen.
 
@@ -71,7 +71,7 @@ slide 5 first.
 | 0:30 | 2. Architecture | Slide only, see [diagram](architecture.md) | "React front end, Supabase Auth and Postgres, Edge Functions, the Gmail API and Gemini. No vector database, because results are structured state." |
 | 1:30 | 3. Primary flow (live) | Browser. Point at the branded top bar, then open **Connection and permissions** | "Real Gmail and real Gemini, running locally on fictional mail. Connecting Gmail didn't allow scanning. Scanning needs a sender allowlist and separate consent." Point at the status line "Status: connected" with its icon and the settings form |
 | 2:00 | Live | Send drafts A, B and C. Check that they arrived in the test mailbox and not in Spam | "I'm sending three new emails right now: a new request, a deadline change, and one the rules should block." |
-| 2:20 | Live | **Review** section, then click **Scan past seven days** | "While it scans you'll see a spinner." Then read the number tiles under Last batch: "Two new emails went to the model. The blocked one was rejected on metadata, so its body was never fetched. Reused messages cost zero model calls." Note the countdown ring and disabled scan buttons: "That is the 60-second cooldown." Scan length isn't measured, so keep talking if it takes a while |
+| 2:20 | Live | **Review** section, then click **Scan past seven days** | "While it scans you'll see a spinner." Then read the number tiles under Last batch: "Two new emails went to the model. The blocked one was rejected on metadata, so its body was never fetched. Reused messages cost zero model calls." Note the countdown ring and disabled scan buttons: "That is the 30-second cooldown." Scan length isn't measured, so keep talking if it takes a while |
 | 3:00 | Live | Point at the new budget form card in **Review** | "Each suggestion has its evidence quote and a link, **Open conversation in Gmail**. This is a proposal with its source, not a task yet." |
 | 3:15 | Live | Click **Approve task** on that card | "Approval makes no model call and writes nothing to Calendar." Read the notice: "Task approved. No Calendar event was created." |
 | 3:30 | Live | **Review** proposal for the report (expected: Nov 20 to Nov 24, slides untouched). This reply has never been run, so check what appears. Click **Approve edit** | "A reply moved the deadline. The accepted value doesn't change until I approve." Only if the proposal targets the report: "Two tasks share this thread, and it targeted the right one." Then open **Accepted tasks** |
@@ -127,7 +127,7 @@ skip this and never describe onboarding as available.
 | --- | --- |
 | Daily request limit per account per **UTC** day | Default is 20. The local test account's limit was raised from 20 to 50 for the demo. Say so if asked. Rehearsing in the evening Central time uses the same UTC day as a morning demo |
 | 200,000 tokens per UTC day, three requests per minute | Unchanged |
-| Two model calls per batch, 60-second scan cooldown | A live scan processes two new permitted messages at most, so send only drafts A and B plus the blocked C |
+| Three model calls per batch, 30-second scan cooldown | A live scan processes three new permitted messages at most, so send only drafts A and B plus the blocked C |
 | Tokens per call | About 2,500 per live call across 14 local calls. Failed attempts keep their reservation, which was 24,384-26,058 tokens in testing |
 | Updates need an approved task in the same thread | The report and slides are already approved. Send the update as a reply in their thread |
 | 30-second connect cooldown | Don't cancel and retry Google consent on stage |

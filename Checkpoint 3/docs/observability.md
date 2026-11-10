@@ -10,7 +10,7 @@ Updated November 5, 2026. The system records latency boundaries, token accountin
 | --- | --- | --- | --- |
 | Batch counts: candidates, permitted, blocked, skipped, prepared, reused, failed, context bodies, model calls | `private.gmail_scan_work.last_result`, returned by the `gmail_scan` endpoint and `gmail_scan_status` | Owner, shown in the workspace | Live local (L07, L14, L21, L22) |
 | Batch stop reason, per-code failure counts, unresolved count, backlog flag | Same | Owner | Automated; some stop reasons live local |
-| Last started, finished and successful times; cooldown end | `gmail_scan_status` | Owner; the workspace shows the last successful time and a cooldown countdown | Local API. Known issue F6: "last successful" does not update when a batch stops at the model-call limit |
+| Last started, finished and successful times; cooldown end | `gmail_scan_status` | Owner; the workspace shows the last successful time and a cooldown countdown | Local API. A batch that stops at a planned per-batch limit counts as successful (F6, fixed in `20261110000000_scan_cooldown_and_batch_stops`) |
 | One row per model attempt: state, `safe_error`, `reserved_tokens`, `reported_tokens`, `started_at`, `finished_at` | [`private.storage_attempts`](../app/supabase/migrations/20261104060000_storage_schema.sql) | Database operator only | Automated |
 | Daily requests and tokens per user | `private.storage_usage` | Owner totals through `storage_activity`, shown only in the `/storage` tester | Automated |
 | Shared requests per model per minute | `private.storage_provider_usage` | Database operator only | Automated |

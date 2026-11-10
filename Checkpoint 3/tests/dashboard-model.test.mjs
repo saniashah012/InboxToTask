@@ -160,11 +160,12 @@ test('scan status: running wins, then load failure, then saved-settings blockers
   assert.equal(panel({ blockers: { ...clear, gmail: true } }), 'disconnected');
   assert.equal(panel({ cooldownLeft: 30 }), 'cooldown');
   assert.equal(panel({ status: { ...ready, result: { error: 'STORAGE_BUDGET' } } }), 'failed');
+  for (const error of ['SCAN_INFERENCE_LIMIT', 'SCAN_TIME_LIMIT', 'SCAN_RETRIEVAL_LIMIT']) assert.equal(panel({ status: { ...ready, result: { error } } }), 'partial', error);
   assert.equal(panel({ status: { ...ready, lastSuccessful: null } }), 'empty');
   assert.equal(panel({}), 'ready');
 });
 
 test('a manual scan is offered only when nothing blocks it', () => {
   for (const state of ['loading', 'processing', 'cooldown', 'missing-sources', 'paused', 'disconnected']) assert.equal(canScan(state), false, state);
-  for (const state of ['ready', 'empty', 'failed']) assert.equal(canScan(state), true, state);
+  for (const state of ['ready', 'empty', 'failed', 'partial']) assert.equal(canScan(state), true, state);
 });

@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildDashboardModel, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
+  autoContinueDelay, batchMadeProgress, buildDashboardModel, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
 } from '../app/web/src/dashboardModel.ts';
 
 const NOW = new Date('2026-11-09T15:00:00Z');
@@ -159,13 +159,39 @@ test('scan status: running wins, then load failure, then saved-settings blockers
   assert.equal(panel({ blockers: { ...clear, consent: true } }), 'paused');
   assert.equal(panel({ blockers: { ...clear, gmail: true } }), 'disconnected');
   assert.equal(panel({ cooldownLeft: 30 }), 'cooldown');
-  assert.equal(panel({ status: { ...ready, result: { error: 'STORAGE_BUDGET' } } }), 'failed');
-  for (const error of ['SCAN_INFERENCE_LIMIT', 'SCAN_TIME_LIMIT', 'SCAN_RETRIEVAL_LIMIT']) assert.equal(panel({ status: { ...ready, result: { error } } }), 'partial', error);
+  assert.equal(panel({ status: { ...ready, result: { error: 'GMAIL_UNAVAILABLE' } } }), 'failed');
+  for (const error of ['SCAN_INFERENCE_LIMIT', 'SCAN_TIME_LIMIT', 'SCAN_RETRIEVAL_LIMIT', 'STORAGE_PROVIDER_LIMIT']) {
+    assert.equal(panel({ status: { ...ready, backlog: true, result: { error } } }), 'partial', error);
+    // A limit hit after the last email was handled leaves nothing waiting.
+    assert.equal(panel({ status: { ...ready, backlog: false, result: { error } } }), 'ready', error);
+  }
+  assert.equal(panel({ status: { ...ready, backlog: true, result: { error: null } } }), 'partial');
+  assert.equal(panel({ status: { ...ready, backlog: true, result: { error: 'STORAGE_BUDGET' } } }), 'daily-limit');
   assert.equal(panel({ status: { ...ready, lastSuccessful: null } }), 'empty');
   assert.equal(panel({}), 'ready');
 });
 
 test('a manual scan is offered only when nothing blocks it', () => {
   for (const state of ['loading', 'processing', 'cooldown', 'missing-sources', 'paused', 'disconnected']) assert.equal(canScan(state), false, state);
-  for (const state of ['ready', 'empty', 'failed', 'partial']) assert.equal(canScan(state), true, state);
+  for (const state of ['ready', 'empty', 'failed', 'partial', 'daily-limit']) assert.equal(canScan(state), true, state);
+});
+
+test('automatic scanning continues only while a backlog is saved, after the cooldown', () => {
+  const at = Date.parse('2026-11-09T15:00:10Z');
+  const waiting = { ...ready, backlog: true, cooldownUntil: '2026-11-09T15:00:30Z', lastFinished: '2026-11-09T15:00:05Z', result: { error: 'SCAN_INFERENCE_LIMIT' } };
+  assert.equal(autoContinueDelay(waiting, at), 20_000);
+  assert.equal(autoContinueDelay({ ...waiting, cooldownUntil: '2026-11-09T14:59:00Z' }, at), 0);
+  assert.equal(autoContinueDelay({ ...waiting, backlog: false }, at), null, 'caught up');
+  assert.equal(autoContinueDelay({ ...waiting, running: true }, at), null);
+  assert.equal(autoContinueDelay(null, at), null);
+  for (const error of ['STORAGE_BUDGET', 'GMAIL_RECONNECT_REQUIRED', 'STORAGE_PAUSED']) assert.equal(autoContinueDelay({ ...waiting, result: { error } }, at), null, error);
+  // The shared per-minute limit waits for the next calendar minute.
+  assert.equal(autoContinueDelay({ ...waiting, result: { error: 'STORAGE_PROVIDER_LIMIT' } }, at), 52_000);
+});
+
+test('a batch that moved nothing forward counts as a stall', () => {
+  assert.equal(batchMadeProgress({ counts: { prepared: 3, modelCalls: 3 } }), true);
+  assert.equal(batchMadeProgress({ counts: { blocked: 4 } }), true);
+  assert.equal(batchMadeProgress({ counts: { candidates: 0, modelCalls: 0 } }), false);
+  assert.equal(batchMadeProgress(null), false);
 });

@@ -218,14 +218,18 @@ export type ScanStatusLike = {
   backlog: boolean
   lastSuccessful: string | null
   cooldownUntil: string | null
+  lastFinished?: string | null
   result: { error?: string | null; counts?: Record<string, number>; unresolved?: number } | null
 }
 
-export type ScanPanelState = "loading" | "failed" | "processing" | "cooldown" | "missing-sources" | "paused" | "disconnected" | "partial" | "ready" | "empty"
+export type ScanPanelState = "loading" | "failed" | "processing" | "cooldown" | "missing-sources" | "paused" | "disconnected" | "partial" | "daily-limit" | "ready" | "empty"
 
-// Planned per-batch limits. The batch saved its work and stopped on purpose to
-// bound model use, so these are not failures: more email is simply waiting.
-export const BATCH_LIMIT_STOPS = ["SCAN_INFERENCE_LIMIT", "SCAN_TIME_LIMIT", "SCAN_RETRIEVAL_LIMIT"]
+// Planned limits. The batch saved its work and stopped on purpose to bound model
+// use, so these are not failures. With a saved backlog, more email is waiting.
+// The per-minute AI limit is shared and resets each calendar minute.
+export const BATCH_LIMIT_STOPS = ["SCAN_INFERENCE_LIMIT", "SCAN_TIME_LIMIT", "SCAN_RETRIEVAL_LIMIT", "STORAGE_PROVIDER_LIMIT"]
+// The account's daily allowance: expected, but nothing more runs until it resets.
+export const DAILY_LIMIT_STOP = "STORAGE_BUDGET"
 
 // One state for the designed status bar. Order matters: a running scan wins,
 // then a load failure, then reasons scanning is refused, then cooldown.
@@ -244,9 +248,37 @@ export function scanPanelState(input: {
   if (blockers.consent || blockers.paused) return "paused"
   if (blockers.gmail) return "disconnected"
   if (cooldownLeft > 0) return "cooldown"
-  if (status.result?.error) return BATCH_LIMIT_STOPS.includes(status.result.error) ? "partial" : "failed"
+  const error = status.result?.error
+  if (error === DAILY_LIMIT_STOP) return "daily-limit"
+  if (error && !BATCH_LIMIT_STOPS.includes(error)) return "failed"
+  // "More email to check" only when the batch actually saved unscanned work.
+  if (status.backlog) return "partial"
   if (!status.lastSuccessful) return "empty"
   return "ready"
 }
 
-export const canScan = (state: ScanPanelState) => state === "ready" || state === "empty" || state === "failed" || state === "partial"
+export const canScan = (state: ScanPanelState) => ["ready", "empty", "failed", "partial", "daily-limit"].includes(state)
+
+// Milliseconds until automatic scanning should start the next batch, or null when
+// it should not: nothing is waiting, or the last batch stopped for a reason a
+// retry will not fix. The caller also checks canScan and the saved preference.
+export function autoContinueDelay(status: ScanStatusLike | null, now: number): number | null {
+  if (!status || status.running || !status.backlog) return null
+  const error = status.result?.error ?? null
+  if (error && !BATCH_LIMIT_STOPS.includes(error)) return null
+  const cooldown = status.cooldownUntil ? Date.parse(status.cooldownUntil) : 0
+  let at = Number.isNaN(cooldown) ? now : cooldown
+  if (error === "STORAGE_PROVIDER_LIMIT") {
+    // Wait for the next calendar minute, plus a moment for clock differences.
+    const finished = status.lastFinished ? Date.parse(status.lastFinished) : now
+    at = Math.max(at, (Math.floor((Number.isNaN(finished) ? now : finished) / 60_000) + 1) * 60_000 + 2_000)
+  }
+  return Math.max(0, at - now)
+}
+
+// Whether a finished batch moved the backlog forward. Repeated batches that do
+// not stop automatic scanning, so a stuck message cannot loop forever.
+export function batchMadeProgress(result: ScanStatusLike["result"]): boolean {
+  const c = result?.counts ?? {}
+  return ["prepared", "reused", "skipped", "privateTopic", "failed", "blocked"].some((k) => (c[k] ?? 0) > 0)
+}

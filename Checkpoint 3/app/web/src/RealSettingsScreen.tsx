@@ -30,6 +30,7 @@ export default function RealSettingsScreen({
   refreshing,
   initialSection,
   onSave,
+  onSaveAutoScan,
   onReload,
   onRunSetup,
   onBack,
@@ -39,6 +40,7 @@ export default function RealSettingsScreen({
   refreshing: boolean
   initialSection: SettingsSection
   onSave: (next: ScanSettings) => Promise<ScanSettings>
+  onSaveAutoScan: (enabled: boolean) => Promise<ScanSettings>
   onReload: () => void
   onRunSetup: () => void
   onBack: () => void
@@ -50,13 +52,27 @@ export default function RealSettingsScreen({
   const [paused, setPaused] = useState(settings.paused)
   const { saving, saveError, setSaveError, run } = useSettingsSave()
   const [savedRevision, setSavedRevision] = useState<number | null>(null)
+  // Automatic scanning saves on its own, immediately, without the Save button.
+  const [autoSaving, setAutoSaving] = useState(false)
+  const [autoMessage, setAutoMessage] = useState<{ text: string; error: boolean } | null>(null)
+  const toggleAutoScan = async (enabled: boolean) => {
+    setAutoSaving(true); setAutoMessage(null)
+    try {
+      await onSaveAutoScan(enabled)
+      setAutoMessage({ text: enabled ? "Automatic scanning is on." : "Automatic scanning is off.", error: false })
+    } catch (err) {
+      setAutoMessage({ text: (err as Error).message, error: true })
+    } finally { setAutoSaving(false) }
+  }
   // A confirmed save or a reload replaces the draft with what is actually stored.
   useEffect(() => {
     setPreferences(preferencesFromSettings(settings))
     setContext({ ...settings.context_limits })
     setConsent(settings.consent)
     setPaused(settings.paused)
-  }, [settings])
+    // Keyed by revision: saving automatic scanning returns new settings at the same
+    // revision, and must not discard unsaved edits to the other fields.
+  }, [settings.revision])
   const gmail = useGmailState(true, section)
 
   const draft = { ...settingsWithPreferences(settings, preferences, context), consent, paused }
@@ -186,6 +202,23 @@ export default function RealSettingsScreen({
                   <input checked={paused} disabled={saving} onChange={(event) => setPaused(event.target.checked)} type="checkbox" />
                   Pause scanning
                 </label>
+              </div>
+              <div className="settings-card">
+                <div className="card-heading">
+                  <div>
+                    <strong>Automatic scanning</strong>
+                    <span>
+                      After you press Scan now, keep checking a few emails at a time until
+                      nothing permitted is left. Runs only while InboxToTask is open, stops at
+                      your daily limit, and never runs on a schedule. Saved as soon as you change it.
+                    </span>
+                  </div>
+                </div>
+                <label className="real-settings-check">
+                  <input checked={settings.auto_scan ?? false} disabled={autoSaving} onChange={(event) => void toggleAutoScan(event.target.checked)} type="checkbox" />
+                  Keep scanning automatically until I'm caught up
+                </label>
+                {autoMessage && <p className={autoMessage.error ? "notice warning" : "settings-footnote"} role={autoMessage.error ? "alert" : "status"}>{autoMessage.text}</p>}
               </div>
               <div className="settings-card">
                 <div className="card-heading">

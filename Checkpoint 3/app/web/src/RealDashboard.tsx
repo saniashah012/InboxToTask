@@ -13,6 +13,7 @@ import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
+  autoContinueDelay, BATCH_LIMIT_STOPS, batchMadeProgress, DAILY_LIMIT_STOP,
   buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
   type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
@@ -101,6 +102,10 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [scanning, setScanning] = useState(false)
+  // Automatic scanning (saved preference). It stops for this page when the user
+  // stops it, or after repeated batches that make no progress.
+  const [autoHalt, setAutoHalt] = useState<null | "user" | "stalled">(null)
+  const stalls = useRef(0)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [notice, setNotice] = useState(initialNotice)
   const [activeTab, setActiveTab] = useState<"tasks" | "passive">("tasks")
@@ -178,14 +183,19 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     }
   }
 
-  async function scan(mode: "initial" | "more") {
+  async function scan(mode: "initial" | "more", auto = false) {
+    // A manual press restarts automatic scanning after it was stopped or stalled.
+    if (!auto) { stalls.current = 0; setAutoHalt(null) }
     setScanning(true)
     try {
       await perform(async () => {
         const result = await manualScan(mode)
         if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
-        if (result.error) throw new Error(`${scanStopMessage(result.error)} Saved results remain available.`)
-      }, "This check finished. New suggestions, if any, are under Suggestions.")
+        stalls.current = batchMadeProgress(result) ? 0 : stalls.current + 1
+        if (stalls.current >= 3) setAutoHalt("stalled")
+        // Planned limits are not failures; the status bar explains them.
+        if (result.error && !BATCH_LIMIT_STOPS.includes(result.error) && result.error !== DAILY_LIMIT_STOP) throw new Error(`${scanStopMessage(result.error)} Saved results remain available.`)
+      }, auto ? "" : "This check finished. New suggestions, if any, are under Suggestions.")
     } finally { setScanning(false) }
   }
 
@@ -249,6 +259,20 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const panelState: ScanPanelState = gmail.checking && !status ? "loading" : scanPanelState({ status, loadError: statusFailed, scanning, cooldownLeft, blockers })
   const needsReconnect = status?.result?.error === "GMAIL_RECONNECT_REQUIRED" || gmail.state === "reconnect_required"
 
+  // While the app is open, start the next batch after the cooldown until no
+  // backlog remains. Every batch passes the same server checks as a manual scan.
+  const autoOn = Boolean(settings.auto_scan) && autoHalt === null
+  const autoReady = autoOn && !busy && !scanning && !loading && !statusFailed && !needsReconnect
+    && !blockers.sources && !blockers.consent && !blockers.paused && !blockers.gmail
+  useEffect(() => {
+    if (!autoReady) return
+    const delay = autoContinueDelay(status, Date.now())
+    if (delay === null) return
+    const timer = window.setTimeout(() => void scan("more", true), delay)
+    return () => window.clearTimeout(timer)
+    // scan is recreated each render; the timer only needs the latest status.
+  }, [autoReady, status])
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -305,6 +329,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
           settings={settings} gmail={gmail.state} needsReconnect={needsReconnect} activityOpen={activityOpen}
           onToggleActivity={() => setActivityOpen((c) => !c)}
           onScan={(mode) => void scan(mode)}
+          auto={{ on: Boolean(settings.auto_scan), halted: autoHalt, onStop: () => setAutoHalt("user") }}
           onSettings={() => onOpenSettings(panelState === "missing-sources" ? "sources" : panelState === "paused" ? "processing" : "connections")}
         />
 
@@ -649,22 +674,25 @@ const partialDetail = (status: ScanStatus | null) => {
   return n > 0 ? `Checked ${n} new email${n === 1 ? "" : "s"} this time; each scan handles a few at a time.` : "Each scan handles a few new emails at a time."
 }
 
-const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailState, status: ScanStatus | null, cooldownLeft: number): [string, string] => {
+const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailState, status: ScanStatus | null, autoActive: boolean): [string, string] => {
   switch (state) {
     case "loading": return ["Loading scan status…", "Checking saved settings and the Gmail connection."]
     case "processing": return ["Checking permitted Gmail…", "Counts update when the batch finishes. You can keep reviewing."]
     case "missing-sources": return ["Nothing to check", "Add a sender, domain or category to check in Settings. Until then nothing is processed."]
     case "paused": return settings.consent ? ["Scanning paused", "Resume in Settings to run a manual check."] : ["Scanning consent needed", "Give scanning consent in Settings before a manual check."]
     case "disconnected": return gmail === "reconnect_required" ? ["Reconnect Gmail", "Gmail access is no longer valid. Reconnect in Settings → Connections."] : gmail === "unknown" ? ["Gmail status unavailable", "Could not confirm the Gmail connection. Reload, or check Settings → Connections."] : ["Gmail not connected", "Connect Gmail in Settings → Connections. No mailbox was accessed."]
-    case "cooldown": return ["Cooling down", "You can scan again when the timer finishes."]
-    case "partial": return ["More email to check", `${partialDetail(status)} Scan again when you're ready to continue.`]
+    case "cooldown": return ["Cooling down", autoActive && status?.backlog ? "Scanning continues automatically when the timer finishes." : "You can scan again when the timer finishes."]
+    case "partial": return ["More email to check", status?.result?.error === "STORAGE_PROVIDER_LIMIT"
+      ? `The AI service's per-minute limit was reached. ${autoActive ? "Scanning continues automatically in about a minute." : "Wait a minute, then scan again."}`
+      : `${partialDetail(status)} ${autoActive ? "Continuing automatically." : "Scan again when you're ready to continue."}`]
+    case "daily-limit": return ["Daily limit reached", "Today's AI allowance is used up, so scanning stops here. It resets at midnight UTC; saved results remain available."]
     case "failed": return status?.result?.error ? ["Last check stopped", `${scanStopMessage(status.result.error)} Saved results remain available.`] : ["Scan status unavailable", "Could not load scan status. Saved tasks below are unaffected."]
     case "empty": return ["Ready for your first scan", ""]
     default: return ["Ready to scan", ""]
   }
 }
 
-function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings, gmail, needsReconnect, activityOpen, onToggleActivity, onScan, onSettings }: {
+function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings, gmail, needsReconnect, activityOpen, onToggleActivity, onScan, onSettings, auto }: {
   state: ScanPanelState
   status: ScanStatus | null
   cooldownLeft: number
@@ -677,11 +705,12 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
   onToggleActivity: () => void
   onScan: (mode: "initial" | "more") => void
   onSettings: () => void
+  auto: { on: boolean; halted: null | "user" | "stalled"; onStop: () => void }
 }) {
   // One button: it continues unfinished work when an earlier check left some,
   // otherwise it starts a new 7-day check. A reconnect always starts fresh.
   const resume = Boolean(status?.backlog) && !needsReconnect
-  const [title, detail] = stateCopy(state, settings, gmail, status, cooldownLeft)
+  const [title, detail] = stateCopy(state, settings, gmail, status, auto.on && !auto.halted)
   const counts = status?.result?.counts
   const allowed = canScan(state) && !busy && !scanning && !status?.running
   const blocked = state === "missing-sources" || state === "paused" || state === "disconnected"
@@ -698,6 +727,13 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
             {status?.lastSuccessful ? `Last scan ${friendlyTime(status.lastSuccessful)}` : "No scans yet"}
             {resume ? " · more email to process" : " · covers the past 7 days"}
           </span>
+          {auto.on && (
+            <span className="scan-last-checked">
+              {auto.halted === "stalled" ? "Automatic scanning paused: the last few batches made no progress. Press Scan now to try again."
+                : auto.halted === "user" ? "Automatic scanning stopped for now. Press Scan now to continue."
+                  : <>Automatic scanning is on{resume && (state === "partial" || state === "cooldown" || state === "processing") && <> · <button className="text-link" onClick={auto.onStop}>Stop</button></>}</>}
+            </span>
+          )}
         </div>
       </div>
       <div className="processing-status-actions">

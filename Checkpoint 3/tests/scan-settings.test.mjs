@@ -240,6 +240,20 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       const fresh=await scan('claim',{mode:'initial'});await save(4);
       await assert.rejects(scan('assert',{lease:fresh.lease}),{code:'PT409'});
     });
+    await t.test('automatic scanning saves on its own without bumping the revision or fencing work',async()=>{
+      const before=await get(C);assert.equal(before.auto_scan,false);
+      const generation=await scalar('select generation from public.storage_preferences where user_id=$1',[C]);
+      const on=await as('authenticated',C,()=>scalar('select public.scan_auto_scan_save(true)'));
+      assert.equal(on.auto_scan,true);assert.equal(on.revision,before.revision);
+      assert.equal(await scalar('select generation from public.storage_preferences where user_id=$1',[C]),generation);
+      // A full settings save keeps the choice.
+      const saved=await save(before.revision,rules,context,false,true,null,C,before.semantic_preferences);assert.equal(saved.auto_scan,true);
+      assert.equal((await as('authenticated',C,()=>scalar('select public.scan_auto_scan_save(false)'))).auto_scan,false);
+      await as('authenticated',C,()=>assert.rejects(q('select public.scan_auto_scan_save(null)'),{code:'22023'}));
+      await as('anon',null,()=>assert.rejects(q('select public.scan_auto_scan_save(true)')));
+      // Another account's choice is untouched.
+      assert.equal((await get(B)).auto_scan,false);
+    });
     await t.test('account deletion removes saved privacy settings',async()=>{
       await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings where user_id=$1',[A]),0);
     });

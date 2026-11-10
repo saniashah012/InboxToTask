@@ -2884,6 +2884,7 @@ textarea:focus-visible {
 }
 
 .state-paused .status-pulse,
+.state-daily-limit .status-pulse,
 .state-cooldown .status-pulse,
 .state-missing-sources .status-pulse {
   border-color: #eee2c6;
@@ -3059,6 +3060,7 @@ textarea:focus-visible {
 }
 
 .processing-status.state-paused,
+.processing-status.state-daily-limit,
 .processing-status.state-missing-sources {
   border-color: #e6d7b6;
   background: #fffbf3;

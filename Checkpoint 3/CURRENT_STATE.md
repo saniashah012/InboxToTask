@@ -105,6 +105,11 @@ The app does not fetch or display email bodies on demand.
   OAuth/token secrets are set. Who deployed it is not recorded here. On the live site, anyone who
   signs in can connect Gmail and, after saving consent, send permitted email to Gemini.
   Signed-in hosted scanning has no recorded verification.
+- **Unused Groq secret removed from hosted (November 9, 10:16 PM Central).** `GROP_API_KEY` was
+  deleted with `supabase secrets unset`, approved by Matthew in chat; 20 secrets remain. No code on
+  `main` reads it. Only the legacy Groq `analysis_email` deployment (version 7, October 30) did,
+  and it is called only by the local-development `/storage` route, which production builds omit.
+  The key itself should also be revoked in the Groq console.
 - **Personal accounts removed from hosted (November 9).** A teammate's sign-in landed on their
   personal Google account (see the sign-in note below), and Disconnect appeared to fail. The user
   deleted those accounts from hosted Auth, which cascades to their connection, settings and scan

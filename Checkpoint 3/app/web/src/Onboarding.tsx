@@ -58,6 +58,7 @@ export default function Onboarding({
   // Unchecked unless consent is already saved; connecting Google never checks it.
   const initialConsent = real.settings.consent
   const [consentChecked, setConsentChecked] = useState(initialConsent)
+  const [autoScan, setAutoScan] = useState(real.settings.auto_scan ?? false)
   const { saving, saveError, setSaveError, run } = useSettingsSave()
   const gmail = useGmailState(step === 4, step)
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
@@ -71,10 +72,13 @@ export default function Onboarding({
       setSaveError({ message: contextError, stale: false })
       return
     }
-    await run(() => real.onSave(withConsentDecision(
-      settingsWithPreferences(real.settings, preferences, context),
-      consentDecision(initialConsent, consentChecked),
-    )))
+    await run(() => real.onSave({
+      ...withConsentDecision(
+        settingsWithPreferences(real.settings, preferences, context),
+        consentDecision(initialConsent, consentChecked),
+      ),
+      auto_scan: autoScan,
+    }))
   }
 
   return (
@@ -272,6 +276,22 @@ export default function Onboarding({
                   </p>
                 </div>
               )}
+              <div className="onboarding-consent">
+                <label>
+                  <input
+                    checked={autoScan}
+                    disabled={saving}
+                    onChange={(event) => setAutoScan(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Keep scanning automatically until I'm caught up
+                </label>
+                <p className="setup-helper">
+                  {autoScan
+                    ? "After you press Scan now, InboxToTask keeps checking, a few emails at a time, until nothing permitted is left. It only runs while the app is open, stops at your daily limit, and never runs on a schedule. You can turn this off in Settings."
+                    : "Each scan checks a few new emails. Press Scan now again to continue. You can turn on automatic scanning later in Settings."}
+                </p>
+              </div>
               <p className="approval-reminder">
                 You review task suggestions before approving them. Calendar
                 entries require separate approval.

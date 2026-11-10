@@ -102,7 +102,7 @@ The app does not fetch or display email bodies on demand.
   (6:20 PM Central November 9), alongside `analysis_email`. Read from secret digests, not values:
   `ENABLE_GOOGLE_CONNECTION` and `ENABLE_GMAIL_SCAN` are true; `ENABLE_GMAIL_RETRIEVAL`,
   `ENABLE_FIXTURE_EXTRACTION` and `ENABLE_STORAGE_CLEANUP` are false; a Gemini key and Google
-  OAuth/token secrets are set. Who deployed it is not recorded here. On the live site, anyone who
+  OAuth/token secrets are set. Matthew approved the deployment in chat; a Claude Code session ran it, applying `20261109220000`, setting the function secrets and deploying the three functions (corrected November 9: an earlier version of this note said it was unrecorded). On the live site, anyone who
   signs in can connect Gmail and, after saving consent, send permitted email to Gemini.
   Signed-in hosted scanning has no recorded verification.
 - **Unused Groq secret removed from hosted (November 9, 10:16 PM Central).** `GROP_API_KEY` was
@@ -153,7 +153,7 @@ Next:
 
 1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code, and for onboarding preview `91234dd`.
 2. Connect real data and onboarding to the designed dashboard, and make PR 20's chip screens reachable for signed-in testing.
-3. Hosted Gmail is live (see above). Record who deployed it and under what approval, decide
+3. Hosted Gmail is live (see above; deployment approved by Matthew). Decide
    whether `ENABLE_GMAIL_SCAN` should stay on, run a signed-in hosted check with the test
    mailbox only, and merge the sign-in account-picker fix.
 4. In CP4, finish Calendar's OAuth fixes and review, then consider Phase 7 and the remaining live checks.

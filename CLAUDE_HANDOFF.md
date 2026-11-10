@@ -32,8 +32,8 @@ checkout, rebase or merge; stage named files only; no installs in `Checkpoint 3/
 **November 9 update (checked directly, about 6:30 PM Central):** hosted Gmail is live.
 `google_connection`, `google_callback` and `gmail_scan` were deployed at 00:20 UTC November 10, and
 `ENABLE_GOOGLE_CONNECTION` and `ENABLE_GMAIL_SCAN` are true (read from secret digests). All five
-November 9 migrations, including `20261109220000`, are applied (25 versions). Who deployed it is not
-recorded. A teammate's personal Google account was signed in and connected there; the user deleted
+November 9 migrations, including `20261109220000`, are applied (25 versions). Matthew approved the deployment in chat; a Claude Code session ran it, applying `20261109220000`, setting the function secrets and deploying the three functions (corrected November 9: an earlier version of this note said it was unrecorded).
+A teammate's personal Google account was signed in and connected there; the user deleted
 those accounts from hosted Auth. See [current state](<Checkpoint 3/CURRENT_STATE.md>) for details.
 The rest of this section describes November 5–6 and is superseded where it conflicts.
 

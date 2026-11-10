@@ -243,7 +243,8 @@ test('PostgreSQL storage migrations, transactions, privileges and lifecycle', as
         assert.equal(await scalar('select private.valid_task_fields($1)',[{...fields,deadline}]),true);
       }
       for(const doc of [{...fields,owner:'spoofed'}, {...fields,deadline:{...fields.deadline,date:'2026-02-30'}},
-        {...fields,deadline:{...fields.deadline,time:'24:00'}}, {...fields,requirements:[100]}]){
+        {...fields,deadline:{...fields.deadline,time:'24:00'}}, {...fields,requirements:[100]},
+        {...fields,deadline:{...fields.deadline,boundary:null}}, {...fields,deadline:{...fields.deadline,boundary:7}}]){
         assert.equal(await scalar('select private.valid_task_fields($1)',[doc]),false);
       }
     });

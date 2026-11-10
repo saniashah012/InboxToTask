@@ -2,7 +2,7 @@ import {supabase} from './supabase'
 import type {TaskFields} from './storageAdapter'
 export type ScanStatus={running:boolean;backlog:boolean;lastStarted:string|null;lastFinished:string|null;lastSuccessful:string|null;cooldownUntil:string|null;result:any}
 const stopMessages:Record<string,string>={
- SCAN_INFERENCE_LIMIT:'This batch reached its model-call limit. Scan again to continue.',
+ SCAN_INFERENCE_LIMIT:'This scan checked as many new emails as one scan allows. Scan again to continue.',
  SCAN_TIME_LIMIT:'This batch reached its time limit. Scan again to continue.',
  SCAN_RETRIEVAL_LIMIT:'This batch reached its Gmail request limit. Scan again to continue.',
  SCAN_FAILURE_LIMIT:'Too many messages could not be processed, so the batch stopped. Check the Gmail connection and backend configuration.',

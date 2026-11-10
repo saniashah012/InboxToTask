@@ -221,7 +221,11 @@ export type ScanStatusLike = {
   result: { error?: string | null; counts?: Record<string, number>; unresolved?: number } | null
 }
 
-export type ScanPanelState = "loading" | "failed" | "processing" | "cooldown" | "missing-sources" | "paused" | "disconnected" | "ready" | "empty"
+export type ScanPanelState = "loading" | "failed" | "processing" | "cooldown" | "missing-sources" | "paused" | "disconnected" | "partial" | "ready" | "empty"
+
+// Planned per-batch limits. The batch saved its work and stopped on purpose to
+// bound model use, so these are not failures: more email is simply waiting.
+export const BATCH_LIMIT_STOPS = ["SCAN_INFERENCE_LIMIT", "SCAN_TIME_LIMIT", "SCAN_RETRIEVAL_LIMIT"]
 
 // One state for the designed status bar. Order matters: a running scan wins,
 // then a load failure, then reasons scanning is refused, then cooldown.
@@ -240,9 +244,9 @@ export function scanPanelState(input: {
   if (blockers.consent || blockers.paused) return "paused"
   if (blockers.gmail) return "disconnected"
   if (cooldownLeft > 0) return "cooldown"
-  if (status.result?.error) return "failed"
+  if (status.result?.error) return BATCH_LIMIT_STOPS.includes(status.result.error) ? "partial" : "failed"
   if (!status.lastSuccessful) return "empty"
   return "ready"
 }
 
-export const canScan = (state: ScanPanelState) => state === "ready" || state === "empty" || state === "failed"
+export const canScan = (state: ScanPanelState) => state === "ready" || state === "empty" || state === "failed" || state === "partial"

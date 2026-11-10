@@ -225,9 +225,15 @@ test('repeat scans reuse results, re-extraction never duplicates review items, d
   await t.test('source deletion purges retained metadata and is reported to retrieval',async()=>{
    const source=(await q("select * from public.storage_sources where message_id='m-reply'"))[0];
    assert.ok(source.permission_metadata);
+   // Another source's evidence quoting m-reply as an earlier thread message, plus a control quote.
+   const other=(await q("select e.id from public.storage_extractions e join public.storage_sources s on s.id=e.source_id where s.namespace='gmail' and s.message_id<>'m-reply' limit 1"))[0].id;
+   const cited=await scalar("insert into public.storage_evidence(user_id,extraction_id,message_id,quote) values($1,$2,'m-reply','Fictional earlier quote') returning id",[A,other]);
+   const control=await scalar("insert into public.storage_evidence(user_id,extraction_id,message_id,quote) values($1,$2,'m-unrelated','Fictional unrelated quote') returning id",[A,other]);
    await auth('storage_action',{p_kind:'source',p_id:source.id,p_action:'delete',p_revision:null,p_fields:null});
    const after=(await q('select * from public.storage_sources where id=$1',[source.id]))[0];
    assert.equal(after.permission_metadata,null);
+   assert.equal(await scalar('select quote from public.storage_evidence where id=$1',[cited]),null,'quotes of the deleted message are cleared everywhere');
+   assert.equal(await scalar('select quote from public.storage_evidence where id=$1',[control]),'Fictional unrelated quote');
    assert.equal(await scalar('select count(*)::int from private.gmail_result_cache where source_id=$1',[source.id]),0);
    assert.equal(await scalar('select count(*)::int from private.storage_jobs where source_id=$1 and gmail_guard is not null',[source.id]),0);
    assert.ok((await rpc('gmail_suppressed_messages',{p_user:A,p_lease:work.lease})).includes('m-reply'));

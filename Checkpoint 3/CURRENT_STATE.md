@@ -67,19 +67,21 @@ The app does not fetch or display email bodies on demand.
 
 ## Local migration and feature state last observed
 
-- **Pending migrations, rechecked November 9 with `supabase migration list`:**
+- **November 9 migrations** (all on `main`; PR #26 merged the designed frontend there):
 
-  | Migration | From | Branch | Local | Hosted |
-  | --- | --- | --- | --- | --- |
-  | `20261109000000_onboarding_preference_limits` | PR #29 | `main` | Not applied | Not applied |
-  | `20261109000100_calendar_preview_replace` | PR #29 | `main` | Not applied | Not applied |
-  | `20261109120000_task_return_to_review` | PR #28 | `integration/designed-frontend` | Applied, corrected function re-run (see below) | Not applied |
-  | `20261109200000_private_topic_words` | PR #31 | `integration/designed-frontend` | Not applied | Not applied |
+  | Migration | From | Local | Hosted |
+  | --- | --- | --- | --- |
+  | `20261109000000_onboarding_preference_limits` | PR #29 | Not applied | Applied November 9 |
+  | `20261109000100_calendar_preview_replace` | PR #29 | Not applied | Applied November 9 |
+  | `20261109120000_task_return_to_review` | PR #28, corrected by #32 | Applied, corrected function re-run (see below) | Applied November 9, corrected version |
+  | `20261109200000_private_topic_words` | PR #31 | Not applied | Applied November 9 |
+  | `20261109220000_source_delete_quotes_and_boundary` | Fixes the two open defects (below) | Not applied | Not applied |
 
   The two #29 migrations are dated earlier than one already applied locally, so the local
-  database needs `migration up --include-all`. Read-only aggregate counts on hosted on
-  November 9 found no rows that the onboarding limits or the topic-word backfill would
-  reject (3 settings rows, no excluded topics) and no pending calendar operations.
+  database needs `migration up --include-all`. Before the hosted push, read-only aggregate
+  counts found no rows that the onboarding limits or the topic-word backfill would reject
+  (3 settings rows, no excluded topics) and no pending calendar operations. After it,
+  `migration list` showed all 24 applied, and the backfill gave every settings row `blockedWords`.
 - **`20261109120000` was corrected in place** before reaching hosted: Return to review failed
   with a foreign-key error for a task that had an accepted incoming update, because that
   update kept `approved_task_id`. A PGlite test now covers it. Because the local database had
@@ -90,9 +92,9 @@ The app does not fetch or display email bodies on demand.
   are applied to the local database, without reset.
 - **Hosted (`IS492_c3`) has migrations through `20261106040000_gmail_token_recheck`** (20 versions),
   applied November 6 at 03:26 and 03:50 UTC; see the [first](docs/hosted-backup-verification-2026-11-06.md)
-  and [second](docs/hosted-rollout-2-manifest-2026-11-06.md) rollout records. Rechecked unchanged
-  on November 9. Production `main` already includes the two #29 migrations unapplied; neither
-  is needed by the deployed UI.
+  and [second](docs/hosted-rollout-2-manifest-2026-11-06.md) rollout records. The four
+  migrations above were pushed on November 9, so hosted has 24 versions through
+  `20261109200000_private_topic_words`.
 - **Hosted Gmail functions are not deployed.** Only `analysis_email` is deployed, and the scan,
   retrieval and Google connection flags are unset, so Connect Gmail and Scan cannot work on the
   live site.
@@ -108,8 +110,11 @@ The app does not fetch or display email bodies on demand.
   commit still has the OAuth reconnect failures found in review, which block its release:
   a Gmail-only reconnect after full revocation, reconnecting after a key rotation, and reuse of a revoked refresh
   token. ICS export is the CP3 calendar path and writes nothing to Google.
-- **Fix before enabling hosted scanning:** deleting an earlier email leaves its quote visible, and
-  `valid_task_fields` accepts a null boundary. See the [second rollout record](docs/hosted-rollout-2-manifest-2026-11-06.md#open-defects-not-blocking-this-rollout).
+- **The two defects to fix before hosted scanning now have a fix in
+  `20261109220000_source_delete_quotes_and_boundary`**, not yet applied anywhere: deleting a Gmail
+  source now also clears quotes of that message in other sources' evidence, and
+  `valid_task_fields` rejects a null or non-string boundary. PGlite tests cover both and failed
+  without the migration. The defects are described in the [second rollout record](docs/hosted-rollout-2-manifest-2026-11-06.md#open-defects-not-blocking-this-rollout).
 - `ENABLE_GMAIL_SCAN` was set to false after live testing, then turned on the night of November 5 for the local demo. No scan has been confirmed since; recheck it, and turn it off after the demo. A Gemini key remains in the private local
   function configuration. Retrieval-only mode, fixture inference and cleanup remain disabled.
 - The local Google token key was rotated after being exposed in a development session's output.
@@ -128,7 +133,7 @@ Next:
 
 1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code, and for onboarding preview `91234dd`.
 2. Connect real data and onboarding to the designed dashboard, and make PR 20's chip screens reachable for signed-in testing.
-3. Fix the two open defects with a new migration before any hosted Gmail deployment. That deployment and hosted scanning need separate approval.
+3. Apply `20261109220000_source_delete_quotes_and_boundary` before any hosted Gmail deployment. That deployment and hosted scanning need separate approval.
 4. In CP4, finish Calendar's OAuth fixes and review, then consider Phase 7 and the remaining live checks.
 
 **Known CP3 gap:** the assignment's "all proposed core features" is not met. Not built: automatic scans, real data in the designed dashboard, a Waiting For view in the workspace and account deletion. Calendar events moved to CP4.

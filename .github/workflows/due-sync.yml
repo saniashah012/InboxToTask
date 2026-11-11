@@ -1,0 +1,30 @@
+# Mirrors each issue's "Due:" line into the CP4 board's Due field and comments
+# when the date changes. Logic and setup notes: .github/scripts/due-sync.js
+name: Sync due dates to the CP4 board
+
+on:
+  issues:
+    types: [opened, edited]
+  workflow_dispatch: # Actions tab -> "Run workflow" re-syncs every issue on the board
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: due-sync-${{ github.event.issue.number || 'all' }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/github-script@v9
+        env:
+          PROJECT_TOKEN: ${{ secrets.PROJECT_SYNC_TOKEN }}
+        with:
+          script: |
+            const sync = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/due-sync.js`);
+            await sync.main({ github, context, core, getOctokit });

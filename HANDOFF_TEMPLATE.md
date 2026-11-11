@@ -26,6 +26,7 @@ the code, trust the code and tell your person.
 
 **From → to:** <name> → <name> · **Date:** YYYY-MM-DD
 **Branch:** `<branch>` at `<short SHA>` · **PR:** <link or "none yet"> · **Pushed:** yes / no
+**Issue:** #<N> · **Target date:** YYYY-MM-DD (a target, not a strict deadline) · **Blocks:** <issues waiting on this, from its "Used by" list, or "none">
 
 ### Summary
 <!-- Two or three sentences: what this task is for, where it stands, and the one

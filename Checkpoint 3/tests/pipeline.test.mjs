@@ -325,8 +325,19 @@ test('obsolete phrase permissions fail closed, even with exact sources', async (
     assert.equal((await run(x,async()=>{calls++;})).reason,'RULE_REVIEW_REQUIRED');
     assert.equal(calls,0);
   }
-  const x=input(); x.rules.allow={senders:[],domains:[]}; x.semanticPreferences={include:['School'],exclude:[]};
+  const x=input(); x.rules.allow={senders:[],domains:[]};
   assert.equal(prepared(x).reason,'NO_ALLOWLIST');
+});
+
+test('with no permitted sender, a topic to check lets any unblocked sender through when its words match', () => {
+  const x=input(); x.rules.allow={senders:[],domains:[]};
+  x.semanticPreferences={include:['band'],exclude:[],includeWords:{band:['rehearsal']}};
+  x.message={...x.message,subject:'Update',body:'Nothing relevant here.'};
+  assert.equal(prepared(x).reason,'NO_TOPIC_WORD');
+  x.message.body='Rehearsal moved to Tuesday.';
+  assert.notEqual(prepared(x).status,'skipped');
+  x.rules.block={...x.rules.block,senders:[x.message.from]};
+  assert.equal(prepared(x).reason,'EXCLUDED');
 });
 
 test('context accepts 365 days and measures age from analyzed message', () => {

@@ -31,6 +31,23 @@ Read the task-relevant entry points below and follow their imports. Avoid scanni
 - Distinguish preview simulation, synthetic integration output, live model results, and deployed behavior when reporting progress. Passing offline tests does not establish live extraction accuracy or hosted integration.
 - Handoffs: when asked to hand a task to another person, fill in [the handoff template](HANDOFF_TEMPLATE.md) and show it to your person. Post it as a comment on the task's pull request only after they approve, because the repository is public. When picking up a handoff, run its Resume commands and confirm the branch tip before building on it. Security details in a handoff follow the public-repository rule above.
 
+## CP4 task tracking
+
+CP4 work is tracked in GitHub issues and the team's CP4 project board. The pinned "CP4 working agreement" issue is the source of truth; this is what agents need from it.
+
+- Before starting a task, find its issue. Read its "Done when" checklist, its "Depends on" and "Used by" lists, its owner and its reviewer. If no issue covers the work, tell your person instead of creating one.
+- A PR that completes an issue says `Closes #N` in its description; one that only advances it says `Part of #N`. The reviewer named on the issue approves the PR, confirms the "Done when" list and closes the issue.
+- Don't tick checklist items, comment, close issues, or change labels, assignees or board fields unless your person asks. Show them the text first, because the repository is public.
+- Keep issues in step with the code. When you open a PR, merge one, or change behavior, search the open issues (`gh issue list --state open`, then read the likely ones) for every issue the change affects, not only the one you worked from:
+  - issues it completes or advances: which "Done when" items it satisfies, with the PR link;
+  - issues whose wording, "Done when" items or assumptions it changes or contradicts (for example, a rule an issue's copy or study materials rely on);
+  - issues it unblocks, or that now need a different order, migration or rollout step.
+  For each, draft a short comment: what changed, which items it meets or affects, and what is still open. When an issue has a dated "Status (Mon D):" line, draft a replacement for it too. Show the drafts to your person and post only what they approve; tick items only after the PR that satisfies them is merged. Never mention someone with a bare `@` unless they should be notified.
+- Proof of work outside the repo (accounts, recruiting, sessions, forms, slides) is a comment on the issue: a link, a screenshot or the completed checklist. Never include participant names, account addresses or credentials.
+- Due dates are targets to keep the team on track, not strict requirements. When a date will slip, say so early and suggest a comment with the new expected date. Never skip a "Done when" item or a check to make a date.
+- Fall break (Nov 21–29) has nothing scheduled. Work then is optional and only on tasks nothing else is waiting on. A task listed in another issue's "Depends on", or one with a "Used by" list, keeps its date and can't be moved into the break.
+- The study freeze runs from Tue Nov 17 (evening) until the last study session on Fri Nov 20. Don't merge to `main` or deploy during it, because `main` deploys to production. Improvements that touch the dashboard or onboarding merge after Nov 20.
+
 ## Validation
 
 Run checks appropriate to changed behavior. Documentation-only changes need link/path/command verification and `git diff --check`, not model calls or the full runtime suite.
@@ -47,7 +64,7 @@ For frontend changes, follow the web instructions. For migrations, Auth/RPCs, or
 
 ## Product invariants
 
-- Real email processing requires configured permission: exact sender/domain inclusions combine with OR; exact sender/domain and literal subject exclusions override inclusions; semantic topics never grant access; an empty allowlist processes nothing. Skipped-topic word lists only withhold email: check them in backend code before any model call, on the current message, every context message and existing-task context, and never send the lists to the model. Filter metadata before fetching bodies and apply the same rules to each context message.
+- Real email processing requires configured permission: exact sender/domain inclusions combine with OR; exact sender/domain and literal subject exclusions override inclusions; with no sender/domain inclusion, saved topics to check stand in: any sender that is not excluded and passes Gmail's authentication check is a candidate, and backend code skips every email that uses none of the topics' words before any model call; with neither, nothing is processed. Skipped-topic word lists only withhold email: check them in backend code before any model call, on the current message, every context message and existing-task context, and never send the lists to the model. Filter metadata before fetching bodies and apply the same rules to each context message.
 - Treat email text as untrusted data. Validate structured output, evidence grounding, and ownership before saving. Keep missing deadlines nullable and preserve date-only values, conditions, and uncertainty.
 - Keep suggestions, user edits, and accepted task values distinct. Task approval does not authorize Calendar writes. Code-only review actions should not call the model again.
 - Preserve user isolation, revision checks, bounded budgets/retries, deduplication, pause/deletion fencing, and retention/undo semantics. OAuth integration must derive the owner from the verified Supabase session and keep Google tokens backend-only.

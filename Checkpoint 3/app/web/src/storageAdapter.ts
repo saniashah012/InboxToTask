@@ -9,10 +9,14 @@ export type ScanRules = Record<"allow" | "block", Record<"labels" | "senders" | 
 export type ScanSettings = {
   revision: number; consent: boolean; paused: boolean; consent_at: string | null
   // blockedWords: one literal word list per skipped topic, checked before anything reaches the AI.
-  semantic_preferences: { include: string[]; exclude: string[]; blockedWords?: Record<string, string[]> }
+  // includeWords: one list per topic to check; with any saved, an email must use one of the words.
+  semantic_preferences: { include: string[]; exclude: string[]; blockedWords?: Record<string, string[]>; includeWords?: Record<string, string[]> }
   requires_review: boolean; legacy_phrase_rules: ScanRules | null; reviewed?: boolean
   rules: ScanRules
   context_limits: { maxMessages: number; maxAgeDays: number; maxMessageChars: number; maxTotalChars: number }
+  // Keep scanning while the app is open until no backlog remains. Saved on its own
+  // (saveAutoScan); scan_settings_save ignores it.
+  auto_scan?: boolean
 }
 export async function loadScanSettings(): Promise<ScanSettings> {
   if (!supabase) throw new Error("Account connection is not configured.")
@@ -29,6 +33,13 @@ export async function saveScanSettings(settings: ScanSettings): Promise<ScanSett
     p_disclosure: settings.consent ? "gmail-scan-v1" : null,
   })
   if (error) throw new ScanSettingsSaveError(error.code === "PT409")
+  return data
+}
+// Does not bump the settings revision, so it never fences a running scan.
+export async function saveAutoScan(enabled: boolean): Promise<ScanSettings> {
+  if (!supabase) throw new Error("Account connection is not configured.")
+  const { data, error } = await supabase.rpc("scan_auto_scan_save", { p_enabled: enabled })
+  if (error) throw new Error("The automatic scanning choice was not saved. Retry, or reload saved settings.")
   return data
 }
 // Fixed text only, so screens may show the message as written.

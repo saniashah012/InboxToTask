@@ -31,11 +31,18 @@ Review mutations require a nonnegative revision; stale revisions fail. Approval 
 Owner-readable `scan_settings` are saved only through revision-checked
 `scan_settings_get` / `scan_settings_save`. Exact sender/domain inclusions combine
 with OR; source exclusions and literal case-insensitive subject exclusions win.
-Domains do not include subdomains. Empty source inclusions permit nothing.
+Domains do not include subdomains. Empty source inclusions permit nothing unless a
+topic to check is saved ([migration](migrations/20261112000000_topics_without_senders.sql)):
+then `private.scan_sources_ready` lets scans start, `private.gmail_permitted` treats
+the empty allowlist as any sender that is not excluded, and the topic words decide.
 `semantic_preferences` holds include and exclude topics and, since the
 [private-topic migration](migrations/20261109200000_private_topic_words.sql),
-`blockedWords`: one word list per excluded topic. Topics never grant source access.
-Included topics are judged by Gemini after permitted content is sent. Excluded topics
+`blockedWords`: one word list per excluded topic. Topics grant access only as above.
+Since the [topic-to-check migration](migrations/20261111000000_topic_to_check_words.sql),
+`includeWords` holds one word list per included topic: with any saved, a permitted email
+must contain one of the words before it is sent to Gemini. Lists follow the same rules
+and carry-over as `blockedWords`, and `private.starter_topic_words` must match
+`STARTER_TOPIC_WORDS` in the pipeline. Excluded topics
 are never sent: backend code checks their words before any model call.
 
 The [source/semantic migration](migrations/20261105200000_source_semantic_contract.sql)

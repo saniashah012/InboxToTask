@@ -30,6 +30,34 @@ export const STARTER_BLOCKED_WORDS = Object.freeze({
   ],
 });
 
+// Topics to check use the same literal matching in the other direction: when any
+// topic to check is saved, a permitted email must contain at least one of their
+// words before it reaches a model. Email about the topic that uses none of the
+// words is skipped. These lists only narrow what is processed; they never grant
+// access. private.starter_topic_words in the topic-to-check migration must match.
+export const STARTER_TOPIC_WORDS = Object.freeze({
+  school: [
+    'class', 'classes', 'course', 'courses', 'homework', 'assignment', 'assignments', 'syllabus', 'lecture',
+    'lectures', 'exam', 'exams', 'midterm', 'midterms', 'final exam', 'quiz', 'quizzes', 'professor',
+    'instructor', 'teaching assistant', 'office hours', 'canvas', 'grade', 'grades', 'semester', 'tutoring',
+    'registration', 'advisor',
+  ],
+  'job applications': [
+    'application', 'applications', 'applied', 'interview', 'interviews', 'recruiter', 'recruiting', 'resume',
+    'cover letter', 'job offer', 'offer letter', 'internship', 'internships', 'position', 'hiring', 'candidate',
+    'background check', 'career fair', 'job',
+  ],
+  research: [
+    'research', 'study', 'paper', 'papers', 'manuscript', 'journal', 'conference', 'submission', 'reviewer',
+    'irb', 'dataset', 'experiment', 'experiments', 'survey', 'literature review', 'lab meeting', 'thesis',
+    'dissertation', 'grant', 'abstract',
+  ],
+  meetings: [
+    'meeting', 'meetings', 'meet', 'zoom', 'google meet', 'teams meeting', 'calendar invite', 'invitation',
+    'agenda', 'minutes', 'schedule', 'reschedule', 'rescheduled', 'availability', 'appointment', 'call',
+  ],
+});
+
 export const MAX_WORDS_PER_TOPIC = 100;
 export const MAX_BLOCKED_WORDS = 1000;
 const invalid = () => Object.assign(new Error('INVALID_SEMANTIC_PREFERENCES'), { code: 'INVALID_SEMANTIC_PREFERENCES' });
@@ -53,6 +81,10 @@ export function validWord(value) {
 export function defaultWords(topic) {
   return [...(STARTER_BLOCKED_WORDS[topic] ?? [topic])];
 }
+// Words for each topic to check, chosen the same way.
+export function defaultTopicWords(topic) {
+  return [...(STARTER_TOPIC_WORDS[topic] ?? [topic])];
+}
 
 // The matcher's terms. Every blocked word of every excluded topic, deduplicated.
 export function blockedTerms(semantic) {
@@ -60,6 +92,21 @@ export function blockedTerms(semantic) {
   const terms = new Set();
   for (const topic of semantic.exclude) {
     for (const word of semantic.blockedWords?.[topic] ?? defaultWords(topic)) {
+      const term = matchText(word);
+      if (term.trim()) terms.add(term);
+    }
+  }
+  if (terms.size > MAX_BLOCKED_WORDS) throw invalid();
+  return [...terms];
+}
+
+// The terms an email must contain one of. Empty when no topic to check is saved,
+// which means nothing is required.
+export function requiredTerms(semantic) {
+  if (!semantic) return [];
+  const terms = new Set();
+  for (const topic of semantic.include) {
+    for (const word of semantic.includeWords?.[topic] ?? defaultTopicWords(topic)) {
       const term = matchText(word);
       if (term.trim()) terms.add(term);
     }

@@ -155,7 +155,9 @@ Inclusions use OR: exact case-insensitive sender/domain matches, with no implici
 subdomains. Source exclusions and literal case-insensitive `block.subjectKeywords`
 override inclusion. Phrase access rules and mailbox labels fail closed with
 `RULE_REVIEW_REQUIRED`; they never grant source access. Empty source allowlists
-produce `NO_ALLOWLIST` and zero inference. Optional `semanticPreferences` are
+produce `NO_ALLOWLIST` and zero inference, unless a topic to check is saved: then
+`filterMessage(..., anySender)` permits any sender that is not excluded (retrieval
+still requires Gmail's authentication result) and the topic words decide. Optional `semanticPreferences` are
 validated separately from access permissions. Only `include` (topics of interest)
 reaches Gemini; relevance to it is part of the versioned Gmail extraction contract.
 Each `exclude` topic is a list of literal words in `blockedWords` (suggested topics
@@ -163,6 +165,17 @@ start from the lists in [private-topics.mjs](private-topics.mjs)). Retrieval che
 subject before fetching a body, then the decoded body; `prepareInput` checks again, and
 earlier thread messages and existing-task candidates get the same check. A matching
 email makes no model call and stores nothing; scan counts record only `privateTopic`.
+Each `include` topic (topic to check) also has a word list, in `includeWords`, with
+starter lists for the suggested topics in `STARTER_TOPIC_WORDS`. When any topic to check
+is saved, a permitted email whose subject and decoded body contain none of their words
+is skipped after the body check, before any model call; `prepareInput` repeats the check
+(`NO_TOPIC_WORD`) and scan counts record `noTopicWord`. With no topic to check, nothing
+is required. The words narrow what is processed and never reach Gemini; only topic names do.
+Every-minute automatic checks overlap the previous complete check by `SCAN_OVERLAP_MS`
+(5 minutes, matching migration `20261112010000`) so email Gmail indexes late is not
+missed. An email skipped in that overlap is read and skipped again but not counted
+again (`skipCountStart`); a full 7-day check counts every skip. Nothing is stored for
+a skipped email either way.
 Matching ignores case, accents and punctuation but needs whole words, with no stemming.
 Metadata rules and word lists are not semantic healthcare/financial classifiers.
 

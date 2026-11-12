@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '../app/node_modules/@electric-sql/pglite/dist/index.js';
-import {STARTER_BLOCKED_WORDS} from '../app/pipeline/private-topics.mjs';
+import {STARTER_BLOCKED_WORDS,STARTER_TOPIC_WORDS} from '../app/pipeline/private-topics.mjs';
 
 test('saved scanning settings: permissions, validation, revisions, and stale-work fencing',async(t)=>{
   const db=new PGlite();
@@ -65,7 +65,8 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       exclude:['Financial','invoice','custom exclusion'],
     });
     assert.deepEqual(saved.semantic_preferences,{include:['school','homework','my custom phrase'],exclude:['financial','invoice','custom exclusion'],
-      blockedWords:{financial:STARTER_BLOCKED_WORDS.financial,invoice:['invoice'],'custom exclusion':['custom exclusion']}});
+      blockedWords:{financial:STARTER_BLOCKED_WORDS.financial,invoice:['invoice'],'custom exclusion':['custom exclusion']},
+      includeWords:{school:STARTER_TOPIC_WORDS.school,homework:['homework'],'my custom phrase':['my custom phrase']}});
     const loaded=await get(C);
     assert.deepEqual(loaded.semantic_preferences,saved.semantic_preferences);
 
@@ -77,6 +78,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       include:['homework','my custom phrase'],
       exclude:['invoice','custom exclusion'],
       blockedWords:{invoice:['invoice'],'custom exclusion':['custom exclusion']},
+      includeWords:{homework:['homework'],'my custom phrase':['my custom phrase']},
     });
     assert.deepEqual((await get(C)).semantic_preferences,removedSuggestion.semantic_preferences);
 
@@ -88,6 +90,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       include:['school','homework'],
       exclude:['financial','invoice'],
       blockedWords:{financial:STARTER_BLOCKED_WORDS.financial,invoice:['invoice']},
+      includeWords:{school:STARTER_TOPIC_WORDS.school,homework:['homework']},
     });
     assert.deepEqual((await get(C)).semantic_preferences,removedCustom.semantic_preferences);
   });
@@ -96,7 +99,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       assert.deepEqual(await scalar('select private.starter_blocked_words($1)',[topic]),words,topic);
     // Saved names converted to starter lists, or the name itself, erring toward blocking.
     assert.deepEqual((await get(convertedUser)).semantic_preferences,{include:['school'],exclude:['health','rowing team'],
-      blockedWords:{health:STARTER_BLOCKED_WORDS.health,'rowing team':['rowing team']}});
+      blockedWords:{health:STARTER_BLOCKED_WORDS.health,'rowing team':['rowing team']},includeWords:{school:STARTER_TOPIC_WORDS.school}});
     const D='66666666-6666-4666-8666-666666666666';
     await q('insert into auth.users values($1,$2)',[D,'d@example.org']);
     assert.deepEqual((await get(D)).semantic_preferences,{include:[],exclude:[],blockedWords:{}});
@@ -118,6 +121,49 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       [2,rules,context,{include:[],exclude:[],extra:[]}]),{code:'22023'}));
     await as('authenticated',D,()=>assert.rejects(q('select private.starter_blocked_words($1)',['health']),{code:'42501'}));
   });
+  await t.test('topic-to-check word lists: starter parity, round trip, carry-over and validation',async()=>{
+    for(const [topic,words] of Object.entries(STARTER_TOPIC_WORDS))
+      assert.deepEqual(await scalar('select private.starter_topic_words($1)',[topic]),words,topic);
+    const E='77777777-7777-4777-8777-777777777777';
+    await q('insert into auth.users values($1,$2)',[E,'e@example.org']);
+    const edited=await save(0,rules,context,false,true,null,E,{include:[' School ','Band'],exclude:[],
+      includeWords:{School:[' Office   Hours ','syllabus','SYLLABUS'],band:['rehearsal']}});
+    assert.deepEqual(edited.semantic_preferences.includeWords,{school:['office hours','syllabus'],band:['rehearsal']});
+    assert.deepEqual((await get(E)).semantic_preferences,edited.semantic_preferences);
+    // An older client that sends names only keeps the edited lists of topics that stay selected.
+    const older=await save(1,rules,context,false,true,null,E,{include:['school','meetings'],exclude:[]});
+    assert.deepEqual(older.semantic_preferences.includeWords,{school:['office hours','syllabus'],meetings:STARTER_TOPIC_WORDS.meetings});
+    // Removing every topic to check removes every list, so nothing is required.
+    const none=await save(2,rules,context,false,true,null,E,{include:[],exclude:[],includeWords:{school:['syllabus']}});
+    assert.deepEqual(none.semantic_preferences.includeWords,{});
+    for(const bad of [{school:[]},{school:['!!!']},{school:['a'.repeat(101)]},{school:'syllabus'}])
+      await as('authenticated',E,()=>assert.rejects(q('select public.scan_settings_save($1,$2,$3,false,true,null,$4)',
+        [3,rules,context,{include:['school'],exclude:[],includeWords:bad}]),{code:'22023'},JSON.stringify(bad)));
+    await as('authenticated',E,()=>assert.rejects(q('select private.starter_topic_words($1)',['school']),{code:'42501'}));
+  });
+  await t.test('a topic to check stands in for a permitted sender; with neither, scans are refused',async()=>{
+    const F='88888888-8888-4888-8888-888888888888';
+    await q('insert into auth.users values($1,$2)',[F,'f@example.org']);
+    const none={allow:{labels:[],keywords:[],senders:[],domains:[]},block:{labels:[],senders:['ads@example.org'],domains:[],subjectKeywords:[]}};
+    await save(0,none,context,true,false,'gmail-scan-v1',F,{include:[],exclude:[]});
+    await q('update public.storage_preferences set enabled=true where user_id=$1',[F]);
+    await q("insert into private.google_connections(user_id,state,email,scopes) values($1,'connected','f@example.org',$2)",[F,JSON.stringify(['https://www.googleapis.com/auth/gmail.readonly'])]);
+    const scan=()=>as('service_role',F,()=>scalar('select public.gmail_scan_service($1,$2,$3)',[F,'claim',{mode:'initial'}]));
+    await assert.rejects(scan(),{code:'PT409'});
+    await save(1,none,context,true,false,'gmail-scan-v1',F,{include:['school'],exclude:[]});
+    const claim=await scan(); assert.equal(claim.state,'claimed');
+    // A save makes unfinished work stale, so it is cleared and the next check starts fresh.
+    await as('service_role',F,()=>scalar('select public.gmail_scan_service($1,$2,$3)',[F,'finish',{lease:claim.lease,continuation:{pending:['gmail1'],next:null},result:{modelCalls:0}}]));
+    assert.ok(await scalar('select continuation is not null from private.gmail_scan_work where user_id=$1',[F]));
+    await save(2,none,context,true,false,'gmail-scan-v1',F,{include:['school'],exclude:[]});
+    assert.equal(await scalar('select continuation from private.gmail_scan_work where user_id=$1',[F]),null);
+    const permitted=(from,r)=>scalar('select private.gmail_permitted($1,$2)',[{from,subject:'Hi'},r]);
+    assert.equal(await permitted('anyone@example.net',none),true);
+    assert.equal(await permitted('ads@example.org',none),false);
+    assert.equal(await permitted('anyone@example.net',rules),false);
+    assert.equal(await scalar('select private.scan_sources_ready($1,$2)',[none,{include:[],exclude:[]}]),false);
+    await as('authenticated',F,()=>assert.rejects(q('select private.scan_sources_ready($1,$2)',[none,{include:[]}]),{code:'42501'}));
+  });
     await t.test('anonymous, owner injection and direct writes cannot bypass the RPC',async()=>{
       await as('anon',A,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
       await as('authenticated',null,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
@@ -128,7 +174,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       const saved=await save();assert.equal(saved.revision,1);assert.equal(saved.consent,false);assert.equal(saved.consent_at,null);
       assert.deepEqual(saved.rules.allow.keywords,[]);assert.deepEqual(saved.rules.allow.senders,['teacher@example.org']);assert.deepEqual(saved.rules.allow.subjectKeywords,[]);
       assert.deepEqual(saved.rules.block.subjectKeywords,['newsletter']);
-      assert.deepEqual(saved.semantic_preferences,{include:['school'],exclude:[],blockedWords:{}});
+      assert.deepEqual(saved.semantic_preferences,{include:['school'],exclude:[],blockedWords:{},includeWords:{school:STARTER_TOPIC_WORDS.school}});
       assert.equal((await get()).revision,1);assert.equal((await get(B)).revision,0);
       assert.deepEqual(await as('authenticated',B,()=>q('select * from public.scan_settings')),[]);
     });
@@ -193,6 +239,70 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       await q('update public.storage_preferences set enabled=true where user_id=$1',[A]);
       const fresh=await scan('claim',{mode:'initial'});await save(4);
       await assert.rejects(scan('assert',{lease:fresh.lease}),{code:'PT409'});
+    });
+    await t.test('new checks cover only email since the last complete check, with a 5-minute overlap',async()=>{
+      const scan=(action,data={})=>as('service_role',A,()=>scalar('select public.gmail_scan_service($1,$2,$3)',[A,action,data]));
+      const cool=()=>q("update private.gmail_scan_work set lease=null,lease_until=null,last_started=now()-interval '2 minutes' where user_id=$1",[A]);
+      const days=(c)=>(Date.parse(c.end)-Date.parse(c.start))/86400000;
+      const persistent=(error=null)=>({executionMode:'GMAIL_PERSISTENT_MANUAL',counts:{},error});
+      const complete=(c,result=persistent())=>scan('finish',{lease:c.lease,continuation:null,result});
+      const lastEnd=async()=>{const v=await scalar('select last_complete_end from private.gmail_scan_work where user_id=$1',[A]);return v===null?null:new Date(v).getTime();};
+      const claim=async()=>{await cool();const c=await scan('claim',{mode:'initial'});assert.equal(c.state,'claimed');return c;};
+      // An hour-old complete check, so the overlap is measurable.
+      const age=()=>q("update private.gmail_scan_work set last_complete_end=now()-interval '1 hour' where user_id=$1",[A]);
+      const expectIncremental=async(c)=>assert.equal(Date.parse(c.start),new Date(await scalar("select last_complete_end-interval '5 minutes' from private.gmail_scan_work where user_id=$1",[A])).getTime());
+      await save((await get()).revision,rules,context,true,false,'gmail-scan-v1');
+      await q("update private.gmail_scan_work set last_complete_end=null where user_id=$1",[A]);
+      // First check: full 7 days. A batch that left a continuation is not complete.
+      let c=await claim();assert.equal(days(c),7);
+      await scan('finish',{lease:c.lease,continuation:{pending:['gmail1'],next:null},result:persistent('SCAN_INFERENCE_LIMIT')});
+      assert.equal(await lastEnd(),null);
+      c=await claim();assert.equal(days(c),7,'a new check after an incomplete one still covers 7 days');
+      // Complete: the next check covers from 5 minutes before where it ended.
+      await complete(c);assert.equal(await lastEnd(),Date.parse(c.end));
+      await age();c=await claim();await expectIncremental(c);assert.ok(days(c)<0.1);
+      const status=await as('authenticated',A,()=>scalar('select public.gmail_scan_status()'));
+      assert.equal(Date.parse(status.windowStart),Date.parse(c.start));assert.equal(Date.parse(status.windowEnd),Date.parse(c.end));
+      // Stopped with no continuation, retrieval-only, or a stop code: not complete; the old mark stays.
+      const before=await lastEnd();
+      await complete(c,persistent('SCAN_TIME_LIMIT'));assert.equal(await lastEnd(),before);
+      c=await claim();await complete(c,{executionMode:'GMAIL_RETRIEVAL_ONLY',counts:{},error:null});assert.equal(await lastEnd(),before);
+      c=await claim();await expectIncremental(c);
+      // Never further back than 7 days.
+      await complete(c);await q("update private.gmail_scan_work set last_complete_end=now()-interval '10 days' where user_id=$1",[A]);
+      c=await claim();assert.equal(days(c),7);
+      // A settings change resets to the full 7 days, then increments again.
+      await complete(c);await age();
+      await save((await get()).revision,rules,{...context,maxMessages:1},true,false,'gmail-scan-v1');
+      c=await claim();assert.equal(days(c),7,'after a settings change');
+      await complete(c);await age();c=await claim();await expectIncremental(c);
+      // A Gmail reconnect (new connection generation) resets too.
+      await complete(c);await age();
+      await q('update private.google_connections set generation=generation+1 where user_id=$1',[A]);
+      c=await claim();assert.equal(days(c),7,'after a reconnect');
+      await complete(c);await age();c=await claim();await expectIncremental(c);
+      // A storage generation change (paused or deleted data) resets too.
+      await complete(c);await age();
+      await q('update public.storage_preferences set generation=generation+1 where user_id=$1',[A]);
+      c=await claim();assert.equal(days(c),7,'after a storage generation change');
+      // Turning automatic checks on or off does not reset the window.
+      await complete(c);await age();
+      await as('authenticated',A,()=>scalar('select public.scan_auto_scan_save(true)'));
+      c=await claim();await expectIncremental(c);
+    });
+    await t.test('automatic scanning saves on its own without bumping the revision or fencing work',async()=>{
+      const before=await get(C);assert.equal(before.auto_scan,false);
+      const generation=await scalar('select generation from public.storage_preferences where user_id=$1',[C]);
+      const on=await as('authenticated',C,()=>scalar('select public.scan_auto_scan_save(true)'));
+      assert.equal(on.auto_scan,true);assert.equal(on.revision,before.revision);
+      assert.equal(await scalar('select generation from public.storage_preferences where user_id=$1',[C]),generation);
+      // A full settings save keeps the choice.
+      const saved=await save(before.revision,rules,context,false,true,null,C,before.semantic_preferences);assert.equal(saved.auto_scan,true);
+      assert.equal((await as('authenticated',C,()=>scalar('select public.scan_auto_scan_save(false)'))).auto_scan,false);
+      await as('authenticated',C,()=>assert.rejects(q('select public.scan_auto_scan_save(null)'),{code:'22023'}));
+      await as('anon',null,()=>assert.rejects(q('select public.scan_auto_scan_save(true)')));
+      // Another account's choice is untouched.
+      assert.equal((await get(B)).auto_scan,false);
     });
     await t.test('account deletion removes saved privacy settings',async()=>{
       await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings where user_id=$1',[A]),0);

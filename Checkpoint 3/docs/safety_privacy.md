@@ -43,7 +43,7 @@ Updated November 5, 2026. This covers local behavior on `main`. **Hosted Gmail e
 - **No PII is removed or masked.** Permitted bodies are sent to Gemini with their text intact, apart from quote cleanup, along with sender, subject and the user's address. The protection is sending less mail, not redacting it.
 - **No sensitive-content classifier exists.** "Content filtering" here means source rules, subject exclusions, skipped-topic words and topics of interest.
 - **Skipped topics are word lists checked before Gemini.** Each skipped topic (for example Health) is a list of literal words and phrases. Backend code checks the subject before fetching the body, then the body, and the same for earlier thread messages and existing-task context. An email containing one of the words is never sent to Gemini and nothing is stored about it beyond a scan count. Email about the topic that uses none of the words can still be sent; excluding the sender or domain is the complete protection. The word lists themselves are never sent to Gemini.
-- **Topics of interest are preferences, never access controls.** Gemini judges relevance after it has received the text. A campus bakery email was marked relevant to `School` (F7).
+- **Topics of interest are word lists, and stand in for a sender allowlist when none is saved.** Since November 12, a category to check is enough to scan without a permitted sender or domain. Then our backend reads the subject and body of authenticated email from any sender that is not blocked, to look for the words, and only matching email reaches Gemini. That reads more of the inbox than an allowlist does. Since November 11, each topic to check has a literal word list. With any topic to check saved, a permitted email whose subject and body contain none of their words is skipped before Gemini; email about the topic that uses none of the words gets no suggestions. Gemini still judges relevance for email that passes. A campus bakery email was marked relevant to `School` (F7).
 - **Provider terms are not verified.** The Gemini service tier's data use and retention have not been reviewed, so this document makes no retention promise. Do not use a real mailbox.
 
 ### Prompt injection: live case L06
@@ -52,15 +52,16 @@ A fictional newsletter contained an instruction aimed at the AI. The result was 
 
 ## Budgets, rate limits and cooldowns
 
-These are project-set trial values, not tuned or validated capacity. A handoff finding notes that two calls per batch and 20 requests per day are too low for real use.
+These are project-set trial values, not tuned or validated capacity. A handoff finding noted that two calls per batch and 20 requests per day are too low for real use; the per-batch cap is now three, matching the shared per-minute limit.
 
 | Control | Value | Enforced in |
 | --- | --- | --- |
 | Model requests per user per UTC day | 20 by default. The test account's local limit is 50 for the demo (reported) | Database claim |
 | Tokens per user per UTC day | 200,000 reported or reserved | Database claim |
-| Model calls per batch | 2 | Processor |
+| Model calls per batch | 3 | Processor |
 | Shared requests per model per minute | 3 | Database claim |
-| Scan request cooldown | 60 seconds | `gmail_scan_service` |
+| Scan request cooldown | 30 seconds | `gmail_scan_service` |
+| Automatic scanning | Off by default. When on, checks when the dashboard opens and every minute while it stays open, never with the app closed; a saved backlog is continued first. Each new check covers only email since the last complete check (5-minute overlap), or the full 7 days after a settings change or Gmail reconnect. Stops at the daily allowance, any non-limit error, three batches without progress, or Stop. Each batch passes the same checks as a manual scan | Dashboard, `scan_settings.auto_scan`, `private.gmail_scan_work.last_complete_*` |
 | Scan lease, one per user | 4 minutes | `gmail_scan_service` |
 | Live extraction job, one per user | 90-second lease | Database claim |
 | Attempts per extraction | 3, with a 60-second retry delay | Database claim |
@@ -114,7 +115,23 @@ The whole feature is off unless `ENABLE_GMAIL_SCAN=true`, `GEMINI_API_KEY` and `
 - **Normal replies are marked for review** because quote removal adds a warning (F5). It is noisy but safe.
 - **A request already sent cannot be recalled.** Pausing stops new work only.
 - **One past exposure:** a local token-encryption key was printed in a development session, then rotated, and local connections were cleared. Whether hosted used the same value is an open check.
+- **Every-minute checks use time windows with a 5-minute overlap.** Gmail's search index can lag behind delivery, so each automatic check looks back 5 minutes into the previous one. Within the overlap, already-processed email is reused without a model call, and a skipped email is read again to check its words but counted only once. An email Gmail indexes more than about 5 minutes late can still be missed by every-minute checks; it is found by the next full 7-day check (after a settings change or Gmail reconnect), or not at all if none happens within 7 days. Gmail's History API (sync from a stored `historyId` bookmark, as production mail clients do) would remove both the overlap and this gap; it is future work, not built.
 - **Not run live:** settings changed during a scan, rate limits, wrong-account connection, replayed OAuth state, and domain and subdomain rules.
+
+## Gaps from production practice
+
+Compared with how production email and AI tools usually handle stored mail data (Nov 12). What already matches: per-user row-level security, OAuth tokens encrypted with AES-256-GCM using server-only keys, no stored email bodies, 30-day eligibility rules, deletion with suppressions, server-side filtering before any model call, and per-user and shared rate limits. What a release beyond a class study would still need (input for the report's Limitations & Ethics section, #83):
+
+- **Google restricted-scope compliance.** Reading Gmail (`gmail.readonly`) is a restricted scope: production use requires Google's app verification, an annual third-party security assessment and Google's "limited use" rules. The app runs in test mode only.
+- **AI provider terms.** No data processing agreement, no-training commitment or retention terms are recorded for the Gemini key in use (an item in #94). Email text, including the sender, is sent to Gemini.
+- **Enforced retention.** Cleanup is off and unscheduled (see [Retention and deletion](#retention-and-deletion)), so the 30-day limits are not enforced, and minimal identifiers and suppressions have no expiry.
+- **Account deletion and data export.** No one-step "delete my account and all data" or "export my data", which privacy laws such as GDPR and CCPA expect.
+- **Field-level encryption.** Sender, subject, excerpts and summaries rely on the database provider's encryption only; production tools often add column-level encryption with per-customer keys.
+- **Masking outside the product.** Production tools use keyed hashes or tokens for identifiers in logs, analytics and test data. Not designed here beyond the rule against printing email content.
+- **Access auditing.** No audit log or time-limited process for team access to stored user data.
+- **Monitoring and incident response.** No alerting, on-call or breach procedure.
+
+Tokenizing sender addresses inside the product is not on this list: access rules, review cards (#41) and ownership extraction need the real address, and production tools usually protect it with the controls above instead.
 
 ## Proposed class-project implementation
 

@@ -175,6 +175,8 @@ function App() {
             refreshing: saved.refreshing,
             onSave: async (next) => {
               const result = await saved.save(next)
+              // Saved separately so it never bumps the settings revision.
+              if (next.auto_scan !== undefined && next.auto_scan !== (result.auto_scan ?? false)) await saved.saveAuto(next.auto_scan)
               show({
                 kind: "workspace",
                 notice: setupSavedNotice(result),
@@ -202,9 +204,11 @@ function App() {
           refreshing={saved.refreshing}
           initialSection={view.kind === "settings" ? view.section : "connections"}
           onSave={saved.save}
+          onSaveAutoScan={saved.saveAuto}
           onReload={saved.reload}
           onRunSetup={() => show({ kind: "setup" }, true)}
           onBack={() => show({ kind: "workspace", notice: "" })}
+          onSaved={(notice) => show({ kind: "workspace", notice })}
         />
       )
     }

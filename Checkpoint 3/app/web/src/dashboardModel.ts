@@ -218,10 +218,18 @@ export type ScanStatusLike = {
   backlog: boolean
   lastSuccessful: string | null
   cooldownUntil: string | null
+  lastFinished?: string | null
   result: { error?: string | null; counts?: Record<string, number>; unresolved?: number } | null
 }
 
-export type ScanPanelState = "loading" | "failed" | "processing" | "cooldown" | "missing-sources" | "paused" | "disconnected" | "ready" | "empty"
+export type ScanPanelState = "loading" | "failed" | "processing" | "cooldown" | "missing-sources" | "paused" | "disconnected" | "partial" | "daily-limit" | "ready" | "empty"
+
+// Planned limits. The batch saved its work and stopped on purpose to bound model
+// use, so these are not failures. With a saved backlog, more email is waiting.
+// The per-minute AI limit is shared and resets each calendar minute.
+export const BATCH_LIMIT_STOPS = ["SCAN_INFERENCE_LIMIT", "SCAN_TIME_LIMIT", "SCAN_RETRIEVAL_LIMIT", "STORAGE_PROVIDER_LIMIT"]
+// The account's daily allowance: expected, but nothing more runs until it resets.
+export const DAILY_LIMIT_STOP = "STORAGE_BUDGET"
 
 // One state for the designed status bar. Order matters: a running scan wins,
 // then a load failure, then reasons scanning is refused, then cooldown.
@@ -240,9 +248,119 @@ export function scanPanelState(input: {
   if (blockers.consent || blockers.paused) return "paused"
   if (blockers.gmail) return "disconnected"
   if (cooldownLeft > 0) return "cooldown"
-  if (status.result?.error) return "failed"
+  const error = status.result?.error
+  if (error === DAILY_LIMIT_STOP) return "daily-limit"
+  if (error && !BATCH_LIMIT_STOPS.includes(error)) return "failed"
+  // "More email to check" only when the batch actually saved unscanned work.
+  if (status.backlog) return "partial"
   if (!status.lastSuccessful) return "empty"
   return "ready"
 }
 
-export const canScan = (state: ScanPanelState) => state === "ready" || state === "empty" || state === "failed"
+export const canScan = (state: ScanPanelState) => ["ready", "empty", "failed", "partial", "daily-limit"].includes(state)
+
+// Milliseconds until automatic scanning should start the next batch, or null when
+// it should not: nothing is waiting, or the last batch stopped for a reason a
+// retry will not fix. The caller also checks canScan and the saved preference.
+export function autoContinueDelay(status: ScanStatusLike | null, now: number): number | null {
+  if (!status || status.running || !status.backlog) return null
+  const error = status.result?.error ?? null
+  if (error && !BATCH_LIMIT_STOPS.includes(error)) return null
+  const cooldown = status.cooldownUntil ? Date.parse(status.cooldownUntil) : 0
+  let at = Number.isNaN(cooldown) ? now : cooldown
+  if (error === "STORAGE_PROVIDER_LIMIT") {
+    // Wait for the next calendar minute, plus a moment for clock differences.
+    const finished = status.lastFinished ? Date.parse(status.lastFinished) : now
+    at = Math.max(at, (Math.floor((Number.isNaN(finished) ? now : finished) / 60_000) + 1) * 60_000 + 2_000)
+  }
+  return Math.max(0, at - now)
+}
+
+// Automatic checks while the app is open start a new check this long after the
+// previous one finished.
+export const AUTO_CHECK_INTERVAL_MS = 60_000
+
+// The next automatic check: which mode and how many milliseconds from now, or null
+// when none should start. A saved backlog is always continued first ("more"), never
+// replaced by a new check. Otherwise a new ("initial") check starts right away when
+// the page has just opened (after any cooldown), or one interval after the last
+// check finished. Stop codes other than planned per-batch limits (daily limit,
+// reconnect, failures) end automatic checks until the next manual Scan now. The
+// caller also checks the saved preference, Stop, stalls and blockers.
+// Passing problems reaching Gmail or the AI service. Nothing for you to do: automatic
+// checks keep retrying them, waiting longer each time (30 s, 1 min, 2 min, then every
+// 5 min), and never stop for them. After TROUBLE_AFTER failures in a row the compact
+// status line says it is having trouble, but checks continue.
+export const TRANSIENT_STOPS = ["GMAIL_UNAVAILABLE", "GMAIL_TIMEOUT", "GMAIL_SERVER_ERROR", "GMAIL_RATE_LIMITED", "PROVIDER_HTTP_429"]
+export const TROUBLE_AFTER = 3
+export const TRANSIENT_RETRY_MS = 30_000
+export const MAX_RETRY_MS = 5 * 60_000
+export const transientRetryDelay = (failuresInARow: number) => Math.min(MAX_RETRY_MS, TRANSIENT_RETRY_MS * 2 ** Math.max(0, failuresInARow))
+
+// Whether the status panel should hide this stop: a passing problem that automatic
+// checks are retrying on their own.
+export function quietStop(status: ScanStatusLike | null, autoActive: boolean): boolean {
+  const error = status?.result?.error ?? null
+  return autoActive && !!error && TRANSIENT_STOPS.includes(error)
+}
+
+export function autoNextCheck(status: ScanStatusLike | null, now: number, firstOnPage: boolean, quietRetries = 0): { mode: "initial" | "more"; delay: number } | null {
+  if (!status || status.running) return null
+  const stop = status.result?.error ?? null
+  if (stop && TRANSIENT_STOPS.includes(stop)) {
+    const parse = (iso: string | null | undefined) => { const t = iso ? Date.parse(iso) : NaN; return Number.isNaN(t) ? null : t }
+    const finished = parse(status.lastFinished)
+    const at = Math.max(parse(status.cooldownUntil) ?? now, finished === null ? now : finished + transientRetryDelay(quietRetries))
+    return { mode: status.backlog ? "more" : "initial", delay: Math.max(0, at - now) }
+  }
+  if (status.backlog) {
+    const delay = autoContinueDelay(status, now)
+    return delay === null ? null : { mode: "more", delay }
+  }
+  const error = status.result?.error ?? null
+  if (error && !BATCH_LIMIT_STOPS.includes(error)) return null
+  const parse = (iso: string | null | undefined) => { const t = iso ? Date.parse(iso) : NaN; return Number.isNaN(t) ? null : t }
+  let at = parse(status.cooldownUntil) ?? now
+  const finished = parse(status.lastFinished)
+  if (!firstOnPage && finished !== null) at = Math.max(at, finished + AUTO_CHECK_INTERVAL_MS)
+  return { mode: "initial", delay: Math.max(0, at - now) }
+}
+
+// Emails the latest finished check skipped because of category words: none of a
+// category to check's words, or a skip word. Senders you did not allow, spam and
+// Google notices are not counted; with an allowlist they would be most of an inbox.
+export function skippedByCategories(status: ScanStatusLike | null): number {
+  if (!status || status.running) return 0
+  const c = status.result?.counts ?? {}
+  return (c.noTopicWord ?? 0) + (c.privateTopic ?? 0)
+}
+
+// A finished check that covered its whole window and found no new email: nothing
+// processed for the first time and nothing failed. Reused messages come from the
+// overlap with the previous check and were already handled.
+export function checkedNoNewEmail(status: ScanStatusLike | null): boolean {
+  if (!status || status.running || status.backlog || !status.lastFinished) return false
+  const result = status.result
+  if (!result || result.error) return false
+  const c = result.counts ?? {}
+  return (c.prepared ?? 0) - (c.reused ?? 0) <= 0 && (c.failed ?? 0) === 0
+}
+
+// Relative time for "Checked …": just now, then minutes, then hours, then null so
+// the caller can fall back to a clock time.
+export function checkedAgo(iso: string | null | undefined, now: number): string | null {
+  const t = iso ? Date.parse(iso) : NaN
+  if (Number.isNaN(t)) return null
+  const minutes = Math.floor(Math.max(0, now - t) / 60_000)
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  return hours < 24 ? `${hours} hr ago` : null
+}
+
+// Whether a finished batch moved the backlog forward. Repeated batches that do
+// not stop automatic scanning, so a stuck message cannot loop forever.
+export function batchMadeProgress(result: ScanStatusLike["result"]): boolean {
+  const c = result?.counts ?? {}
+  return ["prepared", "reused", "skipped", "privateTopic", "noTopicWord", "failed", "blocked"].some((k) => (c[k] ?? 0) > 0)
+}

@@ -1,6 +1,6 @@
 // Runtime-independent logic: no env/file access, credentials, database, or SDK.
 import schema, { gmailSchema } from '../prompts/extraction.schema.mjs';
-import { blockedTerms, containsBlockedWord, defaultWords, MAX_WORDS_PER_TOPIC, storedWord, textValues, validWord } from './private-topics.mjs';
+import { blockedTerms, containsBlockedWord, defaultTopicWords, defaultWords, MAX_WORDS_PER_TOPIC, requiredTerms, storedWord, textValues, validWord } from './private-topics.mjs';
 
 // Generic on purpose: it reaches the model and saved warnings, so it never names a topic or word.
 export const PRIVATE_CONTEXT_WARNING = 'Some thread history was excluded by your settings.';
@@ -50,7 +50,9 @@ function validateRules(rules) {
     if (!r.domains.every((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d.trim()))) fail('INVALID_RULES');
   }
 }
-export function filterMessage(message, rules) {
+// With no permitted sender or domain, `anySender` (set when a topic to check is
+// saved) lets any sender that is not blocked through; the topic words then decide.
+export function filterMessage(message, rules, anySender = false) {
   if (['allow','block'].some(g => ['keywords','labels'].some(f => rules[g][f]?.length) || (g === 'allow' && rules[g].subjectKeywords?.length))) return 'RULE_REVIEW_REQUIRED';
   const sender = address(message.from), domain = sender.split('@')[1];
   // Legacy mailbox tags never grant permission; legacy subject blocks stay subject-only.
@@ -59,7 +61,7 @@ export function filterMessage(message, rules) {
   const matches = (r) => r.senders.some((s) => address(s) === sender)
     || r.domains.some((d) => d.trim().toLowerCase() === domain);
   if (matches(rules.block) || contains(rules.block.subjectKeywords, [message.subject])) return 'EXCLUDED';
-  if (![...rules.allow.senders, ...rules.allow.domains].length) return 'NO_ALLOWLIST';
+  if (![...rules.allow.senders, ...rules.allow.domains].length) return anySender ? 'PERMITTED' : 'NO_ALLOWLIST';
   return matches(rules.allow) ? 'PERMITTED' : 'NOT_ALLOWED';
 }
 export function cleanBody(body) {
@@ -80,7 +82,7 @@ export function cleanBody(body) {
 // starter list, or the topic name itself, so it errs toward blocking more.
 export function semanticPreferences(value) {
   const keys = value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value) : [];
-  if (!keys.length || !keys.every(k => ['include','exclude','blockedWords'].includes(k))
+  if (!keys.length || !keys.every(k => ['include','exclude','blockedWords','includeWords'].includes(k))
     || !Object.hasOwn(value,'include') || !Object.hasOwn(value,'exclude')) fail('INVALID_SEMANTIC_PREFERENCES');
   const result = {};
   for (const group of ['include','exclude']) {
@@ -96,7 +98,15 @@ export function semanticPreferences(value) {
     if (!Array.isArray(words) || !words.length || words.length > MAX_WORDS_PER_TOPIC || !words.every(validWord)) fail('INVALID_SEMANTIC_PREFERENCES');
     result.blockedWords[topic] = [...new Set(words.map(storedWord))];
   }
-  try { result.terms = blockedTerms(result); } catch { fail('INVALID_SEMANTIC_PREFERENCES'); }
+  const savedInclude = value.includeWords ?? {};
+  if (!savedInclude || typeof savedInclude !== 'object' || Array.isArray(savedInclude)) fail('INVALID_SEMANTIC_PREFERENCES');
+  result.includeWords = {};
+  for (const topic of result.include) {
+    const words = Object.hasOwn(savedInclude, topic) ? savedInclude[topic] : defaultTopicWords(topic);
+    if (!Array.isArray(words) || !words.length || words.length > MAX_WORDS_PER_TOPIC || !words.every(validWord)) fail('INVALID_SEMANTIC_PREFERENCES');
+    result.includeWords[topic] = [...new Set(words.map(storedWord))];
+  }
+  try { result.terms = blockedTerms(result); result.requiredTerms = requiredTerms(result); } catch { fail('INVALID_SEMANTIC_PREFERENCES'); }
   return result;
 }
 export function prepareInput(input, defaults) {
@@ -115,11 +125,16 @@ export function prepareInput(input, defaults) {
   const limits = { ...defaults, ...input.contextLimits };
   if (!bounded(limits.maxMessages, 0, 10) || !bounded(limits.maxAgeDays, 1, 365)
     || !bounded(limits.maxMessageChars, 100, 30000) || !bounded(limits.maxTotalChars, 100, 60000)) fail('INVALID_LIMITS');
-  const decision = filterMessage(m, input.rules);
+  // Topics to check stand in for a sender allowlist only when none is saved.
+  const anySender = !!semantic?.requiredTerms?.length;
+  const decision = filterMessage(m, input.rules, anySender);
   if (decision !== 'PERMITTED') return { status: 'skipped', messageId: m.id, reason: decision };
   // Retrieval already checked this; repeating it here keeps every model path behind it.
   const terms = semantic?.terms ?? [];
   if (containsBlockedWord([m.subject, m.body], terms)) return { status: 'skipped', messageId: m.id, reason: 'PRIVATE_TOPIC' };
+  // With topics to check saved, the email must use at least one of their words.
+  const required = semantic?.requiredTerms ?? [];
+  if (required.length && !containsBlockedWord([m.subject, m.body], required)) return { status: 'skipped', messageId: m.id, reason: 'NO_TOPIC_WORD' };
   // Accepted task values can repeat words from their source email.
   const taskContext = existing && existing.filter(t => !containsBlockedWord(textValues(t.acceptedFields), terms));
   if (Date.parse(m.sentAt) > Date.parse(input.analysisTime)) fail('FUTURE_MESSAGE');
@@ -142,7 +157,7 @@ export function prepareInput(input, defaults) {
     validateMessage(c);
     if (ids.has(c.id) || !m.threadId || c.threadId !== m.threadId) fail('INVALID_CONTEXT_ID_OR_THREAD');
     ids.add(c.id);
-    if (filterMessage(c, input.rules) !== 'PERMITTED') { warnings.push('Some context excluded by privacy rules.'); continue; }
+    if (filterMessage(c, input.rules, anySender) !== 'PERMITTED') { warnings.push('Some context excluded by privacy rules.'); continue; }
     if (containsBlockedWord([c.subject, c.body], terms)) { warnings.push(PRIVATE_CONTEXT_WARNING); continue; }
     const age = Date.parse(m.sentAt) - Date.parse(c.sentAt);
     if (age < 0 || age > limits.maxAgeDays * 86400000) { warnings.push('Some context outside permitted time range.'); continue; }

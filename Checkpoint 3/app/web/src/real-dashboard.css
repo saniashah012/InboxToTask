@@ -54,8 +54,19 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 .app-shell .task-row.rd-info-row { grid-template-columns:minmax(0,1fr) auto auto; }
 .app-shell .rd-info-row .email-link { display:inline-block; }
 .rd-info-summary { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.app-shell .rd-info-row.rd-is-read { background:#fafbfa; }
-.app-shell .rd-info-row.rd-is-read .task-main { opacity:.7; }
+/* Unread: white, bold title, green dot. Seen: page grey, normal title. New: green label,
+   grouped first under a divider until you leave the tab. */
+.app-shell .task-row.rd-unread { background:var(--surface); }
+.app-shell .task-row.rd-seen { background:var(--canvas); }
+.app-shell .task-row.rd-unread .task-title-line h3 { font-weight:750; }
+.app-shell .task-row.rd-seen .task-title-line h3 { font-weight:500; }
+.app-shell .rd-info-row.rd-is-read .task-main { opacity:.8; }
+.rd-unread-dot { display:inline-block; width:7px; height:7px; margin:0 7px 1px 0; border-radius:50%; background:var(--green); vertical-align:middle; }
+.rd-new-badge { display:inline-block; padding:2px 7px; border-radius:999px; background:var(--green); color:#fff; font-size:10px; font-weight:700; letter-spacing:.02em; white-space:nowrap; }
+.rd-new-count { margin-left:6px; color:var(--green); font-size:.85em; font-weight:700; white-space:nowrap; }
+.rd-new-divider { display:flex; align-items:center; gap:10px; margin:0 0 8px; color:var(--green); font-size:.8rem; font-weight:700; }
+.rd-new-divider::after { content:""; flex:1; height:1px; background:var(--green-soft); }
+.app-shell .rd-info-row.rd-first-older { border-top:2px solid var(--green-soft); }
 .rd-chip { display:inline-block; padding:2px 8px; border-radius:999px; background:#fff3d6; color:#7a5200; font-size:.75rem; font-weight:600; white-space:nowrap; }
 .rd-summary p { margin:8px 0 0; line-height:1.55; }
 .rd-summary .rd-detail-meta { color:var(--muted); font-size:.8rem; }

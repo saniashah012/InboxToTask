@@ -203,6 +203,21 @@ export function hasSourcePermission(preferences: Pick<SetupPreferences, "selecte
   return preferences.selectedSenders.some(v => v.trim()) || preferences.selectedDomains.some(v => v.trim())
 }
 
+// A scan needs a permitted sender or domain, or else at least one category to
+// check: with no sender or domain, any sender that is not blocked is checked for
+// the categories' words. Must match private.scan_sources_ready.
+export function hasScanSource(preferences: Pick<SetupPreferences, "selectedSenders" | "selectedDomains" | "includedTypes">) {
+  return hasSourcePermission(preferences) || preferences.includedTypes.some(v => v.trim())
+}
+
+export function settingsHaveScanSource(settings: ScanSettings) {
+  return hasScanSource({
+    selectedSenders: settings.rules.allow.senders,
+    selectedDomains: settings.rules.allow.domains,
+    includedTypes: settings.semantic_preferences.include,
+  })
+}
+
 // Signed-in routing: a first save (revision 0) goes through the designed onboarding.
 // Legacy phrase rules need the workspace review form, which is the only screen
 // that can send p_reviewed.
@@ -216,8 +231,8 @@ export type GmailState = "disconnected" | "connected" | "reconnect_required" | "
 // Every reason a manual scan would be refused by saved settings, in plain words.
 export function scanBlockers(settings: ScanSettings, gmail: GmailState): string[] {
   const blockers: string[] = []
-  if (!hasSourcePermission({ selectedSenders: settings.rules.allow.senders, selectedDomains: settings.rules.allow.domains })) {
-    blockers.push("No permitted senders or domains, so nothing will be processed.")
+  if (!settingsHaveScanSource(settings)) {
+    blockers.push("No permitted senders, domains or categories to check, so nothing will be processed.")
   }
   if (!settings.consent) blockers.push("Scanning consent has not been given.")
   if (settings.paused) blockers.push("Scanning is paused.")
@@ -235,7 +250,12 @@ export function accessScopeSummary(preferences: SetupPreferences): string {
     ...preferences.excludedDomains.map(v => `domain ${v}`),
     ...preferences.excludedSubjects.map(v => `subject containing "${v}"`),
   ]
-  const access = allowed.length ? `Permit ${allowed.join(" OR ")}` : "No permitted sources, so nothing is processed"
+  const topics = preferences.includedTypes.map(v => v.trim()).filter(Boolean)
+  const access = allowed.length
+    ? `Permit ${allowed.join(" OR ")}`
+    : topics.length
+      ? `Permit any sender whose email uses a word from ${topics.join(" or ")}`
+      : "No permitted senders, domains or categories to check, so nothing is processed"
   return `${access}${blocked.length ? `, except ${blocked.join(" or ")}` : ""}. Exclusions always win.`
 }
 
@@ -296,4 +316,50 @@ export function topicInputError(term: string, count: number): string | null {
   return term.length > 254 || CONTROL_CHARS.test(term) || count >= 200
     ? "Use up to 200 terms, each 1-254 characters without control characters."
     : null
+}
+
+// What a confirmed save changed, in plain words, for the message shown back on the
+// dashboard. Compares the settings before the save with what the backend stored.
+export const NO_SETTINGS_CHANGES = "No changes to save. Your settings are unchanged."
+export function settingsChanges(before: ScanSettings, after: ScanSettings): string[] {
+  const changes: string[] = []
+  const norm = (values: string[] | undefined) => [...new Set((values ?? []).map(v => v.trim().toLowerCase()).filter(Boolean))]
+  const diff = (label: string, a: string[] | undefined, b: string[] | undefined) => {
+    const was = norm(a), now = norm(b)
+    const added = now.filter(v => !was.includes(v)), removed = was.filter(v => !now.includes(v))
+    if (added.length) changes.push(`added ${label} ${added.join(", ")}`)
+    if (removed.length) changes.push(`removed ${label} ${removed.join(", ")}`)
+  }
+  diff("permitted sender", before.rules.allow.senders, after.rules.allow.senders)
+  diff("permitted domain", before.rules.allow.domains, after.rules.allow.domains)
+  diff("blocked sender", before.rules.block.senders, after.rules.block.senders)
+  diff("blocked domain", before.rules.block.domains, after.rules.block.domains)
+  diff("skipped subject", before.rules.block.subjectKeywords, after.rules.block.subjectKeywords)
+  diff("category to check", before.semantic_preferences.include, after.semantic_preferences.include)
+  diff("category to skip", before.semantic_preferences.exclude, after.semantic_preferences.exclude)
+  // Word lists of categories kept on both sides; added or removed categories are named above.
+  const words = (label: string, a: Record<string, string[]> | undefined, b: Record<string, string[]> | undefined, kept: string[]) => {
+    const edited = kept.filter(t => JSON.stringify(norm(a?.[t])) !== JSON.stringify(norm(b?.[t])) && a?.[t] !== undefined && b?.[t] !== undefined)
+    if (edited.length) changes.push(`edited the words for ${label} ${edited.join(", ")}`)
+  }
+  const keptBoth = (a: string[], b: string[]) => norm(a).filter(t => norm(b).includes(t))
+  words("category to check", before.semantic_preferences.includeWords, after.semantic_preferences.includeWords,
+    keptBoth(before.semantic_preferences.include, after.semantic_preferences.include))
+  words("category to skip", before.semantic_preferences.blockedWords, after.semantic_preferences.blockedWords,
+    keptBoth(before.semantic_preferences.exclude, after.semantic_preferences.exclude))
+  if (JSON.stringify(before.context_limits) !== JSON.stringify(after.context_limits)) changes.push("changed the earlier-email context limits")
+  if (before.consent !== after.consent) changes.push(after.consent ? "gave scanning consent" : "withdrew scanning consent")
+  if (before.paused !== after.paused) changes.push(after.paused ? "paused scanning" : "resumed scanning")
+  return changes
+}
+
+// "Settings saved: added permitted sender a@x.org and removed category to check School."
+// Long lists are cut after three changes so the message stays readable.
+export function settingsSavedNotice(changes: string[]): string {
+  if (!changes.length) return "Settings saved. Nothing that affects scanning changed."
+  const shown = changes.slice(0, 3)
+  const more = changes.length - shown.length
+  const parts = more > 0 ? [...shown, `${more} more change${more === 1 ? "" : "s"}`] : shown
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+  return `Settings saved: ${list}. No email was read and no scan was started.`
 }

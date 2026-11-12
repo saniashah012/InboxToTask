@@ -9,11 +9,14 @@ import { manualScan, manualScanStatus, resolveTaskChange, reviewTaskChange, scan
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
 import { loadTaskSourceLinks, OpenInGmail, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
 import { loadRead, saveRead } from "./readMarks"
+import { changeKey, countAdded, scanSummary, suggestionKey } from "./newItems"
+import { useNewItems } from "./useNewItems"
 import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
-import type { GmailState } from "./scanSetup"
+import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
-  buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
+  autoNextCheck, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
+  AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
   type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
 import "./storage.css"
@@ -101,6 +104,15 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [scanning, setScanning] = useState(false)
+  // Automatic scanning (saved preference). It stops for this page when the user
+  // stops it, or after repeated batches that make no progress.
+  const [autoHalt, setAutoHalt] = useState<null | "user" | "stalled">(null)
+  const stalls = useRef(0)
+  // Whether a check has started on this page (the first automatic check runs on
+  // opening), and when an automatic check last failed to run (it then waits a
+  // full interval instead of retrying at once).
+  const checkedThisPage = useRef(false)
+  const autoFailedAt = useRef<number | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [notice, setNotice] = useState(initialNotice)
   const [activeTab, setActiveTab] = useState<"tasks" | "passive">("tasks")
@@ -117,6 +129,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [now, setNow] = useState(() => Date.now())
   // epoch changes when this account's dashboard unmounts; sequence orders reloads.
   const epoch = useRef(0), sequence = useRef(0)
+  const latestSnapshot = useRef<Snapshot>(snapshot)
+  latestSnapshot.current = snapshot
 
   const reload = useCallback(async () => {
     const current = epoch.current, request = ++sequence.current
@@ -149,6 +163,11 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [cooldownEnd])
+  // Keeps "Checked 3 min ago" current.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
   useEffect(() => {
     if (!scanning && !status?.running) return
     const current = epoch.current
@@ -178,15 +197,50 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     }
   }
 
-  async function scan(mode: "initial" | "more") {
+  async function runScan(mode: "initial" | "more") {
+    const result = await manualScan(mode)
+    if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
+    // A check that caught up is never a stall; repeated backlog batches without
+    // progress are, so a stuck message cannot loop forever.
+    stalls.current = !result.backlog || batchMadeProgress(result) ? 0 : stalls.current + 1
+    if (stalls.current >= 3) setAutoHalt("stalled")
+    // Planned limits are not failures; the status bar explains them.
+    if (result.error && !BATCH_LIMIT_STOPS.includes(result.error) && result.error !== DAILY_LIMIT_STOP) throw new Error(`${scanStopMessage(result.error)} Saved results remain available.`)
+  }
+
+  async function scan(mode: "initial" | "more", auto = false) {
+    checkedThisPage.current = true
     setScanning(true)
+    if (!auto) {
+      // A manual press restarts automatic scanning after it was stopped or stalled.
+      stalls.current = 0; autoFailedAt.current = null; setAutoHalt(null)
+      const current = epoch.current
+      const before = scanIds(latestSnapshot.current)
+      try {
+        const finished = await perform(() => runScan(mode), "")
+        if (current !== epoch.current) return
+        // perform() reloaded saved records, so this counts only what was actually saved.
+        const summary = scanSummaryBetween(before, scanIds(latestSnapshot.current))
+        if (finished) setNotice(`This check finished. ${summary}`)
+        else setFailure((f) => (f ? { message: `${f.message} ${summary}` } : f))
+      } finally { setScanning(false) }
+      return
+    }
+    // Automatic checks run in the background: they do not lock review actions,
+    // close menus or clear notices. Only a failure is shown; what they add shows
+    // through the "New" labels and tab counts.
+    const current = epoch.current
     try {
-      await perform(async () => {
-        const result = await manualScan(mode)
-        if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
-        if (result.error) throw new Error(`${scanStopMessage(result.error)} Saved results remain available.`)
-      }, "This check finished. New suggestions, if any, are under Suggestions.")
-    } finally { setScanning(false) }
+      await runScan(mode)
+      autoFailedAt.current = null
+    } catch (err) {
+      autoFailedAt.current = Date.now()
+      if (++stalls.current >= 3) setAutoHalt("stalled")
+      if (current === epoch.current) setFailure({ message: (err as Error).message })
+    } finally {
+      if (current === epoch.current) await reload()
+      setScanning(false)
+    }
   }
 
   const model = useMemo(() => buildDashboardModel(snapshot, links), [snapshot, links])
@@ -197,6 +251,22 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const openWaiting = model.waiting.filter((w) => !w.row.resolved).length
   const openTasks = model.active.filter((t) => t.row.status === "approved")
   const change = changeId ? [...model.changes].find((c) => c.row.id === changeId) ?? null : null
+
+  // New = saved after your last visit to the tab; unread = not opened or acted on yet.
+  const marks = useNewItems({
+    userId,
+    loaded: !loading && !loadFailed,
+    review: [
+      ...model.suggestions.map((s) => ({ key: suggestionKey(s.row.id), createdAt: s.row.created_at })),
+      ...model.changes.map((c) => ({ key: changeKey(c.row.id), createdAt: c.row.created_at })),
+    ],
+    passive: model.information.map((e) => ({ createdAt: e.created_at })),
+    showing: loading ? null : activeTab === "tasks" ? (view === "suggestions" ? "review" : null) : "passive",
+  })
+  const newSuggestions = model.suggestions.filter((s) => marks.isNew("review", s.row.created_at))
+  const olderSuggestions = model.suggestions.filter((s) => !marks.isNew("review", s.row.created_at))
+  const newReviewCount = newSuggestions.length + model.changes.filter((c) => marks.isNew("review", c.row.created_at)).length
+  const newPassiveCount = model.information.filter((e) => marks.isNew("passive", e.created_at)).length
 
   const sourceForSuggestion = (s: SuggestionItem | ChangeItem | WaitingItem, title: string): SourceView => ({
     title, sender: s.source?.sender, subject: s.source?.subject, sentAt: s.source?.sent_at, quote: s.quote, messageId: s.messageId, extraction: s.extraction,
@@ -233,21 +303,37 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   }
   const move = (from: Category, row: StoredRow, to: Category, suggestionId: string) =>
     void perform(() => runMove(from, row, to), `Moved to ${categoryLabel[to]}.`, () => { setNotice(""); setToast({ kind: "moved", id: suggestionId, from, to }) })
-  const moveItems = (from: Category, row: StoredRow, suggestionId: string | null | undefined, hasQuote = true) => {
+  const moveItems = (from: Category, row: StoredRow, suggestionId: string | null | undefined, hasQuote = true, onAct?: () => void) => {
     if (!suggestionId) return null
     const targets = moveTargets(from, row, hasQuote)
     if (!targets.length) return null
-    return <>{targets.map((to) => <button key={to} onClick={() => { setMenuId(null); move(from, row, to, suggestionId) }}>Move to {categoryLabel[to]}</button>)}</>
+    return <>{targets.map((to) => <button key={to} onClick={() => { setMenuId(null); onAct?.(); move(from, row, to, suggestionId) }}>Move to {categoryLabel[to]}</button>)}</>
   }
 
   const blockers = {
-    sources: settings.rules.allow.senders.length + settings.rules.allow.domains.length === 0,
+    sources: !settingsHaveScanSource(settings),
     consent: !settings.consent,
     paused: settings.paused,
     gmail: !gmail.checking && gmail.state !== "connected",
   }
   const panelState: ScanPanelState = gmail.checking && !status ? "loading" : scanPanelState({ status, loadError: statusFailed, scanning, cooldownLeft, blockers })
   const needsReconnect = status?.result?.error === "GMAIL_RECONNECT_REQUIRED" || gmail.state === "reconnect_required"
+
+  // While the app is open: check on opening, then every minute after the last
+  // check finished, always continuing a saved backlog first. Every check passes
+  // the same server checks as a manual scan; nothing runs with the app closed.
+  const autoOn = Boolean(settings.auto_scan) && autoHalt === null
+  const autoReady = autoOn && !busy && !scanning && !loading && !statusFailed && !needsReconnect
+    && !blockers.sources && !blockers.consent && !blockers.paused && !blockers.gmail
+  useEffect(() => {
+    if (!autoReady) return
+    const next = autoNextCheck(status, Date.now(), !checkedThisPage.current)
+    if (!next) return
+    const backoff = autoFailedAt.current === null ? 0 : autoFailedAt.current + AUTO_CHECK_INTERVAL_MS - Date.now()
+    const timer = window.setTimeout(() => void scan(next.mode, true), Math.max(next.delay, backoff))
+    return () => window.clearTimeout(timer)
+    // scan is recreated each render; the timer only needs the latest status.
+  }, [autoReady, status])
 
   return (
     <div className="app-shell">
@@ -293,18 +379,19 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
 
         <nav aria-label="Inbox categories" className="tabs">
           <button aria-selected={activeTab === "tasks"} className={activeTab === "tasks" ? "tab active" : "tab"} onClick={() => setActiveTab("tasks")} role="tab">
-            Tasks<span className="tab-count">{reviewCount + model.active.length}</span>
+            Tasks<span className="tab-count">{reviewCount + model.active.length}</span>{newReviewCount > 0 && <NewCount n={newReviewCount} />}
           </button>
           <button aria-selected={activeTab === "passive"} className={activeTab === "passive" ? "tab active" : "tab"} onClick={() => setActiveTab("passive")} role="tab">
-            Passive communication<span className="tab-count">{model.information.length}</span>
+            Passive communication<span className="tab-count">{model.information.length}</span>{newPassiveCount > 0 && <NewCount n={newPassiveCount} />}
           </button>
         </nav>
 
         <RealScanStatus
-          state={panelState} status={status} cooldownLeft={cooldownLeft} busy={busy} scanning={scanning}
+          now={now} state={panelState} status={status} cooldownLeft={cooldownLeft} busy={busy} scanning={scanning}
           settings={settings} gmail={gmail.state} needsReconnect={needsReconnect} activityOpen={activityOpen}
           onToggleActivity={() => setActivityOpen((c) => !c)}
           onScan={(mode) => void scan(mode)}
+          auto={{ on: Boolean(settings.auto_scan), halted: autoHalt, onStop: () => setAutoHalt("user") }}
           onSettings={() => onOpenSettings(panelState === "missing-sources" ? "sources" : panelState === "paused" ? "processing" : "connections")}
         />
 
@@ -329,6 +416,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                 {(["suggestions", "active", "completed", "dismissed"] as const).map((v) => (
                   <button aria-selected={view === v} className={view === v ? "review-tab active" : "review-tab"} key={v} onClick={() => { setView(v); setMenuId(null) }} role="tab">
                     {v[0].toUpperCase() + v.slice(1)}<span>{counts[v]}</span>
+                    {v === "suggestions" && newReviewCount > 0 && <NewCount n={newReviewCount} />}
                     {v === "active" && pendingUpdates > 0 && <span className="pending-update-count">{pendingUpdates} update</span>}
                   </button>
                 ))}
@@ -343,34 +431,47 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
               ) : loadFailed && !snapshot.tasks.length && !snapshot.suggestions.length ? null : (
                 <>
                   {view === "suggestions" && <>
-                    {model.suggestions.length > 0 && <div className="task-list">{model.suggestions.map((s) => (
-                      <RealTaskRow key={s.row.id} kind="suggestion" fields={s.fields} today={today} busy={busy}
-                        context={s.source?.sender ?? "Source unavailable"} menuOpen={menuId === s.row.id}
-                        badges={<>{s.sibling && <span className="task-context">{s.sibling.index} of {s.sibling.of} from this email</span>}{s.edited && <span className="updated-badge">Edited by you</span>}{s.extraction?.needs_review && <span className="provisional-badge">Needs verification</span>}{!s.quote && <span className="updated-badge">Evidence expired</span>}</>}
-                        onMenu={() => setMenuId((c) => (c === s.row.id ? null : s.row.id))}
-                        onSource={() => setSource(sourceForSuggestion(s, s.fields.action))}
-                        primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
-                          onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added. No Calendar event was created.")}>Add task</button>}
-                        menu={<><button onClick={() => { setMenuId(null); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
-                          {moveItems("suggestions", s.row, s.row.id, Boolean(s.quote))}
-                          <button className="danger-action" onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) })}>Dismiss suggestion</button></>}
-                      />))}</div>}
+                    {[{ group: newSuggestions, fresh: true }, { group: olderSuggestions, fresh: false }].map(({ group, fresh }) => group.length > 0 && <div key={fresh ? "new" : "older"}>
+                      {fresh && <NewDivider since={marks.lastVisit("review")} />}
+                      {fresh && olderSuggestions.length > 0 && <span className="visually-hidden">End of new suggestions.</span>}
+                      <div className="task-list">{group.map((s) => {
+                        const seen = () => marks.markSeen(suggestionKey(s.row.id))
+                        return (
+                          <RealTaskRow key={s.row.id} kind="suggestion" fields={s.fields} today={today} busy={busy}
+                            isNew={fresh} unread={marks.isUnread(suggestionKey(s.row.id))}
+                            context={s.source?.sender ?? "Source unavailable"} menuOpen={menuId === s.row.id}
+                            badges={<>{s.sibling && <span className="task-context">{s.sibling.index} of {s.sibling.of} from this email</span>}{s.edited && <span className="updated-badge">Edited by you</span>}{s.extraction?.needs_review && <span className="provisional-badge">Needs verification</span>}{!s.quote && <span className="updated-badge">Evidence expired</span>}</>}
+                            onMenu={() => setMenuId((c) => (c === s.row.id ? null : s.row.id))}
+                            onSource={() => { seen(); setSource(sourceForSuggestion(s, s.fields.action)) }}
+                            primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
+                              onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added. No Calendar event was created.") }}>Add task</button>}
+                            menu={<><button onClick={() => { setMenuId(null); seen(); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
+                              {moveItems("suggestions", s.row, s.row.id, Boolean(s.quote), seen)}
+                              <button className="danger-action" onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) }) }}>Dismiss suggestion</button></>}
+                          />)
+                      })}</div>
+                    </div>)}
                     {model.changes.length > 0 && <>
                       <h3 className="rd-subhead">Proposed changes to your tasks</h3>
-                      <div className="task-list">{model.changes.map((c) => (
-                        <article className="task-row is-suggestion" key={c.row.id}>
+                      <div className="task-list">{model.changes.map((c) => {
+                        const unread = marks.isUnread(changeKey(c.row.id)), fresh = marks.isNew("review", c.row.created_at)
+                        const seen = () => marks.markSeen(changeKey(c.row.id))
+                        return (
+                        <article className={`task-row is-suggestion ${unread ? "rd-unread" : "rd-seen"}`} key={c.row.id}>
                           <div className="task-main">
                             <div className="task-title-line">
-                              <h3>{c.row.kind === "cancel" ? "Proposed cancellation" : "Proposed edit"}: {c.target?.accepted_fields?.action ?? c.row.baseline?.action ?? "Task"}</h3>
+                              <h3>{unread && <UnreadDot />}{c.row.kind === "cancel" ? "Proposed cancellation" : "Proposed edit"}: {c.target?.accepted_fields?.action ?? c.row.baseline?.action ?? "Task"}</h3>
+                              {fresh && <NewBadge />}
                               <span className="updated-badge">{c.row.kind === "cancel" ? "Cancellation detected" : `${c.row.changed_fields?.length ?? 0} field${c.row.changed_fields?.length === 1 ? "" : "s"} changed`}</span>
                               {c.stale && <span className="provisional-badge">Task changed since</span>}
                               {!c.open && <span className="provisional-badge">Task no longer open</span>}
                             </div>
                             <p className="task-caption">{c.row.reason}</p>
                           </div>
-                          <button className="email-link" onClick={() => setSource(sourceForSuggestion(c, "Proposed change"))}>View source email</button>
-                          <button className="primary-button row-button" onClick={() => setChangeId(c.row.id)}>Review change</button>
-                        </article>))}</div>
+                          <button className="email-link" onClick={() => { seen(); setSource(sourceForSuggestion(c, "Proposed change")) }}>View source email</button>
+                          <button className="primary-button row-button" onClick={() => { seen(); setChangeId(c.row.id) }}>Review change</button>
+                        </article>)
+                      })}</div>
                     </>}
                     {model.unresolvedChanges.length > 0 && <>
                       <h3 className="rd-subhead">Changes that need you to choose the task</h3>
@@ -431,7 +532,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
           </div>
         ) : (
           loading ? <div className="empty-state" role="status"><span className="spinner" aria-hidden="true" /><h3>Loading summaries…</h3></div>
-            : model.information.length ? <PassiveSection key={`info-${userId}`} userId={userId} items={model.information} sources={snapshot.sources} evidence={snapshot.evidence} onSource={setSource} />
+            : model.information.length ? <PassiveSection key={`info-${userId}`} userId={userId} items={model.information} sources={snapshot.sources} evidence={snapshot.evidence} onSource={setSource}
+              isNew={(e) => marks.isNew("passive", e.created_at)} since={marks.lastVisit("passive")} />
               : <EmptyState title="No informational summaries" detail="Summaries of permitted emails that don’t need action appear here after a manual check." />
         )}
       </main>
@@ -494,8 +596,10 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
   return <div className="empty-state"><div className="empty-state-mark"><Icon name="check" /></div><h3>{title}</h3><p>{detail}</p></div>
 }
 
-function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onMenu, onSource, onComplete, primary, menu }: {
+function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onMenu, onSource, onComplete, primary, menu, isNew, unread }: {
   kind: "suggestion" | "active" | "completed" | "cancelled" | "dismissed"
+  isNew?: boolean
+  unread?: boolean
   fields: TaskFields
   today: string
   busy: boolean
@@ -512,7 +616,7 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
   const done = kind === "completed" || kind === "cancelled"
   const caption = [fields.condition && `Condition: ${fields.condition}`, ...fields.requirements].filter(Boolean).join(" · ")
   return (
-    <article className={`task-row ${done ? "is-complete" : ""} ${kind === "suggestion" || kind === "dismissed" ? "is-suggestion" : ""}`}>
+    <article className={`task-row ${done ? "is-complete" : ""} ${kind === "suggestion" || kind === "dismissed" ? "is-suggestion" : ""} ${unread === undefined ? "" : unread ? "rd-unread" : "rd-seen"}`}>
       {(kind === "active" || kind === "completed") && onComplete && (
         <button aria-label={kind === "completed" ? `Undo completion of ${fields.action}` : `Complete ${fields.action}`} aria-pressed={kind === "completed"} className="checkbox" disabled={busy} onClick={onComplete}>
           {kind === "completed" && <Icon name="check" size={15} />}
@@ -520,7 +624,8 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
       )}
       <div className="task-main">
         <div className="task-title-line">
-          <h3>{fields.action}</h3>
+          <h3>{unread && <UnreadDot />}{fields.action}</h3>
+          {isNew && <NewBadge />}
           {context && <span className="task-context">{context}</span>}
           {badges}
         </div>
@@ -573,12 +678,14 @@ function ConfidenceBadge({ category, value }: { category: string; value: number 
 
 // Passive communication: informational emails as cards in the Tasks style, with
 // Unread/Read tabs. Read marks stay in this browser (same storage as before).
-function PassiveSection({ userId, items, sources, evidence, onSource }: {
+function PassiveSection({ userId, items, sources, evidence, onSource, isNew, since }: {
   userId: string
   items: StoredRow[]
   sources: StoredRow[]
   evidence: StoredRow[]
   onSource: (view: SourceView) => void
+  isNew: (e: StoredRow) => boolean
+  since: string | null
 }) {
   const [read, setRead] = useState(() => loadRead(userId))
   const [view, setView] = useState<"unread" | "read">("unread")
@@ -592,7 +699,10 @@ function PassiveSection({ userId, items, sources, evidence, onSource }: {
     const quote = evidence.find((q) => q.extraction_id === e.id && q.quote)
     return { e, src, quote }
   }).sort((a, b) => Date.parse(b.src?.sent_at ?? b.e.created_at) - Date.parse(a.src?.sent_at ?? a.e.created_at))
-  const shown = cards.filter((c) => read.has(c.e.source_id) === (view === "read"))
+  // New cards first, under a divider; each group keeps newest-first order.
+  const inView = cards.filter((c) => read.has(c.e.source_id) === (view === "read"))
+  const shown = [...inView.filter((c) => isNew(c.e)), ...inView.filter((c) => !isNew(c.e))]
+  const firstOlder = shown.findIndex((c) => !isNew(c.e))
   const counts = { unread: cards.filter((c) => !read.has(c.e.source_id)).length, read: cards.filter((c) => read.has(c.e.source_id)).length }
   return (
     <section className="task-section">
@@ -604,14 +714,16 @@ function PassiveSection({ userId, items, sources, evidence, onSource }: {
         ))}
       </div>
       <p className="rd-sort-note">Newest first · read marks are remembered in this browser</p>
-      {shown.length > 0 ? <div className="task-list">{shown.map(({ e, src, quote }) => {
+      {shown.length > 0 && isNew(shown[0].e) && <NewDivider since={since} />}
+      {shown.length > 0 ? <div className="task-list">{shown.map(({ e, src, quote }, i) => {
         const isRead = read.has(e.source_id)
         const title = src?.subject || "(no subject)"
         return (
-          <article className={`task-row rd-info-row${isRead ? " rd-is-read" : ""}`} key={e.id}>
+          <article className={`task-row rd-info-row${isRead ? " rd-is-read rd-seen" : " rd-unread"}${i === firstOlder && i > 0 ? " rd-first-older" : ""}`} key={e.id}>
             <div className="task-main">
               <div className="task-title-line">
-                <h3>{title}</h3>
+                <h3>{!isRead && <UnreadDot />}{title}</h3>
+                {isNew(e) && <NewBadge />}
                 {src?.sender && <span className="task-context">{src.sender}</span>}
                 {e.needs_review && <span className="rd-chip">Needs verification</span>}
               </div>
@@ -643,21 +755,39 @@ function friendlyTime(iso: string, now = new Date()): string {
   return `${date} at ${clock}`
 }
 
-const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailState, status: ScanStatus | null, cooldownLeft: number): [string, string] => {
+// Each check handles a few new emails, then stops on purpose to limit AI use.
+const partialDetail = (status: ScanStatus | null) => {
+  const n = status?.result?.counts?.modelCalls ?? 0
+  return n > 0 ? `Checked ${n} new email${n === 1 ? "" : "s"} this time; each scan handles a few at a time.` : "Each scan handles a few new emails at a time."
+}
+
+const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailState, status: ScanStatus | null, autoActive: boolean): [string, string] => {
   switch (state) {
     case "loading": return ["Loading scan status…", "Checking saved settings and the Gmail connection."]
     case "processing": return ["Checking permitted Gmail…", "Counts update when the batch finishes. You can keep reviewing."]
-    case "missing-sources": return ["No sources permitted", "Add an exact sender or domain in Settings. Topics never grant access, so nothing is processed."]
+    case "missing-sources": return ["Nothing to check", "Add a sender, domain or category to check in Settings. Until then nothing is processed."]
     case "paused": return settings.consent ? ["Scanning paused", "Resume in Settings to run a manual check."] : ["Scanning consent needed", "Give scanning consent in Settings before a manual check."]
     case "disconnected": return gmail === "reconnect_required" ? ["Reconnect Gmail", "Gmail access is no longer valid. Reconnect in Settings → Connections."] : gmail === "unknown" ? ["Gmail status unavailable", "Could not confirm the Gmail connection. Reload, or check Settings → Connections."] : ["Gmail not connected", "Connect Gmail in Settings → Connections. No mailbox was accessed."]
-    case "cooldown": return ["Cooling down", `You can check again in ${cooldownLeft} s.`]
+    case "cooldown": return ["Cooling down", autoActive ? (status?.backlog ? "Scanning continues automatically when the timer finishes." : "The next automatic check starts a minute after this one finished.") : "You can scan again when the timer finishes."]
+    case "partial": return ["More email to check", status?.result?.error === "STORAGE_PROVIDER_LIMIT"
+      ? `The AI service's per-minute limit was reached. ${autoActive ? "Scanning continues automatically in about a minute." : "Wait a minute, then scan again."}`
+      : `${partialDetail(status)} ${autoActive ? "Continuing automatically." : "Scan again when you're ready to continue."}`]
+    case "daily-limit": return ["Daily limit reached", "Today's AI allowance is used up, so scanning stops here. It resets at midnight UTC; saved results remain available."]
     case "failed": return status?.result?.error ? ["Last check stopped", `${scanStopMessage(status.result.error)} Saved results remain available.`] : ["Scan status unavailable", "Could not load scan status. Saved tasks below are unaffected."]
-    case "empty": return ["Ready for your first scan", ""]
-    default: return ["Ready to scan", ""]
+    case "empty": return ["Ready for your first scan", autoActive ? "The first check starts automatically." : ""]
+    default: return [autoActive ? "Watching for new email" : "Ready to scan", autoActive ? "Checks again every minute while the app is open." : ""]
   }
 }
 
-function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings, gmail, needsReconnect, activityOpen, onToggleActivity, onScan, onSettings }: {
+// Whether the latest check covered the full past 7 days or only email since the
+// previous complete check (incremental window, with a few minutes of overlap).
+const coveredFullWeek = (status: ScanStatus | null) => {
+  const start = Date.parse(status?.windowStart ?? ""), end = Date.parse(status?.windowEnd ?? "")
+  return Number.isNaN(start) || Number.isNaN(end) || end - start >= 7 * 86_400_000 - 60_000
+}
+
+function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, settings, gmail, needsReconnect, activityOpen, onToggleActivity, onScan, onSettings, auto }: {
+  now: number
   state: ScanPanelState
   status: ScanStatus | null
   cooldownLeft: number
@@ -670,11 +800,13 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
   onToggleActivity: () => void
   onScan: (mode: "initial" | "more") => void
   onSettings: () => void
+  auto: { on: boolean; halted: null | "user" | "stalled"; onStop: () => void }
 }) {
   // One button: it continues unfinished work when an earlier check left some,
-  // otherwise it starts a new 7-day check. A reconnect always starts fresh.
+  // otherwise it checks right now for email since the last complete check (the
+  // full 7 days the first time, and after a settings change or reconnect).
   const resume = Boolean(status?.backlog) && !needsReconnect
-  const [title, detail] = stateCopy(state, settings, gmail, status, cooldownLeft)
+  const [title, detail] = stateCopy(state, settings, gmail, status, auto.on && !auto.halted)
   const counts = status?.result?.counts
   const allowed = canScan(state) && !busy && !scanning && !status?.running
   const blocked = state === "missing-sources" || state === "paused" || state === "disconnected"
@@ -682,15 +814,26 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
     <section aria-label="Processing status" className={`processing-status state-${state}`}>
       <div className="processing-status-copy">
         {state === "processing" ? <span className="manual-spinner" aria-hidden="true" />
-          : state === "cooldown" ? <span className="manual-cooldown" aria-hidden="true" style={{ "--cooldown-progress": `${Math.min(100, (cooldownLeft / 60) * 100)}%` } as CSSProperties}><span>{cooldownLeft}</span></span>
+          : state === "cooldown" ? <span className="manual-cooldown" aria-hidden="true" style={{ "--cooldown-progress": `${Math.min(100, (cooldownLeft / 30) * 100)}%` } as CSSProperties}><span>{cooldownLeft}</span></span>
             : <span className="status-pulse" />}
         <div role="status">
           <strong>{title}</strong>
           {detail && <span id="rd-scan-why">{detail}</span>}
           <span className="scan-last-checked">
-            {status?.lastSuccessful ? `Last scan ${friendlyTime(status.lastSuccessful)}` : "No scans yet"}
-            {resume ? " · more email to process" : " · covers the past 7 days"}
+            {checkedNoNewEmail(status) && status?.lastFinished
+              ? `Checked ${checkedAgo(status.lastFinished, now) ?? friendlyTime(status.lastFinished)} · no new email`
+              : <>
+                {status?.lastSuccessful ? `Last scan ${friendlyTime(status.lastSuccessful)}` : "No scans yet"}
+                {resume ? " · more email to process" : status?.lastSuccessful ? (coveredFullWeek(status) ? " · covered the past 7 days" : " · new email since the previous check") : ""}
+              </>}
           </span>
+          {auto.on && (
+            <span className="scan-last-checked">
+              {auto.halted === "stalled" ? "Automatic checks paused: the last few made no progress or could not run. Press Scan now to try again."
+                : auto.halted === "user" ? "Automatic checks stopped until you press Scan now or reopen the app."
+                  : <>Automatic checks are on: when the app opens and every minute while it's open · <button className="text-link" onClick={auto.onStop}>Stop</button></>}
+            </span>
+          )}
         </div>
       </div>
       <div className="processing-status-actions">
@@ -700,7 +843,7 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
           className="primary-button rd-scan-button"
           disabled={!allowed}
           onClick={() => onScan(resume ? "more" : "initial")}
-          title={allowed ? (resume ? "Continue where the last check stopped" : "Check permitted Gmail from the past 7 days") : title}
+          title={allowed ? (resume ? "Continue where the last check stopped" : "Check for new permitted Gmail right now") : title}
         >
           <Icon name="refresh" size={16} />
           {scanning || status?.running ? "Scanning…" : "Scan now"}
@@ -712,9 +855,9 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
           {counts ? <>
             <strong>Last batch</strong>
             <span>{counts.candidates ?? 0} candidates · {counts.permitted ?? 0} permitted · {counts.blocked ?? 0} excluded by your rules · {(counts.privateTopic ?? 0) + (counts.noTopicWord ?? 0)} skipped by topic words · {counts.prepared ?? 0} processed · {counts.reused ?? 0} reused without a model call · {counts.failed ?? 0} could not be processed · {counts.modelCalls ?? 0} model calls</span>
-            {(counts.failed ?? 0) > 0 && <span>{(status?.result?.unresolved ?? 0) > 0 ? `${status?.result?.unresolved} messages stopped after repeated attempts; a new 7-day check tries them again. ` : ""}Other failed messages are retried by the next scan.</span>}
+            {(counts.failed ?? 0) > 0 && <span>{(status?.result?.unresolved ?? 0) > 0 ? `${status?.result?.unresolved} messages stopped after repeated attempts; they are tried again after a settings change or Gmail reconnect, which rechecks the full 7 days. ` : ""}Other failed messages are retried by the next scan.</span>}
           </> : <><strong>No batch recorded</strong><span>Activity appears after your first manual check.</span></>}
-          <span>Scans run only when you press Scan now; automatic scanning is not enabled. Each scan covers the past 7 days, inspects up to 100 permitted messages and makes up to two model calls, within daily limits.</span>
+          <span>{auto.on ? "Automatic checks run when the app opens and every minute while it's open, never with the app closed." : "Scans run only when you press Scan now; automatic checks are off."} The first check, and the first after a settings change or Gmail reconnect, covers the past 7 days; later checks cover email since the previous check. Each batch inspects up to 100 permitted messages and makes up to three model calls, within daily limits.</span>
         </div>
       )}
     </section>
@@ -887,4 +1030,36 @@ function ReminderModal({ followup, busy, onSave, onCancel }: { followup: StoredR
       </div>
     </Modal>
   )
+}
+
+// A small green dot before an unread card's title. The visually hidden word carries the
+// meaning for screen readers, so color is never the only signal.
+function UnreadDot() {
+  return <><span aria-hidden="true" className="rd-unread-dot" /><span className="visually-hidden">Unread: </span></>
+}
+function NewBadge() {
+  return <span className="rd-new-badge">New</span>
+}
+function NewCount({ n }: { n: number }) {
+  return <span className="rd-new-count">· {n} new</span>
+}
+function NewDivider({ since }: { since: string | null }) {
+  return <p className="rd-new-divider">{since ? `New since your last visit · ${friendlyTime(since)}` : "New since your last visit"}</p>
+}
+
+// IDs of saved items, to say what a finished check added.
+function scanIds(s: Snapshot) {
+  const m = buildDashboardModel(s, null)
+  return {
+    suggestions: [...m.suggestions, ...m.dismissed].map((x) => x.row.id as string),
+    changes: [...m.changes, ...m.unresolvedChanges].map((x) => x.row.id as string),
+    passive: m.information.map((x) => x.id as string),
+  }
+}
+function scanSummaryBetween(before: ReturnType<typeof scanIds>, after: ReturnType<typeof scanIds>) {
+  return scanSummary({
+    suggestions: countAdded(new Set(before.suggestions), after.suggestions),
+    changes: countAdded(new Set(before.changes), after.changes),
+    passive: countAdded(new Set(before.passive), after.passive),
+  })
 }

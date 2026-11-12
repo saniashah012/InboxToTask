@@ -92,14 +92,14 @@ One tester and about 15 emails do not measure extraction accuracy.
 
 ## Open findings
 None blocked PR #22. Only the first two need SQL.
-- "Last successful batch" does not update when a batch stops at the model-call limit.
+- ~~"Last successful batch" does not update when a batch stops at the model-call limit.~~ Fixed by `20261112001000_scan_cooldown_and_batch_stops` (not yet applied).
 - New-task option for an ambiguous update whose task is not listed (suggested, not requested).
 - Every normal reply is marked for review, because quote removal adds a warning.
 - A Gmail 403 from quota would show as "reconnect". Found by reading code, not observed.
 - Clearer task labels in the resolver (due date and source email).
 - The prompt says edits carry complete values while validation allows empty ones when untargeted.
   The prompt is in the cache key, so editing it invalidates saved results.
-- Two calls per batch and 20 requests per day are too low for real use.
+- 20 requests per day is too low for real use. The per-batch cap was raised from two to three model calls (matching the 3-per-minute limit).
 
 ## Next work, in order
 1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code. Vercel production is `main` per Sania, so every merge deploys.

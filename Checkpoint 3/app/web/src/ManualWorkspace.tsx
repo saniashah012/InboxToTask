@@ -91,9 +91,9 @@ export default function ManualWorkspace({userId,email,onSignOut,onOpenSettings,o
   <header className="manual-topbar"><div className="manual-brand"><img alt="" src={inboxToTaskLogo}/><span>InboxToTask</span></div><div className="manual-account"><span>{email}</span><button onClick={onOpenSettings}>Settings</button><button onClick={onSignOut}>Sign out</button></div></header>
   <div className="manual-intro"><h1>Your inbox, ready for review</h1><p>Suggestions stay here until you approve them.</p></div>
   <section className="storage-panel" aria-labelledby="manual-scan-title"><h2 id="manual-scan-title">Check Gmail</h2>
-   <p>Manual checks cover the past seven days. Each batch can inspect up to 100 permitted messages and make up to two model calls, subject to time and account budgets. Additional work requires your Scan more request.</p>
+   <p>Manual checks cover the past seven days. Each batch can inspect up to 100 permitted messages and make up to three model calls, subject to time and account budgets. Additional work requires your Scan more request.</p>
    <div className={`manual-scan-state${scanning||status?.running?' is-scanning':!busy&&cooldownLeft>0?' is-cooldown':''}`}>
-    {scanning||status?.running?<span className="manual-spinner" aria-hidden="true"/>:!busy&&cooldownLeft>0?<span className="manual-cooldown" aria-hidden="true" style={{'--cooldown-progress':`${Math.min(100,cooldownLeft/60*100)}%`} as CSSProperties}><span>{cooldownLeft}</span></span>:null}
+    {scanning||status?.running?<span className="manual-spinner" aria-hidden="true"/>:!busy&&cooldownLeft>0?<span className="manual-cooldown" aria-hidden="true" style={{'--cooldown-progress':`${Math.min(100,cooldownLeft/30*100)}%`} as CSSProperties}><span>{cooldownLeft}</span></span>:null}
     <p role="status">{scanning||status?.running?'Scanning permitted emails. Counts update when the batch finishes.':busy?'Saving your change…':cooldownLeft>0?'Cooling down. You can scan again shortly.':loading?'Loading saved status…':'Ready for a manual request. Automatic scanning is not enabled.'}</p>
    </div>
    <p>Last successful batch: {status?.lastSuccessful?new Date(status.lastSuccessful).toLocaleString():'None recorded'}</p>

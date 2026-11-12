@@ -24,7 +24,7 @@ export function createGmailProcessor({rpc,user,work,settings,systemPrompt,genera
  return async (email,{remainingMs=60000}={})=>{
   const topics=work.semanticPreferences===undefined?null:semanticPreferences(work.semanticPreferences);
   const rows=await rpc('gmail_task_context',{p_user:user.id,p_lease:work.lease,p_meta:email.message});
-  const context=selectTaskContext(rows,email.message,email.rules,undefined,topics?.terms??[]);
+  const context=selectTaskContext(rows,email.message,email.rules,undefined,topics?.terms??[],!!topics?.requiredTerms?.length);
   const input={...email,contract:'gmail-v1',user:{email:user.email,timeZone},analysisTime:work.end,
     semanticPreferences:work.semanticPreferences,existingTaskContext:context.tasks};
   const prepared=prepareInput(input,settings.contextLimits);
@@ -52,7 +52,7 @@ export function createGmailProcessor({rpc,user,work,settings,systemPrompt,genera
   // Cache lookup and permission checks precede spending a reservation. Call limit
   // is passed to SQL, so an unchanged cached result remains reusable at the limit.
   const claim=await rpc('gmail_process_claim',{p_user:user.id,p_scan:work.lease,p_key:key,p_base:base,p_config:configKey,
-    p_meta:meta,p_reserve:reserve,p_guard:{metadata,tasks:existingTaskContext,allowInference:calls<2&&remainingMs>10000}});
+    p_meta:meta,p_reserve:reserve,p_guard:{metadata,tasks:existingTaskContext,allowInference:calls<3&&remainingMs>10000}});
   if(claim.state==='cached') return {modelCalls:0,reused:true,saved:true};
   if(claim.state!=='claimed') throw problem(({busy:'STORAGE_BUSY',paused:'STORAGE_PAUSED',suppressed:'STORAGE_SUPPRESSED',
     budget_deferred:'STORAGE_BUDGET',provider_deferred:'STORAGE_PROVIDER_LIMIT',retry_later:'STORAGE_RETRY_LATER',attempt_limit:'STORAGE_ATTEMPT_LIMIT',inference_deferred:'SCAN_INFERENCE_LIMIT'})[claim.state]??'STORAGE_UNAVAILABLE');

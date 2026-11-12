@@ -155,7 +155,9 @@ Inclusions use OR: exact case-insensitive sender/domain matches, with no implici
 subdomains. Source exclusions and literal case-insensitive `block.subjectKeywords`
 override inclusion. Phrase access rules and mailbox labels fail closed with
 `RULE_REVIEW_REQUIRED`; they never grant source access. Empty source allowlists
-produce `NO_ALLOWLIST` and zero inference. Optional `semanticPreferences` are
+produce `NO_ALLOWLIST` and zero inference, unless a topic to check is saved: then
+`filterMessage(..., anySender)` permits any sender that is not excluded (retrieval
+still requires Gmail's authentication result) and the topic words decide. Optional `semanticPreferences` are
 validated separately from access permissions. Only `include` (topics of interest)
 reaches Gemini; relevance to it is part of the versioned Gmail extraction contract.
 Each `exclude` topic is a list of literal words in `blockedWords` (suggested topics

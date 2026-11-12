@@ -95,7 +95,7 @@ sequenceDiagram
       Scan->>DB: Recheck permission, look for a reusable result, reserve budget
       alt Reusable result
         DB-->>Scan: Cached, 0 model calls
-      else At most 2 model calls in a batch
+      else At most 3 model calls in a batch
         Scan->>Model: Structured extraction
         Model-->>Scan: JSON
         Scan->>Scan: Validate schema, evidence, owner and targets
@@ -109,7 +109,7 @@ sequenceDiagram
   UI->>DB: Review RPC with revision check, no model call
 ```
 
-The handler rechecks the scan lease and saved permission before each external request ([retrieval](../app/pipeline/gmail-retrieval.mjs), [processor](../app/pipeline/gmail-processor.mjs), [endpoint](../app/supabase/functions/gmail_scan/index.ts)). If work remains, the user clicks **Scan more** after the 60-second cooldown. Nothing continues on its own. Results appear when a batch finishes; there is no streaming.
+The handler rechecks the scan lease and saved permission before each external request ([retrieval](../app/pipeline/gmail-retrieval.mjs), [processor](../app/pipeline/gmail-processor.mjs), [endpoint](../app/supabase/functions/gmail_scan/index.ts)). If work remains, the user clicks **Scan more** after the 30-second cooldown. Nothing continues on its own. Results appear when a batch finishes; there is no streaming.
 
 ## Components
 
@@ -162,7 +162,7 @@ The system prompt uses one-line rule examples. Reference few-shot examples are s
 | --- | --- | --- |
 | No vector store | Context comes from the same Gmail thread plus accepted tasks found by thread, so retrieval is exact and permission-checked | No cross-thread matching; separate emails about one task stay separate |
 | Metadata before bodies | Excluded mail is never read | More Gmail requests per message |
-| Manual, bounded batches | Controls cost and keeps consent explicit during the trial | At most two model calls per batch, so a large backlog needs many clicks |
+| Manual, bounded batches | Controls cost and keeps consent explicit during the trial | At most three model calls per batch, so a large backlog needs many clicks |
 | Reuse results by content hash | Repeat scans make no model call (L14) | A prompt or settings change invalidates saved results |
 | Backend-owned, code-only review | The model never changes accepted values; review costs no tokens | A person must review each item |
 | Excerpts and a Gmail link, not stored bodies | Less sensitive data kept (chosen as a naive first version) | The full message stays in Gmail, and the link opens the whole conversation |

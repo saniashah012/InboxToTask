@@ -165,6 +165,40 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     return () => { epoch.current++; sequence.current++ }
   }, [reload, userId])
 
+  // Several open tabs: only the tab holding a browser lock runs automatic checks (if
+  // it closes, another takes over), every tab reloads when another reports a change,
+  // and a tab refreshes when you come back to it.
+  const channel = useRef<BroadcastChannel | null>(null)
+  const [autoLeader, setAutoLeader] = useState(() => typeof navigator === "undefined" || !("locks" in navigator))
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null
+    try { bc = new BroadcastChannel(`inboxtotask:${userId}`) } catch { bc = null }
+    channel.current = bc
+    if (bc) bc.onmessage = (event) => { if (event.data === "changed") void reload() }
+    let lastRefresh = Date.now()
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastRefresh < 5000) return
+      lastRefresh = Date.now(); void reload()
+    }
+    document.addEventListener("visibilitychange", refresh)
+    window.addEventListener("focus", refresh)
+    const controller = new AbortController()
+    let release: (() => void) | null = null
+    if ("locks" in navigator) {
+      navigator.locks.request(`inboxtotask-auto-scan:${userId}`, { signal: controller.signal }, () => new Promise<void>((resolve) => {
+        release = resolve
+        setAutoLeader(true)
+      })).catch(() => { /* aborted on unmount */ })
+    }
+    return () => {
+      controller.abort(); release?.()
+      document.removeEventListener("visibilitychange", refresh)
+      window.removeEventListener("focus", refresh)
+      bc?.close(); channel.current = null
+    }
+  }, [reload, userId])
+  const announceChange = () => { try { channel.current?.postMessage("changed") } catch { /* other tabs refresh on focus */ } }
+
   const cooldownEnd = status?.cooldownUntil ? Date.parse(status.cooldownUntil) : 0
   const cooldownLeft = Math.max(0, Math.ceil((cooldownEnd - now) / 1000))
   useEffect(() => {
@@ -196,9 +230,10 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
       if (current !== epoch.current) return false
       setNotice(message); after?.()
       await reload()
+      announceChange()
       return true
     } catch (err) {
-      if (current === epoch.current) { setFailure({ message: (err as Error).message }); await reload() }
+      if (current === epoch.current) { setFailure({ message: (err as Error).message }); await reload(); announceChange() }
       return false
     } finally {
       // Unconditional: the dashboard is keyed by account, so a previous account's
@@ -276,7 +311,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         if (current === epoch.current && !shownInPanel) setFailure({ message: (err as Error).message })
       }
     } finally {
-      if (current === epoch.current) await reload()
+      if (current === epoch.current) { await reload(); announceChange() }
       setScanning(false)
     }
   }
@@ -363,7 +398,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   // While the app is open: check on opening, then every minute after the last
   // check finished, always continuing a saved backlog first. Every check passes
   // the same server checks as a manual scan; nothing runs with the app closed.
-  const autoReady = autoOn && !busy && !scanning && !loading && !statusFailed && !needsReconnect
+  const autoReady = autoOn && autoLeader && !busy && !scanning && !loading && !statusFailed && !needsReconnect
     && !blockers.sources && !blockers.consent && !blockers.paused && !blockers.gmail
   useEffect(() => {
     if (!autoReady) return

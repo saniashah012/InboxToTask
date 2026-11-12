@@ -1,5 +1,7 @@
 > **Working-tree navigation (November 5, 2026):** Start with [current implementation state](<Checkpoint 3/CURRENT_STATE.md>) and [repository instructions](AGENTS.md). Active code is under Checkpoint 3; earlier checkpoints and the project proposal below are historical requirements/context. For continuation, see [the Claude handoff](CLAUDE_HANDOFF.md). The presence of code does not mean local migrations are applied or live acceptance has passed.
 
+**Checkpoint 4 work** is in [`Checkpoint 4/`](<Checkpoint 4/README.md>), tracked in the CP4 issues and the pinned working agreement. Application code stays in `Checkpoint 3/app`.
+
 **Checkpoint 3 deliverables** are in `Checkpoint 3/`. The demo runs locally.
 
 | Required | Location |

@@ -441,27 +441,7 @@ CP3 exit condition: another teammate can reproduce setup, connect a real test ac
 
 ## CP4 checklist: evaluation, refinement, and final delivery
 
-The CP4 instructions have not been supplied. This is a provisional plan based on CP3's Track A/Track B preview and CP2's baseline requirement; align it with the official CP4 rubric when available.
-
-- [ ] Obtain CP4 requirements; select Track A user study or Track B algorithmic benchmark and set success thresholds before final testing.
-- [ ] Unify the workspace's **Scan past seven days** and **Scan more** into one scan button. Keep the existing behavior behind it: a bounded batch, visible backlog, the cooldown, and permission checks. Decide how the user approves continuing a backlog, since the plan currently requires a separate "Scan more" approval.
-- [ ] Evaluate the stored few-shot examples in `app/prompts/few-shot/` against the labeled set, comparing accuracy and token cost, before any of them are added to the system prompt.
-- [ ] Expand the CP3 labeled cases with varied senders/domains, ambiguous dates, multiple responsibilities, changed deadlines, mixed-topic content, and adversarial instructions.
-- [ ] Reserve a held-out set; freeze prompts/settings before final evaluation and avoid tuning on held-out cases.
-- [ ] Compare human-alone, AI-alone, and combined workflows; specify identical inputs, timing rules, and how each workflow's outputs are scored.
-- [ ] Measure task detection precision/recall, ownership/deadline correctness, missed actions, duplicate rate, update matching, and uncertainty handling.
-- [ ] Evaluate filtering separately: rule enforcement, excluded context/quoted-content limitations, and unwanted external disclosures. Do not claim semantic privacy protection from metadata rules.
-- [ ] Measure end-to-end latency, time to first useful result, cost per email/scan, retry recovery, and scan completeness.
-- [ ] Evaluate context selection, same-thread grouping, and optional Batch API/provider caching using the cost section above; report measured savings and accuracy/privacy tradeoffs against the CP3 baseline.
-- [ ] For Track A, measure completion time, correction effort, source verification, understanding of privacy scope, and user control with consent and appropriate study data handling.
-- [ ] For Track B, report dataset composition, labels, scoring, baselines, per-scenario failures, and uncertainty/variation appropriate to the sample size.
-- [ ] Tune prompts, settings, context limits, and reminder/duplicate logic against observed errors, then rerun relevant tests and held-out evaluation.
-- [ ] Refine accessibility, onboarding comprehension, calendar behavior, and retention controls based on evidence.
-- [ ] Test larger inboxes, overlapping jobs, prolonged failures, expiry/disconnection, cleanup races, and backup/deletion disclosures.
-- [ ] Reassess public-launch Gmail verification and model-provider terms before extending beyond test users.
-- [ ] Produce the final report, evaluation evidence, updated architecture/setup/safety documents, and reproducible final artifact.
-
-Optional only if evidence and time support them: push-based arrival detection, richer rule previews, additional calendar integrations, or a separate classifier. None replaces completing the core application, and Jev is not selected.
+The official CP4 instructions were supplied on November 6, 2026. The provisional checklist that was here has moved to [the CP4 plan](<../Checkpoint 4/CP4_PLAN.md>); CP4 work is tracked in the CP4 issues. The requirements above remain the acceptance detail for the features it builds on.
 
 ## Project references
 

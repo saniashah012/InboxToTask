@@ -11,6 +11,7 @@ Read the task-relevant entry points below and follow their imports. Avoid scanni
 | Area | Entry points and documentation |
 | --- | --- |
 | Product requirements | [Implementation plan](<Checkpoint 3/IMPLEMENTATION_PLAN.md>) — unchecked items are requirements, not proof that code is absent |
+| CP4 work and deliverables | [CP4 index](<Checkpoint 4/README.md>), [plan](<Checkpoint 4/CP4_PLAN.md>), [instructions](<Checkpoint 4/CP4_INSTRUCTIONS.md>) — the working agreement (#39) and the CP4 issues win where the plan disagrees |
 | Frontend | [Web instructions](<Checkpoint 3/app/web/AGENTS.md>), [React entry](<Checkpoint 3/app/web/src/main.tsx>) |
 | Canonical extraction | [Pipeline guide](<Checkpoint 3/app/pipeline/README.md>), [core](<Checkpoint 3/app/pipeline/core.mjs>), [Gemini adapter](<Checkpoint 3/app/pipeline/gemini.mjs>) |
 | Model contract | [Prompts and schema](<Checkpoint 3/app/prompts/>) — inspect effective overrides as well as defaults |

@@ -276,17 +276,9 @@ Updated November 12 to the key dates in the CP4 working agreement (#39), which i
 
 The earlier fallback (run the study on `ManualWorkspace` if the dashboard wasn't ready by November 15) is no longer needed: the designed dashboard runs on real data. If hosted Gmail misbehaves, the study still runs on frozen results (#67).
 
-### Proposed owners
+### Owners
 
-These followed the team roles in the README. Current owners and reviewers are on each CP4 issue.
-
-| Area | Proposed owner |
-| --- | --- |
-| Study protocol, sessions, thematic analysis | Hua, with Sania |
-| Related work, references, report assembly | Yuchen |
-| Onboarding, chips, dashboard UI, hosted checks | Sania |
-| Backend, abuse controls, benchmark tooling, modular split | Matthew |
-| Presentation | Everyone, with one person assigned to edit |
+Owners and reviewers are assigned on each CP4 issue on the project board, not in this plan.
 
 ## 9. Workstream D: final artifact
 

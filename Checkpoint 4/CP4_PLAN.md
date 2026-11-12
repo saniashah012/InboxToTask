@@ -22,18 +22,20 @@ This was a proposal for the team to confirm; the decisions below now show what w
 
 **Nine of the 13 points come from the evaluation and report, and features aren't graded directly.** So engineering is limited to what the study needs, what the artifact score needs, and what must be safe to deploy. If engineering runs late, we cut features, not the study. The [fallback](#8-schedule) is defined up front.
 
-## 2. Decisions (updated November 12)
+## 2. Decisions (status as of November 12)
 
-| # | Decision | Recommendation | Why |
+Each row says whether it is **decided**, **done** or still **open**, with the evidence. The team settles open ones in the working agreement (#39) or an issue.
+
+| # | Decision | Status and outcome | Why |
 | --- | --- | --- | --- |
-| D1 | Evaluation track | **Track A, plus a small ablation benchmark** | The rubric and slides expect qualitative depth and ablations. CP2 also committed us to comparing human-only, AI-only and combined workflows |
-| D2 | IRB and consent | **Ask the instructor this week** | The study involves people, and recruiting can't start until this is answered |
+| D1 | Evaluation track | **Decided: Track A, plus a small ablation benchmark** (study sessions #69–#72, analysis #76–#79, ablations #75) | The rubric and slides expect qualitative depth and ablations. CP2 also committed us to comparing human-only, AI-only and combined workflows |
+| D2 | IRB and consent | **Decided: informal class study without IRB review, with a consent sheet** (#60; disclosed as a limitation in #83) | The study involves people, so consent and the limitation are stated plainly |
 | D3 | Google Calendar events | **Decided: required for CP4** (was: cut, keep ICS export) | Tracked in #44–#47 and #53; the latest work is on branch `claude/calendar-designed-ui`, and the go/no-go decision for the study is due noon Tuesday November 17. ICS export stays as the fallback |
-| D4 | Automatic scans | **Partly built:** opt-in checks when the app opens and every minute while it's open (#108, #110, tracked in #50). Scanning with the app closed (#49) is still future work, after the study | Background access with the app closed still raises the consent and token questions, so the report must say plainly which part exists |
-| D5 | Dashboard category filter | **Remove it from real mode for now** | Real data has no topic category (see [Section 5](#5-workstream-b-connect-the-designed-dashboard)). Adding one changes the prompt and invalidates saved results |
-| D6 | Open-source license | **MIT, unless the team objects** | The repo is public but has no license, so it isn't legally open source yet. All four authors must agree |
-| D7 | App location | **Keep `Checkpoint 3/app`, map it in the [CP4 index](README.md)** | Moving it would break CI, Vercel's root setting and doc links, and conflict with open branches, for little gain |
-| D8 | Who can use the live URL | **Public fictional preview, real scanning for approved testers only** (approved-tester controls not built yet: #48; today any signed-in user can scan) | Keeps the link working for graders without exposing the model budget. Ask the instructor whether that plus a recorded demo is acceptable |
+| D4 | Automatic scans | **Decided, partly built:** opt-in checks when the app opens and every minute while it's open (#108, #110, tracked in #50). Scanning with the app closed (#49) is still future work, after the study | Background access with the app closed still raises the consent and token questions, so the report must say plainly which part exists |
+| D5 | Dashboard category filter | **Done: no category filter in the real dashboard** | Real data has no topic category (see [Section 5](#5-workstream-b-connect-the-designed-dashboard)). Adding one changes the prompt and invalidates saved results |
+| D6 | Open-source license | **Open: proposed MIT, unless the team objects** (no `LICENSE` in the repo yet) | The repo is public but has no license, so it isn't legally open source yet. All four authors must agree |
+| D7 | App location | **Decided in practice: kept in `Checkpoint 3/app`, mapped in the [CP4 index](README.md)** | Moving it would break CI, Vercel's root setting and doc links, and conflict with open branches, for little gain |
+| D8 | Who can use the live URL | **Open: proposed public fictional preview, real scanning for approved testers only** (approved-tester controls not built yet, #48; today any signed-in user can scan) | Keeps the link working for graders without exposing the model budget. Ask the instructor whether that plus a recorded demo is acceptable |
 
 ## 3. Requirements check
 
@@ -68,7 +70,7 @@ CP3 has been submitted, so these are carried forward because the final artifact 
 
 ## 4. Evaluation design
 
-This is the recommended design under D1. Write the thresholds and analysis rules down **before** running any session.
+This is the design chosen under D1 (Track A plus an ablation benchmark); the study materials in #58–#64 refine it. Write the thresholds and analysis rules down **before** running any session.
 
 ### User study (Track A)
 

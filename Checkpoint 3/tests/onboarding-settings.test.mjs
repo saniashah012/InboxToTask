@@ -24,6 +24,31 @@ const fresh = () => ({
   context_limits: { maxMessages: 5, maxAgeDays: 90, maxMessageChars: 12000, maxTotalChars: 24000 },
 });
 
+test('a saved settings change is described in plain words for the dashboard message', () => {
+  const before = { ...fresh(), revision: 2, consent: true, paused: false,
+    semantic_preferences: { include: ['school'], exclude: ['health'], includeWords: { school: ['syllabus'] }, blockedWords: { health: ['diagnosis'] } } };
+  before.rules.allow.senders = ['teacher@example.org'];
+  const after = structuredClone(before);
+  after.revision = 3;
+  after.rules.allow.senders = ['teacher@example.org', 'Dean@Example.org'];
+  after.semantic_preferences.include = [];
+  after.semantic_preferences.includeWords = {};
+  after.semantic_preferences.blockedWords = { health: ['diagnosis', 'clinic'] };
+  after.paused = true;
+  assert.deepEqual(settingsChanges(before, after), [
+    'added permitted sender dean@example.org',
+    'removed category to check school',
+    'edited the words for category to skip health',
+    'paused scanning',
+  ]);
+  assert.equal(settingsSavedNotice(settingsChanges(before, after)),
+    'Settings saved: added permitted sender dean@example.org, removed category to check school, edited the words for category to skip health and 1 more change. No email was read and no scan was started.');
+  assert.equal(settingsSavedNotice(['gave scanning consent']), 'Settings saved: gave scanning consent. No email was read and no scan was started.');
+  assert.deepEqual(settingsChanges(before, structuredClone(before)), []);
+  assert.equal(settingsSavedNotice([]), 'Settings saved. Nothing that affects scanning changed.');
+  assert.match(NO_SETTINGS_CHANGES, /No changes/);
+});
+
 test('first-time unchecked save keeps the unconsented, paused state', () => {
   const decision = consentDecision(false, false);
   assert.equal(decision, undefined);
@@ -245,29 +270,4 @@ test('typed skipped-category words follow the backend word rules', () => {
   assert.match(parseBlockedWord('ab', [], 0).error, /1-100/);
   assert.match(parseBlockedWord('new', Array.from({ length: 100 }, (_, i) => `w${i}`), 100).error, /up to 100/);
   assert.match(parseBlockedWord('new', ['a'], 1000).error, /1000 words in total/);
-});
-
-test('a saved settings change is described in plain words for the dashboard message', () => {
-  const before = { ...fresh(), revision: 2, consent: true, paused: false,
-    semantic_preferences: { include: ['school'], exclude: ['health'], includeWords: { school: ['syllabus'] }, blockedWords: { health: ['diagnosis'] } } };
-  before.rules.allow.senders = ['teacher@example.org'];
-  const after = structuredClone(before);
-  after.revision = 3;
-  after.rules.allow.senders = ['teacher@example.org', 'Dean@Example.org'];
-  after.semantic_preferences.include = [];
-  after.semantic_preferences.includeWords = {};
-  after.semantic_preferences.blockedWords = { health: ['diagnosis', 'clinic'] };
-  after.paused = true;
-  assert.deepEqual(settingsChanges(before, after), [
-    'added permitted sender dean@example.org',
-    'removed category to check school',
-    'edited the words for category to skip health',
-    'paused scanning',
-  ]);
-  assert.equal(settingsSavedNotice(settingsChanges(before, after)),
-    'Settings saved: added permitted sender dean@example.org, removed category to check school, edited the words for category to skip health and 1 more change. No email was read and no scan was started.');
-  assert.equal(settingsSavedNotice(['gave scanning consent']), 'Settings saved: gave scanning consent. No email was read and no scan was started.');
-  assert.deepEqual(settingsChanges(before, structuredClone(before)), []);
-  assert.equal(settingsSavedNotice([]), 'Settings saved. Nothing that affects scanning changed.');
-  assert.match(NO_SETTINGS_CHANGES, /No changes/);
 });

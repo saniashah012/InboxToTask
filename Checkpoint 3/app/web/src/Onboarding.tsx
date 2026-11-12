@@ -135,7 +135,7 @@ export default function Onboarding({
             <>
               <h2>Which email categories should we check?</h2>
               <p className="setup-description">
-                Choose exact sender or domain permissions. Topics describe relevance within permitted email.
+                Choose exact sender or domain permissions. Categories to check narrow that further: a permitted email must use one of their words.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" />
               <p className="setup-helper requirement-helper">
@@ -179,8 +179,8 @@ export default function Onboarding({
               <details className="privacy-disclosure">
                 <summary>How privacy filtering works</summary>
                 <ul>
-                  <li>Exact source and subject exclusions override inclusions before an email body is retrieved. Semantic topics are evaluated after Gemini receives permitted content.</li>
-                  <li>Metadata rules cannot guarantee that all health or financial content is excluded.</li>
+                  <li>Exact source and subject exclusions override inclusions before an email body is retrieved. Topics are word lists checked before anything is sent to Gemini: an email using a skipped topic's words is skipped, and with topics to check saved, an email using none of their words is skipped too.</li>
+                  <li>Neither metadata rules nor word lists can guarantee that all health or financial content is excluded: email that uses none of the words can still be sent. Blocking a sender or domain is the complete protection.</li>
                 </ul>
               </details>
               <FooterActions back={() => setStep(2)} next={() => setStep(4)} nextDisabled={Boolean(contextError)} />

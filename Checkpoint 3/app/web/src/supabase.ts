@@ -9,6 +9,8 @@ export type OnboardingPreferences = {
   excludedSenders: string[]
   excludedDomains: string[]
   excludedSubjects: string[]
+  blockedWords?: Record<string, string[]>
+  includeWords?: Record<string, string[]>
 }
 
 type PreferenceRow = {

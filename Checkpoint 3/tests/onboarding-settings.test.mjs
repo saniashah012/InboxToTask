@@ -4,10 +4,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { consentDecision, resolveScanConsent } from '../app/web/src/scanConsent.ts';
 import {
-  accessScopeSummary, contextLimitError, hasSourcePermission, preferencesFromSettings,
-  parseRuleInput, sameSavedFields, scanBlockers, settingsWithPreferences, signedInRoute, topicInputError,
-  withConsentDecision,
+  accessScopeSummary, blockedWordsFor, contextLimitError, hasSourcePermission, parseBlockedWord,
+  preferencesFromSettings, parseRuleInput, sameSavedFields, scanBlockers, settingsWithPreferences,
+  signedInRoute, topicInputError, totalBlockedWords, withConsentDecision,
 } from '../app/web/src/scanSetup.ts';
+import { excludedTopicSuggestions, includedTopicSuggestions, starterBlockedWords, starterTopicWords } from '../app/web/src/filterPresets.ts';
+import { STARTER_BLOCKED_WORDS, STARTER_TOPIC_WORDS } from '../app/pipeline/private-topics.mjs';
 
 const emptyRules = () => ({
   allow: { labels: [], senders: [], domains: [], subjectKeywords: [], keywords: [] },
@@ -60,7 +62,9 @@ test('topics are saved only as semantic preferences, never as access keywords', 
     includedTypes: ['School', 'Research'], excludedTypes: ['Health'],
     selectedSenders: [], selectedDomains: [], excludedSenders: [], excludedDomains: [], excludedSubjects: [],
   });
-  assert.deepEqual(next.semantic_preferences, { include: ['School', 'Research'], exclude: ['Health'] });
+  assert.deepEqual(next.semantic_preferences, { include: ['School', 'Research'], exclude: ['Health'],
+    blockedWords: { health: STARTER_BLOCKED_WORDS.health },
+    includeWords: { school: STARTER_TOPIC_WORDS.school, research: STARTER_TOPIC_WORDS.research } });
   assert.deepEqual(next.rules, emptyRules());
   assert.equal(hasSourcePermission(preferencesFromSettings(next)), false);
 });
@@ -95,7 +99,7 @@ test('fields the screens do not edit keep their saved values', () => {
 });
 
 test('unsaved-change detection ignores the key order jsonb returns', () => {
-  const saved = { ...fresh(), revision: 2, semantic_preferences: { exclude: [], include: ['school'] },
+  const saved = { ...fresh(), revision: 2, semantic_preferences: { includeWords: { school: [...STARTER_TOPIC_WORDS.school] }, exclude: [], include: ['school'] },
     context_limits: { maxAgeDays: 90, maxMessages: 5, maxTotalChars: 24000, maxMessageChars: 12000 } };
   saved.rules.allow = { labels: [], domains: ['example.edu'], senders: [], keywords: [], subjectKeywords: [] };
   const next = settingsWithPreferences(saved, preferencesFromSettings(saved));
@@ -168,4 +172,76 @@ test('topic terms are bounded in length, characters and count', () => {
   assert.equal(topicInputError('x'.repeat(255), 0), error);
   assert.equal(topicInputError('tab\there', 0), error);
   assert.equal(topicInputError('exam', 200), error);
+});
+
+test('every suggested skipped category has a word list matching the backend starter list', () => {
+  assert.deepEqual(starterBlockedWords, STARTER_BLOCKED_WORDS);
+  for (const suggestion of excludedTopicSuggestions) {
+    assert.ok(STARTER_BLOCKED_WORDS[suggestion.toLowerCase()]?.length, `${suggestion} has a starter list`);
+  }
+  assert.deepEqual(Object.keys(STARTER_BLOCKED_WORDS).sort(),
+    excludedTopicSuggestions.map(s => s.toLowerCase()).sort(), 'no starter list lacks a suggestion chip');
+});
+
+test('skipped categories save their edited, starter or name word lists', () => {
+  const base = { ...preferencesFromSettings(fresh()), excludedTypes: ['Health', 'Financial', 'Rowing Team'],
+    blockedWords: { health: ['diagnosis', '  Lab   Results ', 'DIAGNOSIS'], promotions: ['coupon'] } };
+  const next = settingsWithPreferences(fresh(), base);
+  assert.deepEqual(next.semantic_preferences.blockedWords, {
+    health: ['diagnosis', 'lab results'],
+    financial: STARTER_BLOCKED_WORDS.financial,
+    'rowing team': ['rowing team'],
+  }, 'lists of categories no longer skipped are dropped');
+  assert.deepEqual(blockedWordsFor(base, 'Promotions'), ['coupon'], 'a removed edit comes back if re-added');
+  assert.equal(totalBlockedWords(base), 3 + STARTER_BLOCKED_WORDS.financial.length + 1);
+});
+
+test('saved word lists round-trip without reporting unsaved changes', () => {
+  const saved = { ...fresh(), revision: 3, semantic_preferences: { include: [], exclude: ['health', 'my club'],
+    blockedWords: { health: ['diagnosis'], 'my club': ['chess club', 'rowing'] } } };
+  const prefs = preferencesFromSettings(saved);
+  assert.ok(sameSavedFields(settingsWithPreferences(saved, prefs), saved));
+  const edited = { ...prefs, blockedWords: { ...prefs.blockedWords, health: ['diagnosis', 'pharmacy'] } };
+  assert.equal(sameSavedFields(settingsWithPreferences(saved, edited), saved), false);
+  assert.deepEqual(saved.semantic_preferences.blockedWords.health, ['diagnosis'], 'loaded settings are not mutated');
+});
+
+test('an account with no skipped topics does not report unsaved changes after loading', () => {
+  // scan_settings_get returns blockedWords: {} even when nothing is skipped.
+  const saved = { ...fresh(), revision: 3, semantic_preferences: { include: ['school'], exclude: [], blockedWords: {},
+    includeWords: { school: [...STARTER_TOPIC_WORDS.school] } } };
+  assert.ok(sameSavedFields(settingsWithPreferences(saved, preferencesFromSettings(saved)), saved));
+});
+
+test('every suggested category to check has a word list matching the backend starter list', () => {
+  assert.deepEqual(starterTopicWords, STARTER_TOPIC_WORDS);
+  assert.deepEqual(Object.keys(STARTER_TOPIC_WORDS).sort(),
+    includedTopicSuggestions.map(s => s.toLowerCase()).sort(), 'every suggestion chip has a starter list');
+});
+
+test('categories to check save their edited, starter or name word lists, and round-trip', () => {
+  const prefs = { ...preferencesFromSettings(fresh()), includedTypes: ['School', 'Band'],
+    includeWords: { band: ['rehearsal', 'Concert  Hall'] } };
+  const next = settingsWithPreferences(fresh(), prefs);
+  assert.deepEqual(next.semantic_preferences.includeWords,
+    { school: STARTER_TOPIC_WORDS.school, band: ['rehearsal', 'concert hall'] });
+  const saved = { ...next, revision: 1, semantic_preferences: { ...next.semantic_preferences, include: ['school', 'band'] } };
+  assert.ok(sameSavedFields(settingsWithPreferences(saved, preferencesFromSettings(saved)), saved));
+  const edited = preferencesFromSettings(saved);
+  edited.includeWords = { ...edited.includeWords, school: ['syllabus'] };
+  assert.equal(sameSavedFields(settingsWithPreferences(saved, edited), saved), false);
+  // Removing every category to check removes every list, so nothing is required.
+  const cleared = settingsWithPreferences(saved, { ...preferencesFromSettings(saved), includedTypes: [] });
+  assert.deepEqual(cleared.semantic_preferences.includeWords, {});
+});
+
+test('typed skipped-category words follow the backend word rules', () => {
+  assert.equal(parseBlockedWord('   ', [], 0), null);
+  assert.deepEqual(parseBlockedWord('  Lab   Results ', [], 0), { value: 'lab results' });
+  assert.match(parseBlockedWord('LOAN', ['loan'], 1).error, /already/);
+  assert.match(parseBlockedWord('!!!', [], 0).error, /letter or number/);
+  assert.match(parseBlockedWord('x'.repeat(101), [], 0).error, /1-100/);
+  assert.match(parseBlockedWord('ab', [], 0).error, /1-100/);
+  assert.match(parseBlockedWord('new', Array.from({ length: 100 }, (_, i) => `w${i}`), 100).error, /up to 100/);
+  assert.match(parseBlockedWord('new', ['a'], 1000).error, /1000 words in total/);
 });

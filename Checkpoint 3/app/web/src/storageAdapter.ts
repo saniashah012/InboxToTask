@@ -9,7 +9,8 @@ export type ScanRules = Record<"allow" | "block", Record<"labels" | "senders" | 
 export type ScanSettings = {
   revision: number; consent: boolean; paused: boolean; consent_at: string | null
   // blockedWords: one literal word list per skipped topic, checked before anything reaches the AI.
-  semantic_preferences: { include: string[]; exclude: string[]; blockedWords?: Record<string, string[]> }
+  // includeWords: one list per topic to check; with any saved, an email must use one of the words.
+  semantic_preferences: { include: string[]; exclude: string[]; blockedWords?: Record<string, string[]>; includeWords?: Record<string, string[]> }
   requires_review: boolean; legacy_phrase_rules: ScanRules | null; reviewed?: boolean
   rules: ScanRules
   context_limits: { maxMessages: number; maxAgeDays: number; maxMessageChars: number; maxTotalChars: number }

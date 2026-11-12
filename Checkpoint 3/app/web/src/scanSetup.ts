@@ -3,6 +3,7 @@
 // suite can test it directly.
 import type { ScanSettings } from "./storageAdapter"
 import { resolveScanConsent } from "./scanConsent.ts"
+import { starterBlockedWords, starterTopicWords } from "./filterPresets.ts"
 
 // Same shape the designed chip editor already uses.
 export type SetupPreferences = {
@@ -13,6 +14,12 @@ export type SetupPreferences = {
   excludedSenders: string[]
   excludedDomains: string[]
   excludedSubjects: string[]
+  // Skipped-category word lists keyed by lowercased category name. A category
+  // without an entry uses its starter list, or its own name for a custom one.
+  blockedWords?: Record<string, string[]>
+  // Topic-to-check word lists, keyed the same way. With any topic to check saved,
+  // an email must contain one of these words before it reaches Gemini.
+  includeWords?: Record<string, string[]>
 }
 
 export type ContextLimits = ScanSettings["context_limits"]
@@ -47,7 +54,82 @@ export function preferencesFromSettings(settings: ScanSettings): SetupPreference
     excludedSenders: [...settings.rules.block.senders],
     excludedDomains: [...settings.rules.block.domains],
     excludedSubjects: [...settings.rules.block.subjectKeywords],
+    blockedWords: Object.fromEntries(
+      Object.entries(settings.semantic_preferences.blockedWords ?? {}).map(([topic, words]) => [topic, [...words]]),
+    ),
+    includeWords: Object.fromEntries(
+      Object.entries(settings.semantic_preferences.includeWords ?? {}).map(([topic, words]) => [topic, [...words]]),
+    ),
   }
+}
+
+// Skipped-category word lists. These mirror the backend normalizer
+// (private.normalize_scan_semantic): category names are trimmed and lowercased,
+// words are trimmed, lowercased and inner spaces collapsed.
+export const MAX_WORDS_PER_TOPIC = 100
+export const MAX_BLOCKED_WORDS = 1000
+
+export function topicKey(topic: string): string {
+  return topic.trim().toLowerCase()
+}
+
+export function normalizeBlockedWord(word: string): string {
+  return word.trim().toLowerCase().replace(/\s+/g, " ")
+}
+
+export function starterWordsFor(topic: string): string[] | null {
+  const words = starterBlockedWords[topicKey(topic)]
+  return words ? [...words] : null
+}
+
+// The list a category uses now: the user's edited list, else its starter list,
+// else the category name itself (what the backend would save).
+export function blockedWordsFor(preferences: Pick<SetupPreferences, "blockedWords">, topic: string): string[] {
+  const key = topicKey(topic)
+  return [...(preferences.blockedWords?.[key] ?? starterWordsFor(key) ?? [key])]
+}
+
+export function starterTopicWordsFor(topic: string): string[] | null {
+  const words = starterTopicWords[topicKey(topic)]
+  return words ? [...words] : null
+}
+
+// The list a topic to check uses now: edited, else starter, else its own name.
+export function includeWordsFor(preferences: Pick<SetupPreferences, "includeWords">, topic: string): string[] {
+  const key = topicKey(topic)
+  return [...(preferences.includeWords?.[key] ?? starterTopicWordsFor(key) ?? [key])]
+}
+
+export function totalIncludeWords(preferences: Pick<SetupPreferences, "includedTypes" | "includeWords">): number {
+  const keys = new Set(preferences.includedTypes.map(topicKey).filter(Boolean))
+  let total = 0
+  for (const key of keys) total += includeWordsFor(preferences, key).length
+  return total
+}
+
+export function totalBlockedWords(preferences: Pick<SetupPreferences, "excludedTypes" | "blockedWords">): number {
+  const keys = new Set(preferences.excludedTypes.map(topicKey).filter(Boolean))
+  let total = 0
+  for (const key of keys) total += blockedWordsFor(preferences, key).length
+  return total
+}
+
+// Checks one typed word before it joins a category's list. Returns the
+// normalized word, an error to show, or null for blank input.
+export function parseBlockedWord(
+  raw: string,
+  existing: string[],
+  total: number,
+): { value: string } | { error: string } | null {
+  if (!raw.trim()) return null
+  const value = normalizeBlockedWord(raw)
+  if (value.length > 100 || CONTROL_CHARS.test(raw) || !/[\p{L}\p{N}]/u.test(value)) {
+    return { error: "Words must be 1-100 characters and include a letter or number." }
+  }
+  if (existing.includes(value)) return { error: "That word is already in this list." }
+  if (existing.length >= MAX_WORDS_PER_TOPIC) return { error: `A category can hold up to ${MAX_WORDS_PER_TOPIC} words.` }
+  if (total >= MAX_BLOCKED_WORDS) return { error: `These categories can hold up to ${MAX_BLOCKED_WORDS} words in total.` }
+  return { value }
 }
 
 function clean(values: string[], lower: boolean): string[] {
@@ -74,10 +156,7 @@ export function settingsWithPreferences(
   return {
     ...settings,
     context_limits: { ...context },
-    semantic_preferences: {
-      include: clean(preferences.includedTypes, false),
-      exclude: clean(preferences.excludedTypes, false),
-    },
+    semantic_preferences: semanticWithWords(preferences),
     rules: {
       allow: {
         ...settings.rules.allow,
@@ -92,6 +171,26 @@ export function settingsWithPreferences(
       },
     },
   }
+}
+
+// Every skipped category is saved with its full word list, so the draft matches
+// what the backend stores and an untouched form never reports unsaved edits.
+function semanticWithWords(preferences: SetupPreferences): ScanSettings["semantic_preferences"] {
+  const exclude = clean(preferences.excludedTypes, false)
+  const blockedWords: Record<string, string[]> = {}
+  for (const topic of exclude) {
+    const key = topicKey(topic)
+    if (blockedWords[key]) continue
+    blockedWords[key] = [...new Set(blockedWordsFor(preferences, key).map(normalizeBlockedWord).filter(Boolean))]
+  }
+  const include = clean(preferences.includedTypes, false)
+  const includeWords: Record<string, string[]> = {}
+  for (const topic of include) {
+    const key = topicKey(topic)
+    if (includeWords[key]) continue
+    includeWords[key] = [...new Set(includeWordsFor(preferences, key).map(normalizeBlockedWord).filter(Boolean))]
+  }
+  return { include, exclude, blockedWords, includeWords }
 }
 
 // Onboarding's consent box: undefined keeps saved consent and pause exactly.
@@ -150,7 +249,13 @@ export function sameSavedFields(a: ScanSettings, b: ScanSettings): boolean {
     }
     return JSON.stringify(value) ?? "null"
   }
-  const pick = (s: ScanSettings) => stable([s.rules, s.semantic_preferences, s.context_limits, s.consent, s.paused])
+  // A never-saved account has no word lists yet; the backend stores {} for none.
+  const semantic = (s: ScanSettings) => ({
+    ...s.semantic_preferences,
+    blockedWords: s.semantic_preferences.blockedWords ?? {},
+    includeWords: s.semantic_preferences.includeWords ?? {},
+  })
+  const pick = (s: ScanSettings) => stable([s.rules, semantic(s), s.context_limits, s.consent, s.paused])
   return pick(a) === pick(b)
 }
 

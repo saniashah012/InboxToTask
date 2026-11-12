@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '../app/node_modules/@electric-sql/pglite/dist/index.js';
-import {STARTER_BLOCKED_WORDS} from '../app/pipeline/private-topics.mjs';
+import {STARTER_BLOCKED_WORDS,STARTER_TOPIC_WORDS} from '../app/pipeline/private-topics.mjs';
 
 test('saved scanning settings: permissions, validation, revisions, and stale-work fencing',async(t)=>{
   const db=new PGlite();
@@ -65,7 +65,8 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       exclude:['Financial','invoice','custom exclusion'],
     });
     assert.deepEqual(saved.semantic_preferences,{include:['school','homework','my custom phrase'],exclude:['financial','invoice','custom exclusion'],
-      blockedWords:{financial:STARTER_BLOCKED_WORDS.financial,invoice:['invoice'],'custom exclusion':['custom exclusion']}});
+      blockedWords:{financial:STARTER_BLOCKED_WORDS.financial,invoice:['invoice'],'custom exclusion':['custom exclusion']},
+      includeWords:{school:STARTER_TOPIC_WORDS.school,homework:['homework'],'my custom phrase':['my custom phrase']}});
     const loaded=await get(C);
     assert.deepEqual(loaded.semantic_preferences,saved.semantic_preferences);
 
@@ -77,6 +78,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       include:['homework','my custom phrase'],
       exclude:['invoice','custom exclusion'],
       blockedWords:{invoice:['invoice'],'custom exclusion':['custom exclusion']},
+      includeWords:{homework:['homework'],'my custom phrase':['my custom phrase']},
     });
     assert.deepEqual((await get(C)).semantic_preferences,removedSuggestion.semantic_preferences);
 
@@ -88,6 +90,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       include:['school','homework'],
       exclude:['financial','invoice'],
       blockedWords:{financial:STARTER_BLOCKED_WORDS.financial,invoice:['invoice']},
+      includeWords:{school:STARTER_TOPIC_WORDS.school,homework:['homework']},
     });
     assert.deepEqual((await get(C)).semantic_preferences,removedCustom.semantic_preferences);
   });
@@ -96,7 +99,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       assert.deepEqual(await scalar('select private.starter_blocked_words($1)',[topic]),words,topic);
     // Saved names converted to starter lists, or the name itself, erring toward blocking.
     assert.deepEqual((await get(convertedUser)).semantic_preferences,{include:['school'],exclude:['health','rowing team'],
-      blockedWords:{health:STARTER_BLOCKED_WORDS.health,'rowing team':['rowing team']}});
+      blockedWords:{health:STARTER_BLOCKED_WORDS.health,'rowing team':['rowing team']},includeWords:{school:STARTER_TOPIC_WORDS.school}});
     const D='66666666-6666-4666-8666-666666666666';
     await q('insert into auth.users values($1,$2)',[D,'d@example.org']);
     assert.deepEqual((await get(D)).semantic_preferences,{include:[],exclude:[],blockedWords:{}});
@@ -118,6 +121,26 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       [2,rules,context,{include:[],exclude:[],extra:[]}]),{code:'22023'}));
     await as('authenticated',D,()=>assert.rejects(q('select private.starter_blocked_words($1)',['health']),{code:'42501'}));
   });
+  await t.test('topic-to-check word lists: starter parity, round trip, carry-over and validation',async()=>{
+    for(const [topic,words] of Object.entries(STARTER_TOPIC_WORDS))
+      assert.deepEqual(await scalar('select private.starter_topic_words($1)',[topic]),words,topic);
+    const E='77777777-7777-4777-8777-777777777777';
+    await q('insert into auth.users values($1,$2)',[E,'e@example.org']);
+    const edited=await save(0,rules,context,false,true,null,E,{include:[' School ','Band'],exclude:[],
+      includeWords:{School:[' Office   Hours ','syllabus','SYLLABUS'],band:['rehearsal']}});
+    assert.deepEqual(edited.semantic_preferences.includeWords,{school:['office hours','syllabus'],band:['rehearsal']});
+    assert.deepEqual((await get(E)).semantic_preferences,edited.semantic_preferences);
+    // An older client that sends names only keeps the edited lists of topics that stay selected.
+    const older=await save(1,rules,context,false,true,null,E,{include:['school','meetings'],exclude:[]});
+    assert.deepEqual(older.semantic_preferences.includeWords,{school:['office hours','syllabus'],meetings:STARTER_TOPIC_WORDS.meetings});
+    // Removing every topic to check removes every list, so nothing is required.
+    const none=await save(2,rules,context,false,true,null,E,{include:[],exclude:[],includeWords:{school:['syllabus']}});
+    assert.deepEqual(none.semantic_preferences.includeWords,{});
+    for(const bad of [{school:[]},{school:['!!!']},{school:['a'.repeat(101)]},{school:'syllabus'}])
+      await as('authenticated',E,()=>assert.rejects(q('select public.scan_settings_save($1,$2,$3,false,true,null,$4)',
+        [3,rules,context,{include:['school'],exclude:[],includeWords:bad}]),{code:'22023'},JSON.stringify(bad)));
+    await as('authenticated',E,()=>assert.rejects(q('select private.starter_topic_words($1)',['school']),{code:'42501'}));
+  });
     await t.test('anonymous, owner injection and direct writes cannot bypass the RPC',async()=>{
       await as('anon',A,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
       await as('authenticated',null,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
@@ -128,7 +151,7 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       const saved=await save();assert.equal(saved.revision,1);assert.equal(saved.consent,false);assert.equal(saved.consent_at,null);
       assert.deepEqual(saved.rules.allow.keywords,[]);assert.deepEqual(saved.rules.allow.senders,['teacher@example.org']);assert.deepEqual(saved.rules.allow.subjectKeywords,[]);
       assert.deepEqual(saved.rules.block.subjectKeywords,['newsletter']);
-      assert.deepEqual(saved.semantic_preferences,{include:['school'],exclude:[],blockedWords:{}});
+      assert.deepEqual(saved.semantic_preferences,{include:['school'],exclude:[],blockedWords:{},includeWords:{school:STARTER_TOPIC_WORDS.school}});
       assert.equal((await get()).revision,1);assert.equal((await get(B)).revision,0);
       assert.deepEqual(await as('authenticated',B,()=>q('select * from public.scan_settings')),[]);
     });

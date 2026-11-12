@@ -30,6 +30,7 @@ export function createGmailProcessor({rpc,user,work,settings,systemPrompt,genera
   const prepared=prepareInput(input,settings.contextLimits);
   // Retrieval normally skips these first. Nothing is claimed, stored or sent.
   if(prepared.status==='skipped'&&prepared.reason==='PRIVATE_TOPIC') return {modelCalls:0,privateTopic:true};
+  if(prepared.status==='skipped'&&prepared.reason==='NO_TOPIC_WORD') return {modelCalls:0,noTopicWord:true};
   if(prepared.status!=='prepared') throw problem('GMAIL_MESSAGE_REVIEW_REQUIRED');
   if(context.omitted) prepared.payload.contextWarnings.push('Some relevant task context was omitted by task-state limits. Verify update targets.');
   // The warning enters extraction too, without caller-controlled model settings.

@@ -163,6 +163,12 @@ start from the lists in [private-topics.mjs](private-topics.mjs)). Retrieval che
 subject before fetching a body, then the decoded body; `prepareInput` checks again, and
 earlier thread messages and existing-task candidates get the same check. A matching
 email makes no model call and stores nothing; scan counts record only `privateTopic`.
+Each `include` topic (topic to check) also has a word list, in `includeWords`, with
+starter lists for the suggested topics in `STARTER_TOPIC_WORDS`. When any topic to check
+is saved, a permitted email whose subject and decoded body contain none of their words
+is skipped after the body check, before any model call; `prepareInput` repeats the check
+(`NO_TOPIC_WORD`) and scan counts record `noTopicWord`. With no topic to check, nothing
+is required. The words narrow what is processed and never reach Gemini; only topic names do.
 Matching ignores case, accents and punctuation but needs whole words, with no stemming.
 Metadata rules and word lists are not semantic healthcare/financial classifiers.
 

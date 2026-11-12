@@ -287,8 +287,32 @@ export const AUTO_CHECK_INTERVAL_MS = 60_000
 // check finished. Stop codes other than planned per-batch limits (daily limit,
 // reconnect, failures) end automatic checks until the next manual Scan now. The
 // caller also checks the saved preference, Stop, stalls and blockers.
-export function autoNextCheck(status: ScanStatusLike | null, now: number, firstOnPage: boolean): { mode: "initial" | "more"; delay: number } | null {
+// Passing problems reaching Gmail or the AI service. Nothing for you to do: automatic
+// checks keep retrying them, waiting longer each time (30 s, 1 min, 2 min, then every
+// 5 min), and never stop for them. After TROUBLE_AFTER failures in a row the compact
+// status line says it is having trouble, but checks continue.
+export const TRANSIENT_STOPS = ["GMAIL_UNAVAILABLE", "GMAIL_TIMEOUT", "GMAIL_SERVER_ERROR", "GMAIL_RATE_LIMITED", "PROVIDER_HTTP_429"]
+export const TROUBLE_AFTER = 3
+export const TRANSIENT_RETRY_MS = 30_000
+export const MAX_RETRY_MS = 5 * 60_000
+export const transientRetryDelay = (failuresInARow: number) => Math.min(MAX_RETRY_MS, TRANSIENT_RETRY_MS * 2 ** Math.max(0, failuresInARow))
+
+// Whether the status panel should hide this stop: a passing problem that automatic
+// checks are retrying on their own.
+export function quietStop(status: ScanStatusLike | null, autoActive: boolean): boolean {
+  const error = status?.result?.error ?? null
+  return autoActive && !!error && TRANSIENT_STOPS.includes(error)
+}
+
+export function autoNextCheck(status: ScanStatusLike | null, now: number, firstOnPage: boolean, quietRetries = 0): { mode: "initial" | "more"; delay: number } | null {
   if (!status || status.running) return null
+  const stop = status.result?.error ?? null
+  if (stop && TRANSIENT_STOPS.includes(stop)) {
+    const parse = (iso: string | null | undefined) => { const t = iso ? Date.parse(iso) : NaN; return Number.isNaN(t) ? null : t }
+    const finished = parse(status.lastFinished)
+    const at = Math.max(parse(status.cooldownUntil) ?? now, finished === null ? now : finished + transientRetryDelay(quietRetries))
+    return { mode: status.backlog ? "more" : "initial", delay: Math.max(0, at - now) }
+  }
   if (status.backlog) {
     const delay = autoContinueDelay(status, now)
     return delay === null ? null : { mode: "more", delay }
@@ -300,6 +324,15 @@ export function autoNextCheck(status: ScanStatusLike | null, now: number, firstO
   const finished = parse(status.lastFinished)
   if (!firstOnPage && finished !== null) at = Math.max(at, finished + AUTO_CHECK_INTERVAL_MS)
   return { mode: "initial", delay: Math.max(0, at - now) }
+}
+
+// Emails the latest finished check skipped because of category words: none of a
+// category to check's words, or a skip word. Senders you did not allow, spam and
+// Google notices are not counted; with an allowlist they would be most of an inbox.
+export function skippedByCategories(status: ScanStatusLike | null): number {
+  if (!status || status.running) return 0
+  const c = status.result?.counts ?? {}
+  return (c.noTopicWord ?? 0) + (c.privateTopic ?? 0)
 }
 
 // A finished check that covered its whole window and found no new email: nothing

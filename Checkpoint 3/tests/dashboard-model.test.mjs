@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AUTO_CHECK_INTERVAL_MS, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
+  AUTO_CHECK_INTERVAL_MS, MAX_RETRY_MS, quietStop, skippedByCategories, TRANSIENT_RETRY_MS, transientRetryDelay, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
 } from '../app/web/src/dashboardModel.ts';
 
 const NOW = new Date('2026-11-09T15:00:00Z');
@@ -213,7 +213,7 @@ test('automatic checks: on opening right away, then every minute after the last 
   // Nothing new starts while running, after a daily limit, reconnect or other stop.
   assert.equal(autoNextCheck({ ...done, running: true }, at, false), null);
   assert.equal(autoNextCheck(null, at, true), null);
-  for (const error of ['STORAGE_BUDGET', 'GMAIL_RECONNECT_REQUIRED', 'GMAIL_UNAVAILABLE', 'SCAN_FAILURE_LIMIT']) {
+  for (const error of ['STORAGE_BUDGET', 'GMAIL_RECONNECT_REQUIRED', 'GMAIL_REQUEST_REJECTED', 'SCAN_UNEXPECTED_ERROR', 'SCAN_FAILURE_LIMIT']) {
     assert.equal(autoNextCheck({ ...done, result: { error } }, at, false), null, error);
     assert.equal(autoNextCheck({ ...done, result: { error } }, at, true), null, `${error} on opening`);
   }
@@ -227,7 +227,7 @@ test('automatic checks continue a saved backlog before starting a new check', ()
   assert.deepEqual(autoNextCheck(waiting, at, false), { mode: 'more', delay: 20_000 });
   assert.deepEqual(autoNextCheck({ ...waiting, result: { error: 'STORAGE_PROVIDER_LIMIT' } }, at, false), { mode: 'more', delay: 52_000 });
   // A backlog that stopped for another reason is not replaced by a new check.
-  for (const error of ['STORAGE_BUDGET', 'GMAIL_RECONNECT_REQUIRED', 'GMAIL_UNAVAILABLE']) assert.equal(autoNextCheck({ ...waiting, result: { error } }, at, false), null, error);
+  for (const error of ['STORAGE_BUDGET', 'GMAIL_RECONNECT_REQUIRED', 'SCAN_UNEXPECTED_ERROR']) assert.equal(autoNextCheck({ ...waiting, result: { error } }, at, false), null, error);
 });
 
 test('status line: a check that found nothing says so, with relative time', () => {
@@ -246,4 +246,28 @@ test('status line: a check that found nothing says so, with relative time', () =
   assert.equal(checkedAgo('2026-11-09T12:00:00Z', at), '3 hr ago');
   assert.equal(checkedAgo('2026-11-07T12:00:00Z', at), null);
   assert.equal(checkedAgo('not a date', at), null);
+});
+
+test('the skipped count is only category-word skips from the latest finished check', () => {
+  const finished = { ...ready, lastFinished: '2026-11-12T21:27:20Z', result: { error: null, counts: { candidates: 9, blocked: 6, noTopicWord: 1, privateTopic: 1, prepared: 1 } } };
+  assert.equal(skippedByCategories(finished), 2, 'blocked senders and notices are not counted');
+  assert.equal(skippedByCategories({ ...finished, running: true }), 0, 'hidden while a check runs');
+  assert.equal(skippedByCategories({ ...finished, result: { error: null, counts: { candidates: 1, prepared: 1 } } }), 0);
+  assert.equal(skippedByCategories(null), 0);
+});
+
+test('automatic checks keep retrying a passing Gmail or AI-service problem, waiting longer each time', () => {
+  const at = Date.parse('2026-11-09T15:00:10Z');
+  const blip = { ...ready, backlog: true, lastFinished: '2026-11-09T15:00:00Z', cooldownUntil: '2026-11-09T15:00:20Z', result: { error: 'GMAIL_UNAVAILABLE' } };
+  // Retried 30 seconds after it stopped, continuing what was left.
+  assert.deepEqual(autoNextCheck(blip, at, false, 0), { mode: 'more', delay: TRANSIENT_RETRY_MS - 10_000 });
+  assert.deepEqual(autoNextCheck({ ...blip, backlog: false }, at, true, 1), { mode: 'initial', delay: 50_000 }, 'second failure waits a minute');
+  for (const error of ['GMAIL_TIMEOUT', 'GMAIL_SERVER_ERROR', 'GMAIL_RATE_LIMITED', 'PROVIDER_HTTP_429'])
+    assert.ok(autoNextCheck({ ...blip, result: { error } }, at, false, 0), error);
+  // It never gives up: the wait doubles, up to 5 minutes.
+  assert.deepEqual([0, 1, 2, 3, 10].map(transientRetryDelay), [30_000, 60_000, 120_000, 240_000, MAX_RETRY_MS]);
+  assert.deepEqual(autoNextCheck(blip, at, false, 10), { mode: 'more', delay: MAX_RETRY_MS - 10_000 });
+  assert.equal(quietStop(blip, true), true);
+  assert.equal(quietStop(blip, false), false, 'manual scanning shows it straight away');
+  assert.equal(quietStop({ ...blip, result: { error: 'GMAIL_RECONNECT_REQUIRED' } }, true), false, 'problems you must act on are never hidden');
 });

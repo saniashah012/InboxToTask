@@ -20,3 +20,12 @@
 .scan-help .scan-help-tip > span { display: block; padding-left: 14px; position: relative; }
 .scan-help .scan-help-tip > span::before { content: "•"; position: absolute; left: 0; }
 .scan-help .scan-help-tip strong { font-weight: 700; }
+/* About these filters: expands in place on click. */
+.filter-help { margin-top: 14px; }
+.filter-help-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; border: 0; background: transparent; color: var(--green); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.filter-help-toggle:hover { text-decoration: underline; }
+.filter-help-toggle:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; border-radius: 4px; }
+.filter-help-chevron { transition: transform .15s ease; }
+.filter-help-chevron.is-open { transform: rotate(180deg); }
+.filter-help-body { display: grid; gap: 6px; margin: 6px 0 0; padding: 12px 16px 12px 32px; border: 1px solid var(--soft-line); border-radius: 10px; background: var(--canvas); color: var(--ink); font-size: 13px; line-height: 1.45; }
+@media (prefers-reduced-motion: reduce) { .filter-help-chevron { transition: none; } }

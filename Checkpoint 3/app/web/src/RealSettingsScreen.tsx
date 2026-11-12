@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Icon } from "./designedUi"
+import { Icon, Modal } from "./designedUi"
 import GoogleConnectionPanel from "./GoogleConnectionPanel"
 import type { ScanSettings } from "./storageAdapter"
 import {
@@ -86,6 +86,17 @@ export default function RealSettingsScreen({
   const contextError = contextLimitError(context)
   const blockers = scanBlockers(settings, gmail.checking ? "unknown" : gmail.state)
 
+  // Every way back to the dashboard goes through leave(): with unsaved changes it
+  // asks first. Closing or reloading the tab gets the browser's own warning.
+  const [leaving, setLeaving] = useState(false)
+  const leave = () => (dirty ? setLeaving(true) : onBack())
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = "" }
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [dirty])
+
   // Saving always returns to the dashboard. With nothing changed, nothing is sent,
   // so the revision and any unfinished scan work are left alone.
   const save = async () => {
@@ -125,6 +136,10 @@ export default function RealSettingsScreen({
       {dirty && !saving && <p className="settings-footnote" role="status">Unsaved changes on this page.</p>}
       <SaveFailure error={saveError} onReload={() => { setSaveError(null); onReload() }} reloading={refreshing} />
       <div className="step-actions">
+        {/* An easy way out from the bottom of the page. Its label says what happens. */}
+        <button className="secondary-button settings-leave" disabled={saving} onClick={onBack} type="button">
+          {dirty ? "Leave without saving" : "Back to dashboard"}
+        </button>
         <button
           className="secondary-button"
           disabled={saving || refreshing}
@@ -148,14 +163,11 @@ export default function RealSettingsScreen({
   return (
     <div className="settings-shell">
       <header className="topbar">
-        <Brand onHome={() => {
-          if (dirty && !window.confirm("Leave settings? Your unsaved changes will be discarded.")) return
-          onBack()
-        }} />
+        <Brand onHome={leave} />
         <div className="topbar-actions">
           <span className="demo-mode-badge">Signed in · {email}</span>
-          <button className="secondary-button" onClick={onBack}>
-            <Icon name="arrow" size={15} /> {dirty ? "Back to dashboard (discard changes)" : "Back to dashboard"}
+          <button className="secondary-button" onClick={leave}>
+            <Icon name="arrow" size={15} /> Back to dashboard
           </button>
         </div>
       </header>
@@ -309,6 +321,18 @@ export default function RealSettingsScreen({
           )}
         </section>
       </main>
+      {leaving && (
+        <Modal onClose={() => setLeaving(false)} title="Unsaved changes">
+          <p className="rd-leave-text">Save your changes before leaving?</p>
+          <div className="modal-actions">
+            <button className="secondary-button" disabled={saving} onClick={() => setLeaving(false)} type="button">Cancel</button>
+            <button className="secondary-button" disabled={saving} onClick={() => { setLeaving(false); onBack() }} type="button">Discard</button>
+            <button className="primary-button" disabled={saving || Boolean(contextError)} onClick={() => { setLeaving(false); void save() }} type="button">
+              Save
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

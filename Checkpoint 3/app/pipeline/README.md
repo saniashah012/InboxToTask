@@ -171,6 +171,11 @@ is saved, a permitted email whose subject and decoded body contain none of their
 is skipped after the body check, before any model call; `prepareInput` repeats the check
 (`NO_TOPIC_WORD`) and scan counts record `noTopicWord`. With no topic to check, nothing
 is required. The words narrow what is processed and never reach Gemini; only topic names do.
+Every-minute automatic checks overlap the previous complete check by `SCAN_OVERLAP_MS`
+(5 minutes, matching migration `20261112010000`) so email Gmail indexes late is not
+missed. An email skipped in that overlap is read and skipped again but not counted
+again (`skipCountStart`); a full 7-day check counts every skip. Nothing is stored for
+a skipped email either way.
 Matching ignores case, accents and punctuation but needs whole words, with no stemming.
 Metadata rules and word lists are not semantic healthcare/financial classifiers.
 

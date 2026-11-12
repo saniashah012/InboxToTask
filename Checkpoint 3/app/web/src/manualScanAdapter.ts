@@ -8,7 +8,11 @@ const stopMessages:Record<string,string>={
  SCAN_FAILURE_LIMIT:'Too many messages could not be processed, so the batch stopped. Check the Gmail connection and backend configuration.',
  GMAIL_RATE_LIMITED:'Gmail asked the app to slow down. Wait, then scan again.',
  GMAIL_RECONNECT_REQUIRED:'Gmail access is no longer valid. Reconnect Gmail under Connection and permissions.',
- GMAIL_UNAVAILABLE:'Gmail could not be reached. Scan again to retry.',
+ GMAIL_UNAVAILABLE:'Could not connect to Gmail (network error). Scan again to retry.',
+ GMAIL_TIMEOUT:'Gmail took too long to answer. Scan again to retry.',
+ GMAIL_SERVER_ERROR:'Gmail had a temporary problem. Scan again to retry.',
+ GMAIL_REQUEST_REJECTED:'Gmail refused a request from the app. Scan again; if it keeps happening, reconnect Gmail.',
+ SCAN_UNEXPECTED_ERROR:'The check stopped unexpectedly. Scan again; if it keeps happening, report it.',
  PROVIDER_HTTP_429:'The AI service is rate limited. Wait, then scan again.',
  STORAGE_BUDGET:'Your daily processing allowance is used up. Scan again after it resets.',
  STORAGE_PROVIDER_LIMIT:'The per-minute AI request limit was reached. Wait a minute, then scan again.',
@@ -23,6 +27,10 @@ export async function manualScanStatus():Promise<ScanStatus>{
  if(error)throw new Error('Could not load scan status. Check the local backend and reload.')
  return data
 }
+// A refused scan request keeps its backend code (for example SCAN_BUSY) next to the message.
+// fromResult: the check ran and stopped with this code, which the status panel already shows.
+export class ScanRequestError extends Error{constructor(message:string,readonly code:string,readonly fromResult=false){super(message)}}
+export const isScanBusy=(error:unknown)=>error instanceof ScanRequestError&&error.code==='SCAN_BUSY'
 export async function manualScan(mode:'initial'|'more'){
  if(!supabase)throw new Error('Account connection is not configured.')
  const {data,error}=await supabase.functions.invoke('gmail_scan',{body:{mode}})
@@ -32,7 +40,7 @@ export async function manualScan(mode:'initial'|'more'){
    SCAN_BUSY:'A scan is running or cooling down. Reload status before trying again.',
    SCAN_PERMISSION_OR_REVISION_CHANGED:'Scanning permission or saved state changed. Check consent, pause, exact sources and Gmail connection, then reload.',
    GMAIL_SCAN_UNAVAILABLE:'Scanning could not start. Check backend configuration and Gmail connection.'}
-  throw new Error(messages[code]??'No successful scan was confirmed. Reload status before retrying.')
+  throw new ScanRequestError(messages[code]??'No successful scan was confirmed. Reload status before retrying.',code)
  }
  return data
 }

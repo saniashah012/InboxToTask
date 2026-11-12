@@ -4099,3 +4099,15 @@ textarea:focus-visible {
 .blocked-words-editor > .text-link {
   justify-self: start;
 }
+
+/* Leaving Settings with unsaved changes. */
+.rd-leave-text {
+  margin: 0;
+  padding: 18px 24px 6px;
+  color: var(--ink);
+}
+
+/* Settings: the way out sits at the left of the save bar, apart from Save. */
+.real-settings-save .step-actions .settings-leave {
+  margin-right: auto;
+}

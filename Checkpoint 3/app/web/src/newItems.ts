@@ -62,8 +62,10 @@ export function initialState(reviewKeys: string[], reviewTimes: (string | null |
   return { seen: [...new Set(reviewKeys)].slice(-MAX_SEEN), review: latest(reviewTimes), passive: latest(passiveTimes) }
 }
 
+// A tab with no recorded visit was empty when this browser first loaded it, so
+// everything that has arrived since is new.
 export function isNew(createdAt: string | null | undefined, lastVisit: string | null): boolean {
-  return lastVisit !== null && validTime(createdAt) && Date.parse(createdAt) > Date.parse(lastVisit)
+  return validTime(createdAt) && (lastVisit === null || Date.parse(createdAt) > Date.parse(lastVisit))
 }
 
 export function markSeen(state: NewItemsState, key: string): NewItemsState {
@@ -87,6 +89,8 @@ export function countAdded(before: Set<string>, after: Iterable<string>): number
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 const list = (parts: string[]) => parts.length <= 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
 
+export const NOTHING_ADDED = "No new items found."
+
 // What a finished check added, in one sentence. Types with none are left out.
 export function scanSummary(added: { suggestions: number; changes: number; passive: number }): string {
   const parts = [
@@ -94,5 +98,5 @@ export function scanSummary(added: { suggestions: number; changes: number; passi
     added.changes > 0 ? plural(added.changes, "task update", "task updates") : "",
     added.passive > 0 ? plural(added.passive, "Passive communication summary", "Passive communication summaries") : "",
   ].filter(Boolean)
-  return parts.length ? `Found ${list(parts)}.` : "No new items found."
+  return parts.length ? `Found ${list(parts)}.` : NOTHING_ADDED
 }

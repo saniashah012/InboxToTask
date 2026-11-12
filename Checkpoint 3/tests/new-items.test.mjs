@@ -26,7 +26,7 @@ test('a card is new only if it was saved after the last visit', () => {
   assert.equal(isNew(t2, t1), true);
   assert.equal(isNew(t1, t1), false);
   assert.equal(isNew(t1, t2), false);
-  assert.equal(isNew(t2, null), false, 'no visit recorded yet means nothing is new');
+  assert.equal(isNew(t2, null), true, 'a tab that was empty on first load treats later arrivals as new');
   assert.equal(isNew('not a date', t1), false);
   assert.equal(isNew(undefined, t1), false);
 });

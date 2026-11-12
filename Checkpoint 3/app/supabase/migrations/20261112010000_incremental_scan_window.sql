@@ -10,8 +10,9 @@
 -- used (changed settings, deleted/paused storage, or a Gmail reconnect). The
 -- window never reaches back further than 7 days.
 --
--- Same function as 20261110000000 apart from the window rule and recording
--- completion in finish.
+-- Same function as 20261112001000 (including the scan_sources_ready source check
+-- from 20261112000000) apart from the window rule and recording completion in
+-- finish.
 alter table private.gmail_scan_work
   add column last_complete_end timestamptz,
   add column last_complete_revision bigint,
@@ -29,7 +30,7 @@ begin
  select * into c from private.google_connections where user_id=p_user for update;
  if s.user_id is null or g is null or storage_enabled is distinct from true or not s.consent or s.paused or s.requires_review
    or s.disclosure_version is distinct from 'gmail-scan-v1'
-   or jsonb_array_length(s.rules->'allow'->'senders')+jsonb_array_length(s.rules->'allow'->'domains')=0
+   or not private.scan_sources_ready(s.rules,s.semantic_preferences)
    or c.state is distinct from 'connected'
    or not(c.scopes ? 'https://www.googleapis.com/auth/gmail.readonly')
    or not exists(select 1 from auth.users where id=p_user and lower(email)=lower(c.email)) then

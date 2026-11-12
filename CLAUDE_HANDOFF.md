@@ -8,7 +8,13 @@ PR and runtime state before acting; this describes that moment, not today. Read
 
 ## Boundaries
 Do not push, merge, deploy, apply anything to hosted, reset a database, or enable scanning
-without the user's explicit go-ahead for that step. Phase 7 (automatic scans) has not started.
+without the user's explicit go-ahead for that step. Automatic checks while the app is open
+shipped on November 12 (#108, #110); scanning with the app closed (#49) has not started.
+
+**November 12 update:** the CP4 study release is merged and live. What changed, the hosted
+migrations and deploys with times and approvals, and what is still open are in
+[current state](<Checkpoint 3/CURRENT_STATE.md#november-12-2026-cp4-study-release>). Where the
+rest of this handoff conflicts with it, current state wins.
 Never print environment values, tokens or real email. Scripts that read private files must
 suppress raw errors: a parser error once printed a secret (see Security below).
 
@@ -78,7 +84,8 @@ review that against the Gmail flow when Calendar resumes in CP4.
 
 ## Product decisions
 - Exact sender/domain inclusions combine with OR. Sender/domain and literal subject exclusions
-  win. Domains exclude subdomains. Empty allowlist permits nothing. Topics never grant access.
+  win. Domains exclude subdomains. Empty allowlist permits nothing unless a category to check is
+  saved: since November 12 (#104) the category's words then decide which senders are checked.
 - Empty topic inclusions mean no topic restriction (explicitly accepted by the user).
 - **Ambiguous updates (explicit user decision):** apply nothing. Show the source and let the user
   choose the task and enter the values, or dismiss. Full bodies are not stored, so the source view
@@ -130,8 +137,8 @@ been run. The tester's personal address can appear on screen as the allowed send
 
 ## Testing notes
 - Offline fixtures must use thread context and different days. Fixtures with neither hid real bugs here.
-- Scan more stays in the saved time window, so new mail needs **Scan past seven days**.
+- In the developer workspace, Scan more stays in the saved time window, so new mail needs **Scan past seven days**. The designed dashboard has one button, and automatic checks cover new mail incrementally (5-minute overlap).
 - Gmail can file test mail as spam, and Google's account notices count as blocked candidates.
-- Connection attempts have a 30-second cooldown, scans 60 seconds.
+- Connection attempts have a 30-second cooldown, scans 30 seconds (60 before November 12).
 - The processor hides raw validation errors by design. To diagnose one, replay that fictional message
   against the model in a throwaway script without touching the database.

@@ -162,6 +162,8 @@ A nonempty sender/domain allowlist and explicit scanning consent are required. A
 
 Keep suggested interests such as School, Job applications, Research, and Meetings as meaningful topics rather than lists of literal terms. A school-related message can be relevant without containing homework or assignment. Explain that permitted content reaches Gemini before relevance to topics of interest can be determined. Skipped topics are different: their words are checked in our system before anything goes to Gemini. Say plainly that email discussing a skipped topic without any of its words can still be sent, and that excluding the sender or domain is the complete protection. No LLM suggests words.
 
+**Superseded by user decision (November 11–12, #103, #104):** categories to check are now literal word lists too, with starter lists for the suggested topics. With any saved, email using none of their words is skipped before Gemini, and with no sender or domain saved they decide which senders are checked. See [current state](CURRENT_STATE.md#november-12-2026-cp4-study-release) and [safety and privacy](docs/safety_privacy.md).
+
 Frontend copy and controls:
 
 - Separate permitted sources, Never send to AI exclusions, and semantic topics of interest. Preserve custom entry, exact sender/domain controls, shared-session persistence, and accessible hover/focus/tap help with dismissal and visible focus.

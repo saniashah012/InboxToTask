@@ -83,7 +83,7 @@ The whole feature is off unless `ENABLE_GMAIL_SCAN=true`, `GEMINI_API_KEY` and `
 | Paused, disconnected or no consent | Refused with a 409; nothing read | Live local: L18, L23 |
 | Gmail access removed | Scan stops, saved results stay, user is asked to reconnect | Live local: L17, L20 |
 | Access token expired | Refreshed without reconnecting | Live local: L16 |
-| Gmail or Gemini rate limit | Batch stops, progress kept, **Scan more** continues | Automated only |
+| Gmail or Gemini rate limit, timeout or Gmail server error | Batch stops, progress kept; the next scan continues. Automatic checks retry it quietly with a growing wait (30 s up to 5 min) and never stop for it | Automated only |
 | Budget exhausted | Work deferred with a visible message until the UTC reset | Automated only |
 | Invalid, ungrounded or truncated output | Not saved; counted as failed; retried up to three times | Automated; live local through F1 before its fix |
 | One unreadable message | Recorded; later mail continues | Automated |

@@ -112,7 +112,7 @@ Use only the dedicated test account.
 | Gmail access is no longer valid | Reconnect required. Click **Reconnect Google**. Test-mode grants expire after seven days |
 | "Manual Gmail scanning is disabled" | `ENABLE_GMAIL_SCAN`, `ENABLE_GOOGLE_CONNECTION` and `GEMINI_API_KEY` must all be set, then restart `functions serve` |
 | Scan refused | Consent saved, **Pause scanning** off, at least one sender or domain, Gmail connected with the same address |
-| Sign-in goes straight in as the wrong person | Google sign-in silently reuses the current Google account. Sign out of Google in that browser first |
+| Sign-in goes straight in as the wrong person | Since November 12 (#35) Google shows its account picker at every sign-in; choose the right account there. On older builds, sign out of Google in that browser first |
 | `redirect_uri_mismatch` / Access blocked | Use `127.0.0.1`; the owner must add you as a test user. See GOOGLE_AUTH.md section 7 |
 
 ## 6. Safety

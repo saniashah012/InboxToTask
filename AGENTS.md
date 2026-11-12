@@ -37,6 +37,11 @@ CP4 work is tracked in GitHub issues and the team's CP4 project board. The pinne
 - Before starting a task, find its issue. Read its "Done when" checklist, its "Depends on" and "Used by" lists, its owner and its reviewer. If no issue covers the work, tell your person instead of creating one.
 - A PR that completes an issue says `Closes #N` in its description; one that only advances it says `Part of #N`. The reviewer named on the issue approves the PR, confirms the "Done when" list and closes the issue.
 - Don't tick checklist items, comment, close issues, or change labels, assignees or board fields unless your person asks. Show them the text first, because the repository is public.
+- Keep issues in step with the code. When you open a PR, merge one, or change behavior, search the open issues (`gh issue list --state open`, then read the likely ones) for every issue the change affects, not only the one you worked from:
+  - issues it completes or advances: which "Done when" items it satisfies, with the PR link;
+  - issues whose wording, "Done when" items or assumptions it changes or contradicts (for example, a rule an issue's copy or study materials rely on);
+  - issues it unblocks, or that now need a different order, migration or rollout step.
+  For each, draft a short comment: what changed, which items it meets or affects, and what is still open. When an issue has a dated "Status (Mon D):" line, draft a replacement for it too. Show the drafts to your person and post only what they approve; tick items only after the PR that satisfies them is merged. Never mention someone with a bare `@` unless they should be notified.
 - Proof of work outside the repo (accounts, recruiting, sessions, forms, slides) is a comment on the issue: a link, a screenshot or the completed checklist. Never include participant names, account addresses or credentials.
 - Due dates are targets to keep the team on track, not strict requirements. When a date will slip, say so early and suggest a comment with the new expected date. Never skip a "Done when" item or a check to make a date.
 - Fall break (Nov 21–29) has nothing scheduled. Work then is optional and only on tasks nothing else is waiting on. A task listed in another issue's "Depends on", or one with a "Used by" list, keeps its date and can't be moved into the break.

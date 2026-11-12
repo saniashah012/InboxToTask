@@ -2,7 +2,7 @@
 
 This short guide is for team members who get the private Google and Gemini values from the project owner. If you're outside the team, or have no owner to ask, follow [INSTALL.md](../app/INSTALL.md) instead: it's the full reference, and there you create your own Google projects, encryption key and Gemini key. Google Cloud setup is in [GOOGLE_AUTH.md](../app/supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup). This guide was written from the manifests, templates and UI source. It has **not** been run start to finish on a clean machine, so tell the project owner if a step fails.
 
-Real Gmail connection and scanning work **only locally**. The hosted site cannot do either.
+This guide covers local use. Since November 9 the hosted site can also connect Gmail and scan; see [current state](../CURRENT_STATE.md#november-12-2026-cp4-study-release).
 
 ## 1. What you need first
 
@@ -111,7 +111,7 @@ Use only the dedicated test account.
 | "Your daily processing allowance is used up" | Daily budget per UTC day (default 20 requests per account). Wait for the reset |
 | Gmail access is no longer valid | Reconnect required. Click **Reconnect Google**. Test-mode grants expire after seven days |
 | "Manual Gmail scanning is disabled" | `ENABLE_GMAIL_SCAN`, `ENABLE_GOOGLE_CONNECTION` and `GEMINI_API_KEY` must all be set, then restart `functions serve` |
-| Scan refused | Consent saved, **Pause scanning** off, at least one sender or domain, Gmail connected with the same address |
+| Scan refused | Consent saved, **Pause scanning** off, at least one sender, domain or category to check, Gmail connected with the same address |
 | Sign-in goes straight in as the wrong person | Since November 12 (#35) Google shows its account picker at every sign-in; choose the right account there. On older builds, sign out of Google in that browser first |
 | `redirect_uri_mismatch` / Access blocked | Use `127.0.0.1`; the owner must add you as a test user. See GOOGLE_AUTH.md section 7 |
 
@@ -123,10 +123,8 @@ Use only the dedicated test account.
 
 ## 7. What does not work
 
-- **Automatic scans:** not implemented. Scans are manual.
+- **Automatic scans with the app closed:** not built. Since November 12, opt-in automatic checks run every minute while the designed dashboard is open.
 - **Google Calendar:** planned for CP4. ICS export is the current path.
-- **Real data in the designed dashboard:** not connected. The workspace page above is the real-data surface.
-- **Gmail connect and scan on the hosted site:** the Gmail functions are not deployed there.
-- **Onboarding:** on the separate branch `claude/onboarding-connect-0e9360`, not merged; do not expect it in your build.
-- **Waiting For view in the workspace:** not built. Those records are saved but not displayed.
+- **Real data in the designed dashboard:** connected since November 9 (#51). The workspace page above remains as the developer workspace.
+- **Waiting For view in the developer workspace:** not built. The designed dashboard's Active view shows those records.
 - **Account deletion:** not built.

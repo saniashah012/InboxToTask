@@ -8,6 +8,11 @@ Use [CURRENT_STATE.md](CURRENT_STATE.md) as the current implementation/verificat
 index and [the phase report](docs/gmail-manual-scan-phases-2026-11-05.md) for evidence.
 This plan defines requirements and acceptance gates, not a code-absence inventory.
 
+**November 12 update:** the status in this section describes November 5–6. Since then real data runs
+through the designed dashboard and onboarding (#51), hosted Gmail is deployed, and opt-in automatic
+checks while the app is open shipped (#108, #110); scanning with the app closed (#49) has not started.
+See [current state](CURRENT_STATE.md#november-12-2026-cp4-study-release).
+
 As of the November 5 [review](docs/gmail-manual-scan-review-2026-11-05.md): Phases 1-5
 have implementation with fictional injected-model verification through PGlite, actual
 local Auth/PostgREST and a seeded browser check of the signed-in workspace. Phase 5 is
@@ -158,11 +163,11 @@ Confirmed direction from the November 5 discussion: separate deterministic acces
 | Suggested category or custom topic | Semantic relevance preference in the combined extraction call; never a source permission or an automatic keyword expansion |
 | Skipped topic (Never send to AI) | A list of literal words and phrases, checked case- and accent-insensitively as whole words in backend code: the subject before the body is fetched, then the decoded body, and the same for each earlier thread message and existing-task context. A match keeps that email away from Gemini entirely. Suggested topics turn on reviewed starter lists; a user's own word blocks that literal word. Lists only withhold email and never grant access. Decided by Matthew on November 9, 2026, replacing the earlier after-inference result filter |
 
+**Superseded in part by user decision (November 11–12, #103, #104); the next two paragraphs predate it:** categories to check are now literal word lists, like skipped topics, with starter lists for the suggested topics. With any saved, email using none of their words is skipped before Gemini, and with no sender or domain saved they decide which senders are checked. See [current state](CURRENT_STATE.md#november-12-2026-cp4-study-release) and [safety and privacy](docs/safety_privacy.md).
+
 A nonempty sender/domain allowlist and explicit scanning consent are required. A category alone permits nothing. The backend checks rules before fetching the current body and independently before fetching each context body, and rechecks current consent, pause, connection, revisions, and deletion state before inference and commit. Already dispatched requests cannot be retracted.
 
 Keep suggested interests such as School, Job applications, Research, and Meetings as meaningful topics rather than lists of literal terms. A school-related message can be relevant without containing homework or assignment. Explain that permitted content reaches Gemini before relevance to topics of interest can be determined. Skipped topics are different: their words are checked in our system before anything goes to Gemini. Say plainly that email discussing a skipped topic without any of its words can still be sent, and that excluding the sender or domain is the complete protection. No LLM suggests words.
-
-**Superseded by user decision (November 11–12, #103, #104):** categories to check are now literal word lists too, with starter lists for the suggested topics. With any saved, email using none of their words is skipped before Gemini, and with no sender or domain saved they decide which senders are checked. See [current state](CURRENT_STATE.md#november-12-2026-cp4-study-release) and [safety and privacy](docs/safety_privacy.md).
 
 Frontend copy and controls:
 

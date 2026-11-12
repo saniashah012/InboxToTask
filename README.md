@@ -19,7 +19,7 @@
 
 **Known gaps against the CP3 requirements.** "Implements all proposed core features" is **not met**. Not built on `main`: automatic scans, real data in the designed dashboard and onboarding, a Waiting For view in the workspace (records are saved but not displayed), and account deletion. Google Calendar events moved to CP4 and are not merged. There is no streaming, vector store, tool-calling agent or PII sanitization. Gmail connection and scanning work only locally, so the live demo runs locally. See [current state](<Checkpoint 3/CURRENT_STATE.md>) and [use cases](<Checkpoint 3/docs/use-cases.md>) for what has and has not been run.
 
-**CP4 update (November 12, 2026):** real data now runs through the designed onboarding and dashboard, and automatic checks run every minute while the app is open. Still not built: scanning with the app closed, account deletion and Google Calendar events. Current status: [current state](<Checkpoint 3/CURRENT_STATE.md#november-12-2026-cp4-study-release>).
+**CP4 update (November 12, 2026):** real data now runs through the designed onboarding and dashboard, Gmail connection and scanning are deployed on the hosted site, and automatic checks run every minute while the app is open. Still not built: scanning with the app closed, account deletion and Google Calendar events. Current status: [current state](<Checkpoint 3/CURRENT_STATE.md#november-12-2026-cp4-study-release>).
 
 # 1. Project Title & Tagline
 

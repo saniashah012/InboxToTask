@@ -1,6 +1,6 @@
 # InboxToTask: CP4 plan
 
-Written November 6, 2026, against the [CP4 instructions](CP4_INSTRUCTIONS.md). **Due Thursday, December 3 at 11:30 PM.** The assignment also lists a Friday 9:00 AM forum deadline; confirm that it means December 4.
+Written November 6, 2026, against the [CP4 instructions](CP4_INSTRUCTIONS.md). **Due Thursday, December 3 at 11:30 PM.** The forum post is due Friday, December 4 at 9:00 AM (#39).
 
 > **Status (November 12, 2026):** this plan started as a November 6 proposal. The team's decisions,
 > owners and dates now live in the pinned **CP4 working agreement (#39)** and the CP4 issues on the
@@ -36,7 +36,7 @@ Each row says whether it is **decided**, **done** or still **open**, with the ev
 | D5 | Dashboard topic filter (the prototype's School/Work/… tags) | **Done: the real dashboard has no topic filter**; its only tabs are Suggestions, Active, Completed and Dismissed | Real data has no topic category (see [Section 5](#5-workstream-b-connect-the-designed-dashboard)). Adding one changes the prompt and invalidates saved results |
 | D6 | Open-source license | **Open: proposed MIT, unless the team objects** (no `LICENSE` in the repo yet) | The repo is public but has no license, so it isn't legally open source yet. All four authors must agree |
 | D7 | App location | **Decided in practice: kept in `Checkpoint 3/app`, mapped in the [CP4 index](README.md)** | Moving it would break CI, Vercel's root setting and doc links, and conflict with open branches, for little gain |
-| D8 | Who can use the live URL | **Open: real scanning for approved testers only** (approved-tester controls not built yet, #48; today any signed-in user can scan). The fictional preview proposed here was removed (`5d557b4`), so graders need a sign-in or the recorded demo | Keeps the model budget safe. Ask the instructor whether a test sign-in or a recorded demo is acceptable |
+| D8 | Who can use the live URL | **Open: real scanning for approved testers only** (tracked in #48). The fictional preview proposed here was removed (`5d557b4`), so graders need a sign-in or the recorded demo | Keeps the model budget safe. Ask the instructor whether a test sign-in or a recorded demo is acceptable |
 
 ## 3. Requirements check
 
@@ -46,7 +46,7 @@ CP3 has been submitted, so these are carried forward because the final artifact 
 
 | CP3 requirement or gap | Plan |
 | --- | --- |
-| Real data in the designed dashboard and onboarding | **Built** (#51, merged November 9; checked November 12) |
+| Real data in the designed dashboard and onboarding | **Built** (PR #26, merged November 9; issue #51; checked November 12) |
 | Waiting For view | **Built** in the dashboard's Active view |
 | "Clean modular codebase" | **Partly done:** `App.tsx` is down to auth and routing (265 lines), with each screen in its own file; the rest of Workstream A is optional cleanup after the study (schema snapshot: #97) |
 | Reproducible `INSTALL.md`, never run on a clean machine | **Verify** on a second machine (#87); add the Google Cloud setup (#88) |
@@ -148,7 +148,7 @@ This is the design chosen under D1 (Track A plus an ablation benchmark); the stu
 
 ## 5. Workstream B: connect the designed dashboard
 
-**Done (November 9, #51).** Signed-in users now land on the designed dashboard with real data; `ManualWorkspace` remains as the developer workspace. The field map below is kept as a reference for how the dashboard reads saved records.
+**Done (PR #26, merged November 9; issue #51).** Signed-in users now land on the designed dashboard with real data; `ManualWorkspace` remains as the developer workspace. The field map below is kept as a reference for how the dashboard reads saved records.
 
 ### How dashboard fields map to real data
 
@@ -175,7 +175,7 @@ Status November 12: the dashboard runs on real data (#51); open items point to t
 - [x] Add a tested mapper from database rows to dashboard tasks (`dashboardModel.ts`).
 - [ ] **Review cards show who sent the email and the evidence for the task** (sender done; subject and excerpt on the card still open, #41), since the current cards don't give enough to judge a suggestion (team feedback, November 5). Add warnings and uncertainty.
 - [x] Add the Waiting For view with reminders and resolve/reopen.
-- [x] Add a single scan button in place of **Scan past seven days** and **Scan more** (#40, in review), keeping batch limits, visible backlog, cooldown and permission checks. Decide how the user approves continuing a backlog.
+- [x] Add a single scan button in place of **Scan past seven days** and **Scan more** (built; #40 is in review), keeping batch limits, visible backlog, cooldown and permission checks. A saved backlog is continued first.
 - [x] Keep loading, empty, failure, expired-evidence and missing-context states explicit, with session-change fencing.
 - [ ] Keep accessible labels, keyboard use and focus handling (accessibility check of the study flows: #42).
 - [ ] Parity check of the study flows on the live site, including account switching with the account picker (#35): #54. `ManualWorkspace` stays as the developer workspace, so it isn't being retired.
@@ -241,19 +241,19 @@ Keep the current shape: Edge Functions, canonical pipeline and SQL.
 
 ## 7. Workstream C: safe to deploy
 
-Hosted Gmail went live on November 9 and was updated November 12 without these, with Matthew's approval; they are now tracked in #48 (due before real scans widen) and #52. The [abuse-control design](<../Checkpoint 3/IMPLEMENTATION_PLAN.md#class-project-api-abuse-controls-proposed-implementation>) describes them.
+Hosted Gmail went live on November 9 and was updated November 12, each with Matthew's approval. The controls below are tracked in #48 and #52. The [abuse-control design](<../Checkpoint 3/IMPLEMENTATION_PLAN.md#class-project-api-abuse-controls-proposed-implementation>) describes them.
 
-**Existing per-user limits stay:** 20 requests and 200,000 tokens a day, 3 model calls per batch, a 30-second cooldown (both changed November 12) and token reservations. The gaps are below; they are tracked in #48 and #52.
+**Existing per-user limits stay:** 20 requests and 200,000 tokens a day, 3 model calls per batch, a 30-second cooldown (both changed November 12) and token reservations. The items below are tracked in #48 and #52.
 
-- [ ] Set a Gemini quota or spending limit in Google's console (#52), since token limits aren't a dollar cap and billing alerts alone don't stop spending. Record the setting, without any secrets.
+- [ ] Set a Gemini quota or spending limit in Google's console (#52). Record the setting, without any secrets.
 - [ ] Add a private approved-tester table, checked when a scan or extraction is claimed. Browser roles can't edit it.
 - [ ] Add an operator control row with an inference on/off switch and global daily request and token limits. Block new calls if accounting is unavailable.
 - [ ] Reserve global and per-user budget in the same transaction, on both claim paths: the fixture route and `gmail_process_claim`.
 - [ ] Show remaining allowance and reset time in the product, not just the dev tester.
-- [ ] Review the shared limit of 3 requests per minute, since one user can currently block others. (The per-batch limit rose from 2 to 3 model calls on November 12.)
+- [ ] Review the shared limit of 3 requests per minute, now that a batch makes up to 3 model calls (2 before November 12).
 - [ ] Test concurrent reservations, denied-claim rollback, UTC reset, zero model calls when disabled or out of budget, and overlapping scans. Use fake providers, then a small live trial on fictional mail.
 - [x] Fix the two open defects with a new migration (`20261109220000`, PR #34): a deleted earlier email leaves its quote visible, and `valid_task_fields` accepts a null boundary.
-- [ ] Check whether hosted used the exposed local Google token key, and rotate it if so.
+- [ ] Hosted key hygiene: tracked in the private security review (#52).
 - [ ] Set up production OAuth for the Gmail client with the study inboxes as test users (#52), and check Google's current rules for restricted scopes in testing mode, including token expiry.
 - [x] **With separate approval:** apply migrations and deploy `gmail_scan` and the Google functions to hosted (November 9 and 12). The not-yet-live checks on fictional mail are still open (#54).
 

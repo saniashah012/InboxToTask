@@ -37,8 +37,8 @@ All merged to `main` on November 12 (times Central), each a production deploymen
 
 - About 10:40 AM: migration `20261111000000_topic_to_check_words` applied; `gmail_scan` and `analysis_email` redeployed; then #103 merged.
 - About 12:05 PM: migrations `20261112000000_topics_without_senders`, `20261112001000_scan_cooldown_and_batch_stops`, `20261112002000_auto_scan_preference` and `20261112010000_incremental_scan_window` applied (a dry run showed exactly these four); both functions redeployed; then #108 merged. #36's and #37's migrations, first numbered `20261110000000`/`20261110010000`, were renumbered to run after production's, so those old numbers were never applied to hosted.
-- About 3:50 PM: both functions redeployed from #110's branch; no migrations (dry run: up to date); then #110 merged.
 - About 1:15 PM: one read-only query of `private.gmail_scan_work` (times, counts and error codes only) to diagnose the "network error"; no content read.
+- About 3:50 PM: both functions redeployed from #110's branch; no migrations (dry run: up to date); then #110 merged.
 
 Hosted now has 30 migration versions, through `20261112010000`. No secrets or feature flags were changed.
 
@@ -46,7 +46,9 @@ Hosted now has 30 migration versions, through `20261112010000`. No secrets or fe
 
 **Decisions recorded today:** categories to check are literal word lists that narrow what reaches Gemini, and with no sender they decide which senders are checked (this supersedes the "meaningful topics, not literal terms" line in the [plan](IMPLEMENTATION_PLAN.md)); participants will not connect their own email (#94); scored study tasks use one standard setup with automatic scanning off, and an optional, logged exploration follows (#58, #59, #60, #101).
 
-**Still open:** PRs #36 and #37 are replaced by #108 and should be closed. Calendar's latest work is on the local, unpushed branch `claude/calendar-designed-ui` (see #44, #45); the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
+**Still open:** PRs #36 and #37 are replaced by #108: #36 was closed on November 12, and #37 should be closed. Calendar's latest work is on the local, unpushed branch `claude/calendar-designed-ui` (see #44, #45); the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
+
+**Docs record (November 12, evening):** branch `mzheng/docs-nov12` (unpushed when written) brought the living docs up to date with this release and added [Checkpoint 4](<../Checkpoint 4/README.md>). A second review on branch `claude/docs-review-fable-65324d`, on top of it, then removed four statements from the CP4 plan that a public repository shouldn't carry and corrected stale lines in this file, the handoff, the implementation plan, `INSTALL.md`, the local setup guide, safety and privacy, the root README and the CP4 plan. Docs only; no code, hosted or board changes. Verified: PR merge times, issue numbers and the board against GitHub; migration names, limits and line counts against the code; relative links and anchors; `git diff --check`. Not run: the test suites (no `node_modules` in the review worktree).
 
 ## Gmail phases
 
@@ -187,12 +189,12 @@ PR #22 was merged to `main` at `59461b6` on November 5 at about 11:01 PM Central
 
 Sania reports that Vercel's production branch is `main` (Settings > Git), and that rollback to `e2b0009` is available after the PR #22 merge. Treat every merge as a production deployment. A rollback does not undo migrations.
 
-Next (November 12; items 1–3 above this line are history):
+Next (as of November 12):
 
 1. Check the live site signed in: account picker, Settings save and exits, a categories-only scan, New/Unread labels, quiet automatic checks (#54, #51).
 2. Calendar: rebase `claude/calendar-designed-ui`, finish #44's reconnect checks, push and review before the noon November 17 decision (#53).
 3. Study materials (#58–#64, #101) to match the release; hosted items left in #52 (security review, OAuth test users for the study inboxes, a model spending limit).
-4. Close PRs #36 and #37. Background scanning with the app closed (#49) stays after the study.
+4. Close PR #37 (#36 is closed). Background scanning with the app closed (#49) stays after the study.
 
 CP4 deliverables and the evaluation design are in [Checkpoint 4](<../Checkpoint 4/README.md>); the [CP4 plan](<../Checkpoint 4/CP4_PLAN.md>) was updated November 12 to the decisions above.
 

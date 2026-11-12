@@ -5,9 +5,12 @@ import type { ScanSettings } from "./storageAdapter"
 import {
   accessScopeSummary,
   contextLimitError,
+  NO_SETTINGS_CHANGES,
   preferencesFromSettings,
   sameSavedFields,
   scanBlockers,
+  settingsChanges,
+  settingsSavedNotice,
   settingsWithPreferences,
   type ContextLimits,
 } from "./scanSetup"
@@ -33,6 +36,7 @@ export default function RealSettingsScreen({
   onReload,
   onRunSetup,
   onBack,
+  onSaved,
 }: {
   settings: ScanSettings
   email: string
@@ -42,6 +46,8 @@ export default function RealSettingsScreen({
   onReload: () => void
   onRunSetup: () => void
   onBack: () => void
+  // Back to the dashboard with a message saying what the save changed.
+  onSaved: (notice: string) => void
 }) {
   const [section, setSection] = useState<SettingsSection>(initialSection)
   const [preferences, setPreferences] = useState(() => preferencesFromSettings(settings))
@@ -64,14 +70,24 @@ export default function RealSettingsScreen({
   const contextError = contextLimitError(context)
   const blockers = scanBlockers(settings, gmail.checking ? "unknown" : gmail.state)
 
+  // Saving always returns to the dashboard. With nothing changed, nothing is sent,
+  // so the revision and any unfinished scan work are left alone.
   const save = async () => {
-    if (saving || !dirty) return
+    if (saving) return
     if (contextError) {
       setSaveError({ message: contextError, stale: false })
       return
     }
+    if (!dirty) {
+      onSaved(NO_SETTINGS_CHANGES)
+      return
+    }
     setSavedRevision(null)
-    await run(() => onSave(draft), (result) => setSavedRevision(result.revision))
+    const before = settings
+    await run(() => onSave(draft), (result) => {
+      setSavedRevision(result.revision)
+      onSaved(settingsSavedNotice(settingsChanges(before, result)))
+    })
   }
 
   const sections: [SettingsSection, string][] = [
@@ -103,11 +119,11 @@ export default function RealSettingsScreen({
         </button>
         <button
           className="primary-button"
-          disabled={!dirty || saving || refreshing || Boolean(contextError)}
+          disabled={saving || refreshing || Boolean(contextError)}
           onClick={() => void save()}
           type="button"
         >
-          {saving ? "Saving…" : "Save settings"}
+          {saving ? "Saving…" : dirty ? "Save settings" : "Save and return"}
         </button>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { consentDecision, resolveScanConsent } from '../app/web/src/scanConsent.
 import {
   accessScopeSummary, blockedWordsFor, contextLimitError, hasScanSource, hasSourcePermission, parseBlockedWord,
   preferencesFromSettings, parseRuleInput, sameSavedFields, scanBlockers, settingsWithPreferences,
+  settingsChanges, settingsSavedNotice, NO_SETTINGS_CHANGES,
   signedInRoute, topicInputError, totalBlockedWords, withConsentDecision,
 } from '../app/web/src/scanSetup.ts';
 import { excludedTopicSuggestions, includedTopicSuggestions, starterBlockedWords, starterTopicWords } from '../app/web/src/filterPresets.ts';
@@ -21,6 +22,31 @@ const fresh = () => ({
   semantic_preferences: { include: [], exclude: [] },
   requires_review: false, legacy_phrase_rules: null, rules: emptyRules(),
   context_limits: { maxMessages: 5, maxAgeDays: 90, maxMessageChars: 12000, maxTotalChars: 24000 },
+});
+
+test('a saved settings change is described in plain words for the dashboard message', () => {
+  const before = { ...fresh(), revision: 2, consent: true, paused: false,
+    semantic_preferences: { include: ['school'], exclude: ['health'], includeWords: { school: ['syllabus'] }, blockedWords: { health: ['diagnosis'] } } };
+  before.rules.allow.senders = ['teacher@example.org'];
+  const after = structuredClone(before);
+  after.revision = 3;
+  after.rules.allow.senders = ['teacher@example.org', 'Dean@Example.org'];
+  after.semantic_preferences.include = [];
+  after.semantic_preferences.includeWords = {};
+  after.semantic_preferences.blockedWords = { health: ['diagnosis', 'clinic'] };
+  after.paused = true;
+  assert.deepEqual(settingsChanges(before, after), [
+    'added permitted sender dean@example.org',
+    'removed category to check school',
+    'edited the words for category to skip health',
+    'paused scanning',
+  ]);
+  assert.equal(settingsSavedNotice(settingsChanges(before, after)),
+    'Settings saved: added permitted sender dean@example.org, removed category to check school, edited the words for category to skip health and 1 more change. No email was read and no scan was started.');
+  assert.equal(settingsSavedNotice(['gave scanning consent']), 'Settings saved: gave scanning consent. No email was read and no scan was started.');
+  assert.deepEqual(settingsChanges(before, structuredClone(before)), []);
+  assert.equal(settingsSavedNotice([]), 'Settings saved. Nothing that affects scanning changed.');
+  assert.match(NO_SETTINGS_CHANGES, /No changes/);
 });
 
 test('first-time unchecked save keeps the unconsented, paused state', () => {

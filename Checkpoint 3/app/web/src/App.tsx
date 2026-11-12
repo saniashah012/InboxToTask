@@ -202,6 +202,7 @@ function App() {
           onReload={saved.reload}
           onRunSetup={() => show({ kind: "setup" }, true)}
           onBack={() => show({ kind: "workspace", notice: "" })}
+          onSaved={(notice) => show({ kind: "workspace", notice })}
         />
       )
     }

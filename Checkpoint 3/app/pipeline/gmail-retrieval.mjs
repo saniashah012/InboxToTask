@@ -193,14 +193,20 @@ export function gmailBody(data, maxChars) {
 // consume is backend-only; the retrieval endpoint supplies a no-model consumer.
 export async function retrieveGmail({ gmail, work, check, consume, now = Date.now }) {
   const started = now(); const limits = work.contextLimits;
-  const counts = { candidates:0, permitted:0, blocked:0, privateTopic:0, skipped:0, prepared:0, reused:0, failed:0, contextBodies:0, modelCalls:0 };
+  const counts = { candidates:0, permitted:0, blocked:0, privateTopic:0, noTopicWord:0, skipped:0, prepared:0, reused:0, failed:0, contextBodies:0, modelCalls:0 };
   // Private-topic words are checked here, in backend code, before anything reaches a
   // model: the subject before the body is fetched, then the decoded body. Counts
   // record only that an email was skipped, never which topic or word matched.
-  let terms;
-  try { terms = work.semanticPreferences === undefined ? [] : semanticPreferences(work.semanticPreferences).terms; }
+  // Words of the topics to check work the other way: with any saved, an email that
+  // uses none of them is skipped after the body check, before any model call.
+  let terms, required;
+  try {
+    const semantic = work.semanticPreferences === undefined ? null : semanticPreferences(work.semanticPreferences);
+    terms = semantic?.terms ?? []; required = semantic?.requiredTerms ?? [];
+  }
   catch { return { counts, error:'SCAN_SETTINGS_INVALID', backlog:!!work.continuation, failures:{}, unresolved:0, continuation:work.continuation ?? null }; }
   const privateTopic = () => { counts.privateTopic++; retry.delete(messageId); pending.shift(); };
+  const noTopicWord = () => { counts.noTopicWord++; retry.delete(messageId); pending.shift(); };
   let messageId;
   let pending = [...(work.continuation?.pending ?? [])]; let next = work.continuation?.next ?? null;
   let listed = !!work.continuation && !work.continuation.unlisted; let lastError = null; let requests = 0; let metadataRecords = 0;
@@ -236,12 +242,14 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       if (!permitted(raw,current,work.rules)) { counts.blocked++; retry.delete(messageId); pending.shift(); continue; }
       if (Date.parse(current.sentAt)<Date.parse(work.start) || Date.parse(current.sentAt)>Date.parse(work.end)) { retry.delete(messageId); pending.shift(); continue; }
       if (containsBlockedWord([current.subject], terms)) { privateTopic(); continue; }
+      const subjectHasTopicWord = !required.length || containsBlockedWord([current.subject], required);
       counts.permitted++;
       await boundary(); const full = await gmail.full(messageId);
       if (JSON.stringify(gmailMetadata(full)) !== JSON.stringify(current)) throw problem('GMAIL_METADATA_CHANGED');
       const body = gmailBody(full,RAW_BODY_CHARS);
       // The whole decoded body, quoted history included, so this blocks at least as much as the cleaned text.
       if (containsBlockedWord([body], terms)) { privateTopic(); continue; }
+      if (!subjectHasTopicWord && !containsBlockedWord([body], required)) { noTopicWord(); continue; }
       const cleanedChars = cleanBody(body).body.length;
       if (!cleanedChars) throw problem('GMAIL_BODY_EMPTY');
       if (cleanedChars > limits.maxMessageChars || cleanedChars > limits.maxTotalChars) throw problem('GMAIL_BODY_LIMIT');
@@ -300,7 +308,7 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       await boundary();
       const result = await consume({ message:{...current,body},threadContext:context.reverse(),rules:work.rules,contextLimits:limits,retrievalWarnings:[...new Set(retrievalWarnings)] },{remainingMs:90000-(now()-started)});
       counts.modelCalls += result?.modelCalls ?? 0;
-      if (result?.privateTopic) counts.privateTopic++; else counts.prepared++;
+      if (result?.privateTopic) counts.privateTopic++; else if (result?.noTopicWord) counts.noTopicWord++; else counts.prepared++;
       if (result?.reused) counts.reused++;
       retry.delete(messageId); pending.shift();
     } catch (error) {

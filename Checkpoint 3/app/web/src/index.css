@@ -4029,3 +4029,71 @@ textarea:focus-visible {
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* Editable word list for a skipped category. */
+.type-chip .chip-count {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.type-chip.open {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(23, 107, 83, 0.15);
+}
+
+.type-selection-chips.custom-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.blocked-words-editor {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #c9ddd4;
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.blocked-words-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.blocked-words-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.blocked-words-head strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.blocked-words-head span,
+.blocked-words-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.blocked-words-note {
+  margin: 0;
+}
+
+.blocked-word-chips {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.blocked-words-editor > .text-link {
+  justify-self: start;
+}

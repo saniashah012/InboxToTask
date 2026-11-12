@@ -1,6 +1,6 @@
 // Runtime-independent logic: no env/file access, credentials, database, or SDK.
 import schema, { gmailSchema } from '../prompts/extraction.schema.mjs';
-import { blockedTerms, containsBlockedWord, defaultWords, MAX_WORDS_PER_TOPIC, storedWord, textValues, validWord } from './private-topics.mjs';
+import { blockedTerms, containsBlockedWord, defaultTopicWords, defaultWords, MAX_WORDS_PER_TOPIC, requiredTerms, storedWord, textValues, validWord } from './private-topics.mjs';
 
 // Generic on purpose: it reaches the model and saved warnings, so it never names a topic or word.
 export const PRIVATE_CONTEXT_WARNING = 'Some thread history was excluded by your settings.';
@@ -80,7 +80,7 @@ export function cleanBody(body) {
 // starter list, or the topic name itself, so it errs toward blocking more.
 export function semanticPreferences(value) {
   const keys = value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value) : [];
-  if (!keys.length || !keys.every(k => ['include','exclude','blockedWords'].includes(k))
+  if (!keys.length || !keys.every(k => ['include','exclude','blockedWords','includeWords'].includes(k))
     || !Object.hasOwn(value,'include') || !Object.hasOwn(value,'exclude')) fail('INVALID_SEMANTIC_PREFERENCES');
   const result = {};
   for (const group of ['include','exclude']) {
@@ -96,7 +96,15 @@ export function semanticPreferences(value) {
     if (!Array.isArray(words) || !words.length || words.length > MAX_WORDS_PER_TOPIC || !words.every(validWord)) fail('INVALID_SEMANTIC_PREFERENCES');
     result.blockedWords[topic] = [...new Set(words.map(storedWord))];
   }
-  try { result.terms = blockedTerms(result); } catch { fail('INVALID_SEMANTIC_PREFERENCES'); }
+  const savedInclude = value.includeWords ?? {};
+  if (!savedInclude || typeof savedInclude !== 'object' || Array.isArray(savedInclude)) fail('INVALID_SEMANTIC_PREFERENCES');
+  result.includeWords = {};
+  for (const topic of result.include) {
+    const words = Object.hasOwn(savedInclude, topic) ? savedInclude[topic] : defaultTopicWords(topic);
+    if (!Array.isArray(words) || !words.length || words.length > MAX_WORDS_PER_TOPIC || !words.every(validWord)) fail('INVALID_SEMANTIC_PREFERENCES');
+    result.includeWords[topic] = [...new Set(words.map(storedWord))];
+  }
+  try { result.terms = blockedTerms(result); result.requiredTerms = requiredTerms(result); } catch { fail('INVALID_SEMANTIC_PREFERENCES'); }
   return result;
 }
 export function prepareInput(input, defaults) {
@@ -120,6 +128,9 @@ export function prepareInput(input, defaults) {
   // Retrieval already checked this; repeating it here keeps every model path behind it.
   const terms = semantic?.terms ?? [];
   if (containsBlockedWord([m.subject, m.body], terms)) return { status: 'skipped', messageId: m.id, reason: 'PRIVATE_TOPIC' };
+  // With topics to check saved, the email must use at least one of their words.
+  const required = semantic?.requiredTerms ?? [];
+  if (required.length && !containsBlockedWord([m.subject, m.body], required)) return { status: 'skipped', messageId: m.id, reason: 'NO_TOPIC_WORD' };
   // Accepted task values can repeat words from their source email.
   const taskContext = existing && existing.filter(t => !containsBlockedWord(textValues(t.acceptedFields), terms));
   if (Date.parse(m.sentAt) > Date.parse(input.analysisTime)) fail('FUTURE_MESSAGE');

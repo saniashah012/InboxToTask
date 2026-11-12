@@ -2,7 +2,7 @@
 // call. Fictional example.org mail and an injected model only; no live calls.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { blockedTerms, containsBlockedWord, matchText, STARTER_BLOCKED_WORDS } from '../app/pipeline/private-topics.mjs';
+import { blockedTerms, containsBlockedWord, matchText, STARTER_BLOCKED_WORDS, STARTER_TOPIC_WORDS } from '../app/pipeline/private-topics.mjs';
 import { prepareInput, semanticPreferences } from '../app/pipeline/core.mjs';
 import { retrieveGmail } from '../app/pipeline/gmail-retrieval.mjs';
 import { createGmailProcessor } from '../app/pipeline/gmail-processor.mjs';
@@ -131,4 +131,42 @@ test('the processor makes zero model calls and stores nothing for a blocked emai
   assert.deepEqual(payloads[0].existingTaskContext.map(t=>t.id),[ID2]);
   const sent=JSON.stringify(payloads[0]);
   for (const word of ['health','diagnosis','lab results','chess club']) assert.ok(!sent.includes(word),word);
+});
+
+// Topics to check: with any saved, an email must use one of their words to reach a model.
+const checked = {include:['school','band'],exclude:['health'],includeWords:{band:['rehearsal']},blockedWords:{health:['diagnosis']}};
+test('suggested topics to check turn on their starter lists; custom ones require their own name',()=>{
+  const s=semanticPreferences({include:['School','Book club'],exclude:[]});
+  assert.deepEqual(s.includeWords.school,STARTER_TOPIC_WORDS.school);
+  assert.deepEqual(s.includeWords['book club'],['book club']);
+  assert.deepEqual(semanticPreferences({include:[],exclude:[]}).requiredTerms,[]);
+  for (const bad of [{school:[]},{school:['!!!']},{school:'syllabus'},[]])
+    assert.throws(()=>semanticPreferences({include:['school'],exclude:[],includeWords:bad}),/INVALID_SEMANTIC_PREFERENCES/);
+});
+
+test('with topics to check saved, an email using none of their words reaches no model',async()=>{
+  const s=setup([gmailMessage('off',{subject:'Hello',body:'Lunch on Friday?'}),
+    gmailMessage('subject',{subject:'Homework due',body:'See attached.'}),
+    gmailMessage('body',{subject:'Update',body:'Rehearsal moved to Tuesday.'}),
+    gmailMessage('both',{subject:'Syllabus',body:'Your diagnosis is attached.'})]);
+  s.options.work.semanticPreferences=checked;
+  const r=await retrieveGmail(s.options);
+  assert.deepEqual(s.inputs.map(i=>i.message.id),['subject','body']);
+  assert.equal(r.counts.noTopicWord,1);assert.equal(r.counts.privateTopic,1);
+  assert.equal(r.counts.prepared,2);assert.equal(r.counts.modelCalls,2);
+});
+
+test('no topics to check means nothing is required',async()=>{
+  const s=setup([gmailMessage('any',{subject:'Hello',body:'Lunch on Friday?'})]);
+  const r=await retrieveGmail(s.options);
+  assert.deepEqual(s.inputs.map(i=>i.message.id),['any']);assert.equal(r.counts.noTopicWord,0);
+});
+
+test('the payload check repeats the required-word rule and never sends the words',()=>{
+  // The default subject, Assignment, is itself a School word.
+  const plain=body=>{const i=input(body,{semanticPreferences:checked});i.message={...i.message,subject:'Hello'};return i;};
+  assert.deepEqual(prepareInput(plain('Lunch on Friday?'),{}),{status:'skipped',messageId:'m1',reason:'NO_TOPIC_WORD'});
+  const prepared=prepareInput(plain('Rehearsal moved to Tuesday.'),{});
+  assert.deepEqual(prepared.payload.semanticPreferences,{include:['school','band']});
+  assert.ok(!JSON.stringify(prepared.payload.semanticPreferences).includes('syllabus'));
 });

@@ -711,7 +711,7 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
         <div className="scan-activity">
           {counts ? <>
             <strong>Last batch</strong>
-            <span>{counts.candidates ?? 0} candidates · {counts.permitted ?? 0} permitted · {counts.blocked ?? 0} excluded by your rules · {counts.prepared ?? 0} processed · {counts.reused ?? 0} reused without a model call · {counts.failed ?? 0} could not be processed · {counts.modelCalls ?? 0} model calls</span>
+            <span>{counts.candidates ?? 0} candidates · {counts.permitted ?? 0} permitted · {counts.blocked ?? 0} excluded by your rules · {(counts.privateTopic ?? 0) + (counts.noTopicWord ?? 0)} skipped by topic words · {counts.prepared ?? 0} processed · {counts.reused ?? 0} reused without a model call · {counts.failed ?? 0} could not be processed · {counts.modelCalls ?? 0} model calls</span>
             {(counts.failed ?? 0) > 0 && <span>{(status?.result?.unresolved ?? 0) > 0 ? `${status?.result?.unresolved} messages stopped after repeated attempts; a new 7-day check tries them again. ` : ""}Other failed messages are retried by the next scan.</span>}
           </> : <><strong>No batch recorded</strong><span>Activity appears after your first manual check.</span></>}
           <span>Scans run only when you press Scan now; automatic scanning is not enabled. Each scan covers the past 7 days, inspects up to 100 permitted messages and makes up to two model calls, within daily limits.</span>

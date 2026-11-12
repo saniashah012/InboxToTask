@@ -106,9 +106,7 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 .scan-panel-toggle svg.is-open { transform:rotate(180deg); }
 @media (prefers-reduced-motion: reduce) { .compact-dot, .compact-dot.is-checking, .compact-dot.is-checking::after { animation:none; } .scan-panel-toggle svg { transition:none; } }
 
-/* View details sits to the right of the row's main action, before the ⋯ menu. */
-.app-shell .task-row .email-link { order:1; }
-.app-shell .task-row .menu-wrap { order:2; }
+/* View details sits just before the row's main action; both are packed at the right. */
 /* Actions sit together at the right edge; the text takes the rest of the row. */
 @media (min-width: 1051px) {
   .app-shell .task-row { grid-template-columns:24px minmax(235px, 1fr) auto auto 34px; column-gap:10px; }

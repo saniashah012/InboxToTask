@@ -49,21 +49,26 @@ type RuleChip = {
   removeIndex?: number
 }
 
+// Collapsed by default; a click on the heading or its chevron shows the details in
+// place. It no longer opens on hover, so it never covers the form.
 function FilterHelp() {
   const [open, setOpen] = useState(false)
   const id = useId()
-  return <span className="scan-help" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-    <button type="button" className="text-link" aria-label="About these filters" aria-expanded={open} aria-controls={id}
-      onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(true)}
-      onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false) } }}>About these filters (i)</button>
-    {open && <span id={id} role="tooltip" className="scan-help-tip">
-      <span>An email is checked if it matches <strong>any</strong> included sender or domain.</span>
-      <span>Excluded senders, domains and subject phrases <strong>always win</strong> over inclusions.</span>
-      <span>A domain does not cover its subdomains (example.edu is not mail.example.edu).</span>
-      <span>Categories to check are word lists too: with any saved, an email must contain one of their words <strong>before</strong> it reaches Gemini. Email about the topic that uses none of the words is skipped.</span>
-      <span>Categories to skip are word lists checked <strong>before</strong> anything reaches Gemini. Email about the topic that uses none of the words can still be sent; block a sender or domain for complete protection.</span>
-    </span>}
-  </span>
+  return <div className="filter-help">
+    <button type="button" className="filter-help-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen(o => !o)}>
+      About these filters
+      <svg aria-hidden="true" className={`filter-help-chevron${open ? " is-open" : ""}`} height="14" viewBox="0 0 16 16" width="14">
+        <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+      </svg>
+    </button>
+    {open && <ul className="filter-help-body" id={id}>
+      <li>An email is checked if it matches <strong>any</strong> included sender or domain.</li>
+      <li>Excluded senders, domains and subject phrases <strong>always win</strong> over inclusions.</li>
+      <li>A domain does not cover its subdomains (example.edu is not mail.example.edu).</li>
+      <li>Categories to check are word lists too: with any saved, an email must contain one of their words <strong>before</strong> it reaches Gemini. Email about the topic that uses none of the words is skipped.</li>
+      <li>Categories to skip are word lists checked <strong>before</strong> anything reaches Gemini. Email about the topic that uses none of the words can still be sent; block a sender or domain for complete protection.</li>
+    </ul>}
+  </div>
 }
 
 export default function RulesEditor({

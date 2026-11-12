@@ -98,6 +98,7 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 @keyframes compact-pulse { 50% { box-shadow:0 0 0 6px var(--green-soft); } }
 @keyframes compact-ripple { 0% { transform:scale(1); opacity:.6; } 100% { transform:scale(2.4); opacity:0; } }
 .compact-new { color:var(--green); font-weight:700; }
+.compact-dot.is-trouble { background:var(--amber); box-shadow:0 0 0 3px #f6ecd6; animation:none; }
 .scan-panel-toggle { display:inline-grid; place-items:center; width:30px; height:30px; padding:0; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; }
 .scan-panel-toggle:hover { background:var(--green-soft); color:var(--green); }
 .scan-panel-toggle:focus-visible { outline:3px solid var(--green); outline-offset:2px; }

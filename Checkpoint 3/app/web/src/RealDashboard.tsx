@@ -15,7 +15,7 @@ import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
-  autoNextCheck, quietStop, TRANSIENT_STOPS, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
+  autoNextCheck, quietStop, TRANSIENT_STOPS, TROUBLE_AFTER, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
   AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
   type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
@@ -212,7 +212,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
     // A check that caught up is never a stall; repeated backlog batches without
     // progress are, so a stuck message cannot loop forever.
-    stalls.current = !result.backlog || batchMadeProgress(result) ? 0 : stalls.current + 1
+    const passing = Boolean(result.error && TRANSIENT_STOPS.includes(result.error))
+    stalls.current = passing ? stalls.current : !result.backlog || batchMadeProgress(result) ? 0 : stalls.current + 1
     if (stalls.current >= 3) setAutoHalt("stalled")
     // Planned limits are not failures; the status bar explains them.
     if (result.error && !BATCH_LIMIT_STOPS.includes(result.error) && result.error !== DAILY_LIMIT_STOP) throw new ScanRequestError(`${scanStopMessage(result.error)} Saved results remain available.`, result.error, true)
@@ -355,7 +356,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   }
   const autoOn = Boolean(settings.auto_scan) && autoHalt === null
   // While an automatic check is quietly retrying a passing problem, the panel does not show it.
-  const shownStatus = status?.result && quietStop(status, autoOn, quietRetries) ? { ...status, result: { ...status.result, error: null } } : status
+  const shownStatus = status?.result && quietStop(status, autoOn) ? { ...status, result: { ...status.result, error: null } } : status
   const panelState: ScanPanelState = gmail.checking && !status ? "loading" : scanPanelState({ status: shownStatus, loadError: statusFailed, scanning, cooldownLeft, blockers })
   const needsReconnect = status?.result?.error === "GMAIL_RECONNECT_REQUIRED" || gmail.state === "reconnect_required"
 
@@ -431,7 +432,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
           onToggleActivity={() => setActivityOpen((c) => !c)}
           onScan={(mode) => void scan(mode)}
           auto={{ on: Boolean(settings.auto_scan), halted: autoHalt, onStop: () => setAutoHalt("user") }}
-          panel={{ open: panelOpen, onToggle: togglePanel, newCount: newReviewCount + newPassiveCount }}
+          panel={{ open: panelOpen, onToggle: togglePanel, newCount: newReviewCount + newPassiveCount, trouble: quietRetries >= TROUBLE_AFTER }}
           onSettings={() => onOpenSettings(panelState === "missing-sources" ? "sources" : panelState === "paused" ? "processing" : "connections")}
         />
 
@@ -854,7 +855,7 @@ function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, sett
   onScan: (mode: "initial" | "more") => void
   onSettings: () => void
   auto: { on: boolean; halted: null | "user" | "stalled"; onStop: () => void }
-  panel: { open: boolean; onToggle: () => void; newCount: number }
+  panel: { open: boolean; onToggle: () => void; newCount: number; trouble: boolean }
 }) {
   // One button: it continues unfinished work when an earlier check left some,
   // otherwise it checks right now for email since the last complete check (the
@@ -871,11 +872,11 @@ function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, sett
   if (compactable && !panel.open) {
     const checking = state === "processing" || scanning || Boolean(status?.running)
     const when = status?.lastFinished ? (checkedAgo(status.lastFinished, now) ?? friendlyTime(status.lastFinished)) : null
-    const line = checking ? "Checking…" : when ? `Checked ${when}` : "Starting…"
+    const line = checking ? "Checking…" : panel.trouble ? "Having trouble reaching Gmail · retrying automatically" : when ? `Checked ${when}` : "Starting…"
     return (
       <section aria-label="Processing status" className="processing-status processing-status-compact">
         <div className="processing-status-copy" role="status">
-          <span aria-hidden="true" className={`compact-dot${checking ? " is-checking" : ""}`} />
+          <span aria-hidden="true" className={`compact-dot${checking ? " is-checking" : panel.trouble ? " is-trouble" : ""}`} />
           <span><strong>Automatic checks on</strong> · {line}{panel.newCount > 0 ? <> · <span className="compact-new">{panel.newCount} new</span></> : null}</span>
         </div>
         <div className="processing-status-actions">

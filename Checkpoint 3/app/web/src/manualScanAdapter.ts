@@ -1,6 +1,6 @@
 import {supabase} from './supabase'
 import type {TaskFields} from './storageAdapter'
-export type ScanStatus={running:boolean;backlog:boolean;lastStarted:string|null;lastFinished:string|null;lastSuccessful:string|null;cooldownUntil:string|null;result:any}
+export type ScanStatus={running:boolean;backlog:boolean;lastStarted:string|null;lastFinished:string|null;lastSuccessful:string|null;cooldownUntil:string|null;windowStart?:string|null;windowEnd?:string|null;result:any}
 const stopMessages:Record<string,string>={
  SCAN_INFERENCE_LIMIT:'This scan checked as many new emails as one scan allows. Scan again to continue.',
  SCAN_TIME_LIMIT:'This batch reached its time limit. Scan again to continue.',

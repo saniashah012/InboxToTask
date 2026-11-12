@@ -208,15 +208,17 @@ export default function RealSettingsScreen({
                   <div>
                     <strong>Automatic scanning</strong>
                     <span>
-                      After you press Scan now, keep checking a few emails at a time until
-                      nothing permitted is left. Runs only while InboxToTask is open, stops at
-                      your daily limit, and never runs on a schedule. Saved as soon as you change it.
+                      Checks for new email when you open InboxToTask and every minute while
+                      it stays open, a few emails at a time. Each check looks only at email
+                      since the last one. It never runs with the app closed, and stops at
+                      your daily limit. Scan now still checks right away. Saved as soon as
+                      you change it.
                     </span>
                   </div>
                 </div>
                 <label className="real-settings-check">
                   <input checked={settings.auto_scan ?? false} disabled={autoSaving} onChange={(event) => void toggleAutoScan(event.target.checked)} type="checkbox" />
-                  Keep scanning automatically until I'm caught up
+                  Check for new email automatically while the app is open
                 </label>
                 {autoMessage && <p className={autoMessage.error ? "notice warning" : "settings-footnote"} role={autoMessage.error ? "alert" : "status"}>{autoMessage.text}</p>}
               </div>

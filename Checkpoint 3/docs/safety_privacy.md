@@ -61,7 +61,7 @@ These are project-set trial values, not tuned or validated capacity. A handoff f
 | Model calls per batch | 3 | Processor |
 | Shared requests per model per minute | 3 | Database claim |
 | Scan request cooldown | 30 seconds | `gmail_scan_service` |
-| Automatic scanning | Off by default. When on, continues only while the app is open and a backlog is saved; stops at the daily allowance, any non-limit error, or three batches without progress. Each batch passes the same checks as a manual scan | Dashboard, `scan_settings.auto_scan` |
+| Automatic scanning | Off by default. When on, checks when the dashboard opens and every minute while it stays open, never with the app closed; a saved backlog is continued first. Each new check covers only email since the last complete check (5-minute overlap), or the full 7 days after a settings change or Gmail reconnect. Stops at the daily allowance, any non-limit error, three batches without progress, or Stop. Each batch passes the same checks as a manual scan | Dashboard, `scan_settings.auto_scan`, `private.gmail_scan_work.last_complete_*` |
 | Scan lease, one per user | 4 minutes | `gmail_scan_service` |
 | Live extraction job, one per user | 90-second lease | Database claim |
 | Attempts per extraction | 3, with a 60-second retry delay | Database claim |

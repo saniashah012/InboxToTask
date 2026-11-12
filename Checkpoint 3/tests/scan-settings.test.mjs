@@ -240,6 +240,56 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       const fresh=await scan('claim',{mode:'initial'});await save(4);
       await assert.rejects(scan('assert',{lease:fresh.lease}),{code:'PT409'});
     });
+    await t.test('new checks cover only email since the last complete check, with a 5-minute overlap',async()=>{
+      const scan=(action,data={})=>as('service_role',A,()=>scalar('select public.gmail_scan_service($1,$2,$3)',[A,action,data]));
+      const cool=()=>q("update private.gmail_scan_work set lease=null,lease_until=null,last_started=now()-interval '2 minutes' where user_id=$1",[A]);
+      const days=(c)=>(Date.parse(c.end)-Date.parse(c.start))/86400000;
+      const persistent=(error=null)=>({executionMode:'GMAIL_PERSISTENT_MANUAL',counts:{},error});
+      const complete=(c,result=persistent())=>scan('finish',{lease:c.lease,continuation:null,result});
+      const lastEnd=async()=>{const v=await scalar('select last_complete_end from private.gmail_scan_work where user_id=$1',[A]);return v===null?null:new Date(v).getTime();};
+      const claim=async()=>{await cool();const c=await scan('claim',{mode:'initial'});assert.equal(c.state,'claimed');return c;};
+      // An hour-old complete check, so the overlap is measurable.
+      const age=()=>q("update private.gmail_scan_work set last_complete_end=now()-interval '1 hour' where user_id=$1",[A]);
+      const expectIncremental=async(c)=>assert.equal(Date.parse(c.start),new Date(await scalar("select last_complete_end-interval '5 minutes' from private.gmail_scan_work where user_id=$1",[A])).getTime());
+      await save((await get()).revision,rules,context,true,false,'gmail-scan-v1');
+      await q("update private.gmail_scan_work set last_complete_end=null where user_id=$1",[A]);
+      // First check: full 7 days. A batch that left a continuation is not complete.
+      let c=await claim();assert.equal(days(c),7);
+      await scan('finish',{lease:c.lease,continuation:{pending:['gmail1'],next:null},result:persistent('SCAN_INFERENCE_LIMIT')});
+      assert.equal(await lastEnd(),null);
+      c=await claim();assert.equal(days(c),7,'a new check after an incomplete one still covers 7 days');
+      // Complete: the next check covers from 5 minutes before where it ended.
+      await complete(c);assert.equal(await lastEnd(),Date.parse(c.end));
+      await age();c=await claim();await expectIncremental(c);assert.ok(days(c)<0.1);
+      const status=await as('authenticated',A,()=>scalar('select public.gmail_scan_status()'));
+      assert.equal(Date.parse(status.windowStart),Date.parse(c.start));assert.equal(Date.parse(status.windowEnd),Date.parse(c.end));
+      // Stopped with no continuation, retrieval-only, or a stop code: not complete; the old mark stays.
+      const before=await lastEnd();
+      await complete(c,persistent('SCAN_TIME_LIMIT'));assert.equal(await lastEnd(),before);
+      c=await claim();await complete(c,{executionMode:'GMAIL_RETRIEVAL_ONLY',counts:{},error:null});assert.equal(await lastEnd(),before);
+      c=await claim();await expectIncremental(c);
+      // Never further back than 7 days.
+      await complete(c);await q("update private.gmail_scan_work set last_complete_end=now()-interval '10 days' where user_id=$1",[A]);
+      c=await claim();assert.equal(days(c),7);
+      // A settings change resets to the full 7 days, then increments again.
+      await complete(c);await age();
+      await save((await get()).revision,rules,{...context,maxMessages:1},true,false,'gmail-scan-v1');
+      c=await claim();assert.equal(days(c),7,'after a settings change');
+      await complete(c);await age();c=await claim();await expectIncremental(c);
+      // A Gmail reconnect (new connection generation) resets too.
+      await complete(c);await age();
+      await q('update private.google_connections set generation=generation+1 where user_id=$1',[A]);
+      c=await claim();assert.equal(days(c),7,'after a reconnect');
+      await complete(c);await age();c=await claim();await expectIncremental(c);
+      // A storage generation change (paused or deleted data) resets too.
+      await complete(c);await age();
+      await q('update public.storage_preferences set generation=generation+1 where user_id=$1',[A]);
+      c=await claim();assert.equal(days(c),7,'after a storage generation change');
+      // Turning automatic checks on or off does not reset the window.
+      await complete(c);await age();
+      await as('authenticated',A,()=>scalar('select public.scan_auto_scan_save(true)'));
+      c=await claim();await expectIncremental(c);
+    });
     await t.test('automatic scanning saves on its own without bumping the revision or fencing work',async()=>{
       const before=await get(C);assert.equal(before.auto_scan,false);
       const generation=await scalar('select generation from public.storage_preferences where user_id=$1',[C]);

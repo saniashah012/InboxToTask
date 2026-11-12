@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  autoContinueDelay, batchMadeProgress, buildDashboardModel, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
+  AUTO_CHECK_INTERVAL_MS, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
 } from '../app/web/src/dashboardModel.ts';
 
 const NOW = new Date('2026-11-09T15:00:00Z');
@@ -195,4 +195,55 @@ test('a batch that moved nothing forward counts as a stall', () => {
   assert.equal(batchMadeProgress({ counts: { noTopicWord: 2 } }), true, 'skipped for no topic word');
   assert.equal(batchMadeProgress({ counts: { candidates: 0, modelCalls: 0 } }), false);
   assert.equal(batchMadeProgress(null), false);
+});
+
+test('automatic checks: on opening right away, then every minute after the last finished', () => {
+  assert.equal(AUTO_CHECK_INTERVAL_MS, 60_000);
+  const at = Date.parse('2026-11-09T15:00:10Z');
+  const done = { ...ready, lastFinished: '2026-11-09T15:00:05Z', cooldownUntil: '2026-11-09T15:00:20Z', result: { error: null, counts: { prepared: 0 } } };
+  // Opening the app: start now, or as soon as the cooldown ends.
+  assert.deepEqual(autoNextCheck({ ...done, cooldownUntil: '2026-11-09T14:59:00Z', lastFinished: '2026-11-09T14:58:50Z' }, at, true), { mode: 'initial', delay: 0 });
+  assert.deepEqual(autoNextCheck(done, at, true), { mode: 'initial', delay: 10_000 }, 'opening waits only for the cooldown');
+  assert.deepEqual(autoNextCheck({ ...ready, lastSuccessful: null }, at, true), { mode: 'initial', delay: 0 }, 'first check ever');
+  // Later checks: one minute after the previous one finished.
+  assert.deepEqual(autoNextCheck(done, at, false), { mode: 'initial', delay: 55_000 });
+  assert.deepEqual(autoNextCheck(done, Date.parse('2026-11-09T15:02:00Z'), false), { mode: 'initial', delay: 0 }, 'overdue');
+  // A planned per-batch stop that left nothing waiting is still caught up.
+  assert.equal(autoNextCheck({ ...done, result: { error: 'SCAN_TIME_LIMIT' } }, at, false).mode, 'initial');
+  // Nothing new starts while running, after a daily limit, reconnect or other stop.
+  assert.equal(autoNextCheck({ ...done, running: true }, at, false), null);
+  assert.equal(autoNextCheck(null, at, true), null);
+  for (const error of ['STORAGE_BUDGET', 'GMAIL_RECONNECT_REQUIRED', 'GMAIL_UNAVAILABLE', 'SCAN_FAILURE_LIMIT']) {
+    assert.equal(autoNextCheck({ ...done, result: { error } }, at, false), null, error);
+    assert.equal(autoNextCheck({ ...done, result: { error } }, at, true), null, `${error} on opening`);
+  }
+});
+
+test('automatic checks continue a saved backlog before starting a new check', () => {
+  const at = Date.parse('2026-11-09T15:00:10Z');
+  const waiting = { ...ready, backlog: true, cooldownUntil: '2026-11-09T15:00:30Z', lastFinished: '2026-11-09T15:00:05Z', result: { error: 'SCAN_INFERENCE_LIMIT' } };
+  // On opening and later: always 'more', after the cooldown, never the 1-minute wait.
+  assert.deepEqual(autoNextCheck(waiting, at, true), { mode: 'more', delay: 20_000 });
+  assert.deepEqual(autoNextCheck(waiting, at, false), { mode: 'more', delay: 20_000 });
+  assert.deepEqual(autoNextCheck({ ...waiting, result: { error: 'STORAGE_PROVIDER_LIMIT' } }, at, false), { mode: 'more', delay: 52_000 });
+  // A backlog that stopped for another reason is not replaced by a new check.
+  for (const error of ['STORAGE_BUDGET', 'GMAIL_RECONNECT_REQUIRED', 'GMAIL_UNAVAILABLE']) assert.equal(autoNextCheck({ ...waiting, result: { error } }, at, false), null, error);
+});
+
+test('status line: a check that found nothing says so, with relative time', () => {
+  const at = Date.parse('2026-11-09T15:00:10Z');
+  const nothing = { ...ready, lastFinished: '2026-11-09T15:00:05Z', result: { error: null, counts: { candidates: 2, blocked: 1, prepared: 1, reused: 1, failed: 0 } } };
+  assert.equal(checkedNoNewEmail(nothing), true, 'overlap reuse is not new email');
+  assert.equal(checkedNoNewEmail({ ...nothing, result: { error: null, counts: { prepared: 2, reused: 1 } } }), false);
+  assert.equal(checkedNoNewEmail({ ...nothing, result: { error: null, counts: { failed: 1 } } }), false);
+  assert.equal(checkedNoNewEmail({ ...nothing, backlog: true }), false);
+  assert.equal(checkedNoNewEmail({ ...nothing, running: true }), false);
+  assert.equal(checkedNoNewEmail({ ...nothing, result: { error: 'SCAN_TIME_LIMIT', counts: {} } }), false);
+  assert.equal(checkedNoNewEmail({ ...nothing, lastFinished: null }), false);
+  assert.equal(checkedNoNewEmail(null), false);
+  assert.equal(checkedAgo('2026-11-09T15:00:05Z', at), 'just now');
+  assert.equal(checkedAgo('2026-11-09T14:57:05Z', at), '3 min ago');
+  assert.equal(checkedAgo('2026-11-09T12:00:00Z', at), '3 hr ago');
+  assert.equal(checkedAgo('2026-11-07T12:00:00Z', at), null);
+  assert.equal(checkedAgo('not a date', at), null);
 });

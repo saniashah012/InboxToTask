@@ -276,6 +276,55 @@ export function autoContinueDelay(status: ScanStatusLike | null, now: number): n
   return Math.max(0, at - now)
 }
 
+// Automatic checks while the app is open start a new check this long after the
+// previous one finished.
+export const AUTO_CHECK_INTERVAL_MS = 60_000
+
+// The next automatic check: which mode and how many milliseconds from now, or null
+// when none should start. A saved backlog is always continued first ("more"), never
+// replaced by a new check. Otherwise a new ("initial") check starts right away when
+// the page has just opened (after any cooldown), or one interval after the last
+// check finished. Stop codes other than planned per-batch limits (daily limit,
+// reconnect, failures) end automatic checks until the next manual Scan now. The
+// caller also checks the saved preference, Stop, stalls and blockers.
+export function autoNextCheck(status: ScanStatusLike | null, now: number, firstOnPage: boolean): { mode: "initial" | "more"; delay: number } | null {
+  if (!status || status.running) return null
+  if (status.backlog) {
+    const delay = autoContinueDelay(status, now)
+    return delay === null ? null : { mode: "more", delay }
+  }
+  const error = status.result?.error ?? null
+  if (error && !BATCH_LIMIT_STOPS.includes(error)) return null
+  const parse = (iso: string | null | undefined) => { const t = iso ? Date.parse(iso) : NaN; return Number.isNaN(t) ? null : t }
+  let at = parse(status.cooldownUntil) ?? now
+  const finished = parse(status.lastFinished)
+  if (!firstOnPage && finished !== null) at = Math.max(at, finished + AUTO_CHECK_INTERVAL_MS)
+  return { mode: "initial", delay: Math.max(0, at - now) }
+}
+
+// A finished check that covered its whole window and found no new email: nothing
+// processed for the first time and nothing failed. Reused messages come from the
+// overlap with the previous check and were already handled.
+export function checkedNoNewEmail(status: ScanStatusLike | null): boolean {
+  if (!status || status.running || status.backlog || !status.lastFinished) return false
+  const result = status.result
+  if (!result || result.error) return false
+  const c = result.counts ?? {}
+  return (c.prepared ?? 0) - (c.reused ?? 0) <= 0 && (c.failed ?? 0) === 0
+}
+
+// Relative time for "Checked …": just now, then minutes, then hours, then null so
+// the caller can fall back to a clock time.
+export function checkedAgo(iso: string | null | undefined, now: number): string | null {
+  const t = iso ? Date.parse(iso) : NaN
+  if (Number.isNaN(t)) return null
+  const minutes = Math.floor(Math.max(0, now - t) / 60_000)
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  return hours < 24 ? `${hours} hr ago` : null
+}
+
 // Whether a finished batch moved the backlog forward. Repeated batches that do
 // not stop automatic scanning, so a stuck message cannot loop forever.
 export function batchMadeProgress(result: ScanStatusLike["result"]): boolean {

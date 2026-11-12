@@ -284,12 +284,12 @@ export default function Onboarding({
                     onChange={(event) => setAutoScan(event.target.checked)}
                     type="checkbox"
                   />
-                  Keep scanning automatically until I'm caught up
+                  Check for new email automatically while the app is open
                 </label>
                 <p className="setup-helper">
                   {autoScan
-                    ? "After you press Scan now, InboxToTask keeps checking, a few emails at a time, until nothing permitted is left. It only runs while the app is open, stops at your daily limit, and never runs on a schedule. You can turn this off in Settings."
-                    : "Each scan checks a few new emails. Press Scan now again to continue. You can turn on automatic scanning later in Settings."}
+                    ? "InboxToTask checks for new email when you open it and every minute while it stays open, a few emails at a time. It never runs with the app closed and stops at your daily limit. You can turn this off in Settings."
+                    : "Scans run only when you press Scan now, a few emails at a time. You can turn on automatic checks later in Settings."}
                 </p>
               </div>
               <p className="approval-reminder">

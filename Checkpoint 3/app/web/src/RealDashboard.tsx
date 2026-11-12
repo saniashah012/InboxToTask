@@ -128,6 +128,14 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [reminderFor, setReminderFor] = useState<StoredRow | null>(null)
   const [toast, setToast] = useState<{ kind: "dismissed" | "completed" | "moved"; id: string; from?: Category; to?: Category } | null>(null)
   const [activityOpen, setActivityOpen] = useState(false)
+  // With automatic checks on, the status bar starts as one slim line; the choice to
+  // expand it is remembered in this browser for this account.
+  const panelKey = `inboxtotask:scan-panel-open:${userId}`
+  const [panelOpen, setPanelOpen] = useState(() => { try { return window.localStorage.getItem(panelKey) === "1" } catch { return false } })
+  const togglePanel = () => setPanelOpen((open) => {
+    try { window.localStorage.setItem(panelKey, open ? "0" : "1") } catch { /* storage unavailable: kept for this page only */ }
+    return !open
+  })
   const [now, setNow] = useState(() => Date.now())
   // epoch changes when this account's dashboard unmounts; sequence orders reloads.
   const epoch = useRef(0), sequence = useRef(0)
@@ -423,6 +431,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
           onToggleActivity={() => setActivityOpen((c) => !c)}
           onScan={(mode) => void scan(mode)}
           auto={{ on: Boolean(settings.auto_scan), halted: autoHalt, onStop: () => setAutoHalt("user") }}
+          panel={{ open: panelOpen, onToggle: togglePanel, newCount: newReviewCount + newPassiveCount }}
           onSettings={() => onOpenSettings(panelState === "missing-sources" ? "sources" : panelState === "paused" ? "processing" : "connections")}
         />
 
@@ -817,7 +826,20 @@ const coveredFullWeek = (status: ScanStatus | null) => {
   return Number.isNaN(start) || Number.isNaN(end) || end - start >= 7 * 86_400_000 - 60_000
 }
 
-function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, settings, gmail, needsReconnect, activityOpen, onToggleActivity, onScan, onSettings, auto }: {
+// States that need you to do something always show the full panel.
+const ATTENTION_STATES: ScanPanelState[] = ["missing-sources", "paused", "disconnected", "daily-limit", "failed"]
+
+function PanelChevron({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button aria-expanded={open} aria-label={open ? "Hide scan details" : "Show scan details"} className="scan-panel-toggle" onClick={onToggle} type="button">
+      <svg aria-hidden="true" className={open ? "is-open" : ""} height="16" viewBox="0 0 16 16" width="16">
+        <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+      </svg>
+    </button>
+  )
+}
+
+function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, settings, gmail, needsReconnect, activityOpen, onToggleActivity, onScan, onSettings, auto, panel }: {
   now: number
   state: ScanPanelState
   status: ScanStatus | null
@@ -832,6 +854,7 @@ function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, sett
   onScan: (mode: "initial" | "more") => void
   onSettings: () => void
   auto: { on: boolean; halted: null | "user" | "stalled"; onStop: () => void }
+  panel: { open: boolean; onToggle: () => void; newCount: number }
 }) {
   // One button: it continues unfinished work when an earlier check left some,
   // otherwise it checks right now for email since the last complete check (the
@@ -841,6 +864,27 @@ function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, sett
   const counts = status?.result?.counts
   const allowed = canScan(state) && !busy && !scanning && !status?.running
   const blocked = state === "missing-sources" || state === "paused" || state === "disconnected"
+  const autoActive = auto.on && !auto.halted
+  const compactable = autoActive && !ATTENTION_STATES.includes(state)
+
+  // Automatic checks on and nothing to act on: one slim line, expandable.
+  if (compactable && !panel.open) {
+    const checking = state === "processing" || scanning || Boolean(status?.running)
+    const when = status?.lastFinished ? (checkedAgo(status.lastFinished, now) ?? friendlyTime(status.lastFinished)) : null
+    const line = checking ? "Checking…" : when ? `Checked ${when}` : "Starting…"
+    return (
+      <section aria-label="Processing status" className="processing-status processing-status-compact">
+        <div className="processing-status-copy" role="status">
+          <span aria-hidden="true" className={`compact-dot${checking ? " is-checking" : ""}`} />
+          <span><strong>Automatic checks on</strong> · {line}{panel.newCount > 0 ? <> · <span className="compact-new">{panel.newCount} new</span></> : null}</span>
+        </div>
+        <div className="processing-status-actions">
+          <button className="text-link" disabled={!allowed} onClick={() => onScan(resume ? "more" : "initial")} type="button">Check now</button>
+          <PanelChevron onToggle={panel.onToggle} open={false} />
+        </div>
+      </section>
+    )
+  }
   return (
     <section aria-label="Processing status" className={`processing-status state-${state}`}>
       <div className="processing-status-copy">
@@ -880,6 +924,7 @@ function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, sett
           {scanning || status?.running ? "Scanning…" : "Scan now"}
         </button>
         <button aria-expanded={activityOpen} className="text-link" onClick={onToggleActivity}>{activityOpen ? "Hide activity" : "View activity"}</button>
+        {compactable && <PanelChevron onToggle={panel.onToggle} open />}
       </div>
       {activityOpen && (
         <div className="scan-activity">

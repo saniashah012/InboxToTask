@@ -8,6 +8,11 @@ Use [CURRENT_STATE.md](CURRENT_STATE.md) as the current implementation/verificat
 index and [the phase report](docs/gmail-manual-scan-phases-2026-11-05.md) for evidence.
 This plan defines requirements and acceptance gates, not a code-absence inventory.
 
+**November 12 update:** the status in this section describes November 5–6. Since then real data runs
+through the designed dashboard and onboarding (#51), hosted Gmail is deployed, and opt-in automatic
+checks while the app is open shipped (#108, #110); scanning with the app closed (#49) has not started.
+See [current state](CURRENT_STATE.md#november-12-2026-cp4-study-release).
+
 As of the November 5 [review](docs/gmail-manual-scan-review-2026-11-05.md): Phases 1-5
 have implementation with fictional injected-model verification through PGlite, actual
 local Auth/PostgREST and a seeded browser check of the signed-in workspace. Phase 5 is
@@ -157,6 +162,8 @@ Confirmed direction from the November 5 discussion: separate deterministic acces
 | Optional excluded subject phrase | Literal case-insensitive substring of the subject only; enforced before body retrieval and inference |
 | Suggested category or custom topic | Semantic relevance preference in the combined extraction call; never a source permission or an automatic keyword expansion |
 | Skipped topic (Never send to AI) | A list of literal words and phrases, checked case- and accent-insensitively as whole words in backend code: the subject before the body is fetched, then the decoded body, and the same for each earlier thread message and existing-task context. A match keeps that email away from Gemini entirely. Suggested topics turn on reviewed starter lists; a user's own word blocks that literal word. Lists only withhold email and never grant access. Decided by Matthew on November 9, 2026, replacing the earlier after-inference result filter |
+
+**Superseded in part by user decision (November 11–12, #103, #104); the next two paragraphs predate it:** categories to check are now literal word lists, like skipped topics, with starter lists for the suggested topics. With any saved, email using none of their words is skipped before Gemini, and with no sender or domain saved they decide which senders are checked. See [current state](CURRENT_STATE.md#november-12-2026-cp4-study-release) and [safety and privacy](docs/safety_privacy.md).
 
 A nonempty sender/domain allowlist and explicit scanning consent are required. A category alone permits nothing. The backend checks rules before fetching the current body and independently before fetching each context body, and rechecks current consent, pause, connection, revisions, and deletion state before inference and commit. Already dispatched requests cannot be retracted.
 
@@ -439,27 +446,7 @@ CP3 exit condition: another teammate can reproduce setup, connect a real test ac
 
 ## CP4 checklist: evaluation, refinement, and final delivery
 
-The CP4 instructions have not been supplied. This is a provisional plan based on CP3's Track A/Track B preview and CP2's baseline requirement; align it with the official CP4 rubric when available.
-
-- [ ] Obtain CP4 requirements; select Track A user study or Track B algorithmic benchmark and set success thresholds before final testing.
-- [ ] Unify the workspace's **Scan past seven days** and **Scan more** into one scan button. Keep the existing behavior behind it: a bounded batch, visible backlog, the cooldown, and permission checks. Decide how the user approves continuing a backlog, since the plan currently requires a separate "Scan more" approval.
-- [ ] Evaluate the stored few-shot examples in `app/prompts/few-shot/` against the labeled set, comparing accuracy and token cost, before any of them are added to the system prompt.
-- [ ] Expand the CP3 labeled cases with varied senders/domains, ambiguous dates, multiple responsibilities, changed deadlines, mixed-topic content, and adversarial instructions.
-- [ ] Reserve a held-out set; freeze prompts/settings before final evaluation and avoid tuning on held-out cases.
-- [ ] Compare human-alone, AI-alone, and combined workflows; specify identical inputs, timing rules, and how each workflow's outputs are scored.
-- [ ] Measure task detection precision/recall, ownership/deadline correctness, missed actions, duplicate rate, update matching, and uncertainty handling.
-- [ ] Evaluate filtering separately: rule enforcement, excluded context/quoted-content limitations, and unwanted external disclosures. Do not claim semantic privacy protection from metadata rules.
-- [ ] Measure end-to-end latency, time to first useful result, cost per email/scan, retry recovery, and scan completeness.
-- [ ] Evaluate context selection, same-thread grouping, and optional Batch API/provider caching using the cost section above; report measured savings and accuracy/privacy tradeoffs against the CP3 baseline.
-- [ ] For Track A, measure completion time, correction effort, source verification, understanding of privacy scope, and user control with consent and appropriate study data handling.
-- [ ] For Track B, report dataset composition, labels, scoring, baselines, per-scenario failures, and uncertainty/variation appropriate to the sample size.
-- [ ] Tune prompts, settings, context limits, and reminder/duplicate logic against observed errors, then rerun relevant tests and held-out evaluation.
-- [ ] Refine accessibility, onboarding comprehension, calendar behavior, and retention controls based on evidence.
-- [ ] Test larger inboxes, overlapping jobs, prolonged failures, expiry/disconnection, cleanup races, and backup/deletion disclosures.
-- [ ] Reassess public-launch Gmail verification and model-provider terms before extending beyond test users.
-- [ ] Produce the final report, evaluation evidence, updated architecture/setup/safety documents, and reproducible final artifact.
-
-Optional only if evidence and time support them: push-based arrival detection, richer rule previews, additional calendar integrations, or a separate classifier. None replaces completing the core application, and Jev is not selected.
+The official CP4 instructions were supplied on November 6, 2026. The provisional checklist that was here has moved to [the CP4 plan](<../Checkpoint 4/CP4_PLAN.md>); CP4 work is tracked in the CP4 issues. The requirements above remain the acceptance detail for the features it builds on.
 
 ## Project references
 

@@ -4,7 +4,7 @@ This is the full setup guide. It is for anyone setting up InboxToTask on their o
 
 Run commands from the folder named in each step.
 
-Hosted Gmail scanning is not deployed or verified, and automatic scanning does not exist. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first.
+This guide covers local setup. Hosted Gmail scanning has been deployed since November 9, and opt-in automatic checks run while the app is open; see [current state](../CURRENT_STATE.md#november-12-2026-cp4-study-release). Neither is verified by this guide. Use a dedicated Google account with fictional mail: permitted email bodies are sent to Gemini. Read [safety and privacy](../docs/safety_privacy.md) first.
 
 ## Windows, macOS and Linux
 
@@ -73,7 +73,7 @@ npx.cmd supabase --agent no migration up
 ```
 
 - The first `start` downloads several container images and can take a while. Docker must be running.
-- Google values are still blank at this point, so Google sign-in won't work until step 5. From reading the source of the pinned CLI (3.0.0), `start` should still succeed, but this hasn't been run. If it reports `Missing required field in config: auth.external.google.client_id`, do [Google setup, steps 2 and 3](supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup) first, then run `start` again.
+- Google values are still blank at this point, so Google sign-in won't work until step 5. From reading the source of the CLI (3.0.0 then; 3.1 since November 12), `start` should still succeed, but this hasn't been run. If it reports `Missing required field in config: auth.external.google.client_id`, do [Google setup, steps 2 and 3](supabase/GOOGLE_AUTH.md#step-by-step-local-google-setup) first, then run `start` again.
 - `supabase:prepare` copies prompts and the pipeline into the ignored Edge bundle. Rerun it after changing them.
 - `start` applies migrations to a new database. `migration up` applies only pending ones to an existing database. Do not run a database reset to apply migrations, because it erases local data.
 - Stay local: do not add `--remote` or link and push to a hosted project.
@@ -271,13 +271,14 @@ Passing these does not show that live Gmail or extraction works. See [live resul
 | Gmail connection fails with a different account | Sign in and connect Gmail with the same Google account |
 | Sign-in client ID or secret seems ignored | Values are in `supabase/.env` (not `functions/.env`), and local Supabase was stopped and started again |
 | "Manual Gmail scanning is disabled" | All three settings in step 7, then restart `functions serve` |
-| Scan refused | Consent saved, not paused, at least one sender or domain, Gmail connected with the same address |
-| "A scan is running or cooling down" | Wait 60 seconds, or 30 seconds for a connection attempt |
+| Scan refused | Consent saved, not paused, at least one sender, domain or category to check, Gmail connected with the same address |
+| "A scan is running or cooling down" | Wait 30 seconds (scans and connection attempts) |
+| An email never becomes a suggestion | With a category to check saved, it must contain one of the category's words; the status line says "N skipped by your categories" |
 | Missing test mail | Gmail may have filed it as spam; **Scan more** stays in the saved window |
 | Google sign-in unavailable | `web/.env` values set and Vite restarted |
 
 ## Hosted deployment
 
-Hosted deployment is separate from local setup. The hosted session reports 20 ledger versions through `20261106040000`, with Gmail functions not deployed, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. The Vercel production branch is `main`, per Sania, so treat a merge as a production deployment. Instant Rollback is available, but it does not undo migrations. Applying migrations or deploying functions needs a separate decision. Requirements are in [the backend guide](supabase/README.md) and the [Google setup rollout section](supabase/GOOGLE_AUTH.md#hosted-rollout-separate-from-local-implementation). Keep `ENABLE_GMAIL_SCAN` off on hosted.
+Hosted deployment is separate from local setup. As of November 12, hosted has 30 migration versions through `20261112010000`, and the Gmail functions are deployed and enabled; see [current state](../CURRENT_STATE.md#november-12-2026-cp4-study-release). (Earlier: 20 versions through `20261106040000`, with Gmail functions not deployed.) Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. The Vercel production branch is `main`, per Sania, so treat a merge as a production deployment. Instant Rollback is available, but it does not undo migrations. Applying migrations or deploying functions needs a separate decision. Requirements are in [the backend guide](supabase/README.md) and the [Google setup rollout section](supabase/GOOGLE_AUTH.md#hosted-rollout-separate-from-local-implementation). `ENABLE_GMAIL_SCAN` has been on for hosted since November 9; whether it stays on is the user's decision.
 
 For a frontend build, set the Vercel root directory to `Checkpoint 3/app/web`, use the Vite preset, and set install command `pnpm install --frozen-lockfile`, build command `pnpm build` and output `dist`. Only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` belong in its environment. `/storage` is excluded from production builds.

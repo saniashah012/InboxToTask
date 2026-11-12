@@ -79,7 +79,7 @@ values; once resolved, re-extraction does not raise it again. Cancelled tasks al
 its retained metadata and stops later scans from fetching it as mail or context.
 
 Service-only `gmail_scan_service` coordinates one four-minute lease per owner,
-with a 60-second request cooldown, seven-day snapshot window, private continuation
+with a 30-second request cooldown (60 seconds before November 12), a seven-day window (incremental for automatic checks, with a 5-minute overlap), private continuation
 IDs/cursor, and rechecks of saved consent, source access, settings revision, storage
 generation, verified mailbox identity, connection state/scope/generation. The
 handler additionally checks before and after obtaining/refreshing a backend token.

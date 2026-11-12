@@ -1,6 +1,6 @@
 ﻿# InboxToTask safety and privacy
 
-Updated November 5, 2026. This covers local behavior on `main`. **Hosted Gmail enforcement is not verified:** the hosted session reports that Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. All live results used a dedicated test mailbox with fictional mail, one tester and about 15 messages. This shows the safeguards ran in those cases; it does not measure how reliable they are.
+Updated November 5, 2026, with dated additions through November 12. This covers local behavior on `main`. **Hosted Gmail enforcement is not verified:** the Gmail functions have been deployed on hosted since November 9, but every live result below was run locally, and the hosted checks that follow predate that deployment. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. All live results used a dedicated test mailbox with fictional mail, one tester and about 15 messages. This shows the safeguards ran in those cases; it does not measure how reliable they are.
 
 **Evidence labels:** *Automated* (offline tests, PGlite, injected responses), *Local API* (real local Auth, PostgREST, Edge, pgTAP), *Seeded browser*, *Live local* (case IDs refer to [UC8](use-cases.md#live-test-cases)), *Code* (read from source only), *Planned*.
 
@@ -21,7 +21,7 @@ Updated November 5, 2026. This covers local behavior on `main`. **Hosted Gmail e
 
 | Guardrail | How it works | How it is tested |
 | --- | --- | --- |
-| **Source permission before body fetch** | Only `From` and `Subject` are read first. Exact sender or domain inclusions combine with OR; sender, domain and literal subject exclusions win. Without a matching inclusion, no body is requested. | Automated ([retrieval](../tests/gmail-retrieval.test.mjs)). Live local: L07, L09, L13b, L21 |
+| **Source permission before body fetch** | Only `From` and `Subject` are read first. Exact sender or domain inclusions combine with OR; sender, domain and literal subject exclusions win. Without a matching inclusion, no body is requested, unless a saved category to check stands in for the allowlist (since November 12; see "Topics of interest" below). | Automated ([retrieval](../tests/gmail-retrieval.test.mjs)). Live local: L07, L09, L13b, L21 |
 | **Each thread message checked separately** | An earlier message must pass the same rules before its body is fetched. Later replies are never context. | Automated. Live local: L13a, L13c |
 | **From-header parsing** | Quoted names and comments are removed first. A header naming more than one address, or no valid address, permits nothing. | Automated, including `"<allowed>" <other>`. Not exercised live |
 | **Exact domains** | A domain rule matches only that domain, not subdomains or lookalike suffixes. | Automated only. **Not run live**, which needs a second sender |
@@ -83,7 +83,7 @@ The whole feature is off unless `ENABLE_GMAIL_SCAN=true`, `GEMINI_API_KEY` and `
 | Paused, disconnected or no consent | Refused with a 409; nothing read | Live local: L18, L23 |
 | Gmail access removed | Scan stops, saved results stay, user is asked to reconnect | Live local: L17, L20 |
 | Access token expired | Refreshed without reconnecting | Live local: L16 |
-| Gmail or Gemini rate limit | Batch stops, progress kept, **Scan more** continues | Automated only |
+| Gmail or Gemini rate limit, timeout or Gmail server error | Batch stops, progress kept; the next scan continues. Automatic checks retry it quietly with a growing wait (30 s up to 5 min) and never stop for it | Automated only |
 | Budget exhausted | Work deferred with a visible message until the UTC reset | Automated only |
 | Invalid, ungrounded or truncated output | Not saved; counted as failed; retried up to three times | Automated; live local through F1 before its fix |
 | One unreadable message | Recorded; later mail continues | Automated |
@@ -116,6 +116,7 @@ The whole feature is off unless `ENABLE_GMAIL_SCAN=true`, `GEMINI_API_KEY` and `
 - **A request already sent cannot be recalled.** Pausing stops new work only.
 - **One past exposure:** a local token-encryption key was printed in a development session, then rotated, and local connections were cleared. Whether hosted used the same value is an open check.
 - **Every-minute checks use time windows with a 5-minute overlap.** Gmail's search index can lag behind delivery, so each automatic check looks back 5 minutes into the previous one. Within the overlap, already-processed email is reused without a model call, and a skipped email is read again to check its words but counted only once. An email Gmail indexes more than about 5 minutes late can still be missed by every-minute checks; it is found by the next full 7-day check (after a settings change or Gmail reconnect), or not at all if none happens within 7 days. Gmail's History API (sync from a stored `historyId` bookmark, as production mail clients do) would remove both the overlap and this gap; it is future work, not built.
+- **A message that keeps failing waits for the next full check.** A message that fails all three attempts during a complete check is not tried again by the every-minute checks. It is tried again when a settings change or Gmail reconnect starts a full 7-day check. The activity panel says how many messages stopped this way.
 - **Not run live:** settings changed during a scan, rate limits, wrong-account connection, replayed OAuth state, and domain and subdomain rules.
 
 ## Gaps from production practice

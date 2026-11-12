@@ -1,5 +1,7 @@
 > **Working-tree navigation (November 5, 2026):** Start with [current implementation state](<Checkpoint 3/CURRENT_STATE.md>) and [repository instructions](AGENTS.md). Active code is under Checkpoint 3; earlier checkpoints and the project proposal below are historical requirements/context. For continuation, see [the Claude handoff](CLAUDE_HANDOFF.md). The presence of code does not mean local migrations are applied or live acceptance has passed.
 
+**Checkpoint 4 work** is in [`Checkpoint 4/`](<Checkpoint 4/README.md>), tracked in the CP4 issues and the pinned working agreement. Application code stays in `Checkpoint 3/app`.
+
 **Checkpoint 3 deliverables** are in `Checkpoint 3/`. The demo runs locally.
 
 | Required | Location |
@@ -16,6 +18,8 @@
 | Demo script and slides | [demo-script.md](<Checkpoint 3/docs/demo-script.md>), [draft slides](<Checkpoint 3/docs/InboxToTask-CP3-presentation-draft.pptx>) |
 
 **Known gaps against the CP3 requirements.** "Implements all proposed core features" is **not met**. Not built on `main`: automatic scans, real data in the designed dashboard and onboarding, a Waiting For view in the workspace (records are saved but not displayed), and account deletion. Google Calendar events moved to CP4 and are not merged. There is no streaming, vector store, tool-calling agent or PII sanitization. Gmail connection and scanning work only locally, so the live demo runs locally. See [current state](<Checkpoint 3/CURRENT_STATE.md>) and [use cases](<Checkpoint 3/docs/use-cases.md>) for what has and has not been run.
+
+**CP4 update (November 12, 2026):** real data now runs through the designed onboarding and dashboard, Gmail connection and scanning are deployed on the hosted site, and automatic checks run every minute while the app is open. Still not built: scanning with the app closed, account deletion and Google Calendar events. Current status: [current state](<Checkpoint 3/CURRENT_STATE.md#november-12-2026-cp4-study-release>).
 
 # 1. Project Title & Tagline
 

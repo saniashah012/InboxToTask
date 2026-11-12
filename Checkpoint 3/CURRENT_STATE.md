@@ -76,8 +76,8 @@ The app does not fetch or display email bodies on demand.
   | `20261109120000_task_return_to_review` | PR #28, corrected by #32 | Applied, corrected function re-run (see below) | Applied November 9, corrected version |
   | `20261109200000_private_topic_words` | PR #31 | Not applied | Applied November 9 |
   | `20261109220000_source_delete_quotes_and_boundary` | Fixes the two open defects (below) | Not applied | Not applied |
-  | `20261112001000_scan_cooldown_and_batch_stops` | 30-second scan cooldown; a planned per-batch stop counts as successful (F6) | Not applied | Not applied |
-  | `20261110010000_auto_scan_preference` | Saved opt-in for automatic scanning while the app is open | Applied November 10 | Not applied |
+  | `20261112001000_scan_cooldown_and_batch_stops` | 30-second scan cooldown; a planned per-batch stop counts as successful (F6) | Not applied under this number (applied November 10 as `20261110000000`) | Not applied |
+  | `20261112002000_auto_scan_preference` | Saved opt-in for automatic scanning while the app is open | Not applied under this number (applied November 10 as `20261110010000`) | Not applied |
 
   The two #29 migrations are dated earlier than one already applied locally, so the local
   database needs `migration up --include-all`. Before the hosted push, read-only aggregate

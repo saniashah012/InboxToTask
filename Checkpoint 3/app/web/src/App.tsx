@@ -111,6 +111,9 @@ function App() {
         options: {
           scopes: "openid email profile",
           redirectTo: window.location.origin,
+          // Always show Google's account picker so sign-in never silently
+          // reuses whichever Google account the browser is already using.
+          queryParams: { prompt: "select_account" },
         },
       })
       if (error) throw error

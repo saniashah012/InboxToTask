@@ -2,7 +2,8 @@
 
 Updated the evening of November 5, 2026 (Central), after live local manual-scan testing, two
 hosted database rollouts and the merge of PR #22 to `main` at `59461b6`. Migration state was
-rechecked on November 9 (see below); other sections were not. This is the resumption index, not a claim that
+rechecked on November 9, and hosted functions and secret flags were rechecked that evening
+(see below); other sections were not. This is the resumption index, not a claim that
 services are running. Check Git status and local runtime/migration state before new work.
 
 ## Read in this order
@@ -75,10 +76,12 @@ The app does not fetch or display email bodies on demand.
   | `20261109000100_calendar_preview_replace` | PR #29 | Not applied | Applied November 9 |
   | `20261109120000_task_return_to_review` | PR #28, corrected by #32 | Applied, corrected function re-run (see below) | Applied November 9, corrected version |
   | `20261109200000_private_topic_words` | PR #31 | Not applied | Applied November 9 |
-  | `20261109220000_source_delete_quotes_and_boundary` | Fixes the two open defects (below) | Not applied | Not applied |
-  | `20261112001000_scan_cooldown_and_batch_stops` | 30-second scan cooldown; a planned per-batch stop counts as successful (F6) | Not applied under this number (applied November 10 as `20261110000000`) | Not applied |
-  | `20261112002000_auto_scan_preference` | Saved opt-in for automatic scanning while the app is open | Not applied under this number (applied November 10 as `20261110010000`) | Not applied |
-  | `20261112010000_incremental_scan_window` | New checks cover email since the last complete check (5-minute overlap); status reports the window | Not applied | Not applied |
+  | `20261109220000_source_delete_quotes_and_boundary` | Fixes the two open defects (below) | Applied (local database rebuilt November 12) | Applied November 9 (seen in `migration list` that evening) |
+  | `20261111000000_topic_to_check_words` | Word lists for categories to check (#103) | Applied (rebuilt November 12) | Applied November 12 |
+  | `20261112000000_topics_without_senders` | A category to check can stand in for a sender; saving clears stale scan work (#104) | Applied (rebuilt November 12) | Applied November 12 (#108) |
+  | `20261112001000_scan_cooldown_and_batch_stops` | 30-second scan cooldown; a planned per-batch stop counts as successful (F6); PR #36 renumbered | Applied (rebuilt November 12) | Applied November 12 (#108) |
+  | `20261112002000_auto_scan_preference` | Saved opt-in for automatic scanning while the app is open; PR #37 renumbered | Applied (rebuilt November 12) | Applied November 12 (#108) |
+  | `20261112010000_incremental_scan_window` | New checks cover email since the last complete check (5-minute overlap); status reports the window | Applied (rebuilt November 12) | Applied November 12 (#108) |
 
   The two #29 migrations are dated earlier than one already applied locally, so the local
   database needs `migration up --include-all`. Before the hosted push, read-only aggregate
@@ -97,16 +100,35 @@ The app does not fetch or display email bodies on demand.
   applied November 6 at 03:26 and 03:50 UTC; see the [first](docs/hosted-backup-verification-2026-11-06.md)
   and [second](docs/hosted-rollout-2-manifest-2026-11-06.md) rollout records. The four
   migrations above were pushed on November 9, so hosted has 24 versions through
-  `20261109200000_private_topic_words`.
-- **Hosted Gmail functions are not deployed.** Only `analysis_email` is deployed, and the scan,
-  retrieval and Google connection flags are unset, so Connect Gmail and Scan cannot work on the
-  live site.
+  `20261109200000_private_topic_words`. `20261109220000_source_delete_quotes_and_boundary` was
+  also applied later on November 9, so hosted has 25 versions.
+- **Hosted Gmail connection and scanning are live (checked November 9, about 6:30 PM Central).**
+  `google_connection`, `google_callback` and `gmail_scan` were deployed at 00:20 UTC on November 10
+  (6:20 PM Central November 9), alongside `analysis_email`. Read from secret digests, not values:
+  `ENABLE_GOOGLE_CONNECTION` and `ENABLE_GMAIL_SCAN` are true; `ENABLE_GMAIL_RETRIEVAL`,
+  `ENABLE_FIXTURE_EXTRACTION` and `ENABLE_STORAGE_CLEANUP` are false; a Gemini key and Google
+  OAuth/token secrets are set. Matthew approved the deployment in chat; a Claude Code session ran it, applying `20261109220000`, setting the function secrets and deploying the three functions (corrected November 9: an earlier version of this note said it was unrecorded). On the live site, anyone who
+  signs in can connect Gmail and, after saving consent, send permitted email to Gemini.
+  Signed-in hosted scanning has no recorded verification.
+- **Unused Groq secret removed from hosted (November 9, 10:16 PM Central).** `GROP_API_KEY` was
+  deleted with `supabase secrets unset`, approved by Matthew in chat; 20 secrets remain. No code on
+  `main` reads it. Only the legacy Groq `analysis_email` deployment (version 7, October 30) did,
+  and it is called only by the local-development `/storage` route, which production builds omit.
+  The key itself should also be revoked in the Groq console.
+- **Personal accounts removed from hosted (November 9).** A teammate's sign-in landed on their
+  personal Google account (see the sign-in note below), and Disconnect appeared to fail. The user
+  deleted those accounts from hosted Auth, which cascades to their connection, settings and scan
+  rows. That cannot revoke the Google grant or recall anything already sent to Gemini; the
+  teammate was advised to remove the app on Google's third-party access page. Whether a scan ran
+  on that account was not checked before deletion.
 - **Sania reports that signed-in hosted settings checks are complete and passed,** on a preview of
   `ffa915a`, an older commit than current `main`: save/reload, sign-out/in, stale-tab conflict and isolation
   between two accounts in the tested workspace flows. These were not RLS penetration tests and did not
   cover onboarding or chip screens. Review, manual resolution and source links remain unverified
-  signed-in on hosted, because there is no Gmail data there. Sign-in silently reuses the current
-  Google account, so unassisted account switching is not established. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Details are in the
+  signed-in on hosted, because there was no Gmail data there at the time. Sign-in silently reuses the current
+  Google account, so unassisted account switching is not established. A fix that adds
+  `prompt=select_account` to product sign-in in `App.tsx` is on branch
+  `claude/supabase-website-task-b1db5d`, typechecked only, not merged or browser-checked. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Details are in the
   [rollout record](docs/hosted-backup-verification-2026-11-06.md#signed-in-checks-reported-by-sania).
 - **Google Calendar moved to CP4 by user decision.** It is not in CP3 or on hosted. The rebase is on
   the unmerged GitHub branch `mzheng/calendar-rebase` at `da4417d`, with migration `20261106050000`, offline tests reported and no live test. That
@@ -114,15 +136,15 @@ The app does not fetch or display email bodies on demand.
   a Gmail-only reconnect after full revocation, reconnecting after a key rotation, and reuse of a revoked refresh
   token. ICS export is the CP3 calendar path and writes nothing to Google.
 - **The two defects to fix before hosted scanning now have a fix in
-  `20261109220000_source_delete_quotes_and_boundary`**, not yet applied anywhere: deleting a Gmail
+  `20261109220000_source_delete_quotes_and_boundary`**, applied on hosted November 9 but not locally: deleting a Gmail
   source now also clears quotes of that message in other sources' evidence, and
   `valid_task_fields` rejects a null or non-string boundary. PGlite tests cover both and failed
   without the migration. The defects are described in the [second rollout record](docs/hosted-rollout-2-manifest-2026-11-06.md#open-defects-not-blocking-this-rollout).
 - `ENABLE_GMAIL_SCAN` was set to false after live testing, then turned on the night of November 5 for the local demo. No scan has been confirmed since; recheck it, and turn it off after the demo. A Gemini key remains in the private local
   function configuration. Retrieval-only mode, fixture inference and cleanup remain disabled.
 - The local Google token key was rotated after being exposed in a development session's output.
-  Stored local Gmail connections were cleared, so local accounts must reconnect. If hosted used
-  the same key value, rotate it there too.
+  Stored local Gmail connections were cleared, so local accounts must reconnect. The hosted key's
+  status is not recorded here, because this repository is public.
 - `GOOGLE_RETURN_URL` in the private local file points at the product root.
 - For the demo, the test account's daily request limit in the local database is 50, not the default 20. Hosted defaults are unchanged.
 
@@ -136,7 +158,9 @@ Next:
 
 1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code, and for onboarding preview `91234dd`.
 2. Connect real data and onboarding to the designed dashboard, and make PR 20's chip screens reachable for signed-in testing.
-3. Apply `20261109220000_source_delete_quotes_and_boundary` before any hosted Gmail deployment. That deployment and hosted scanning need separate approval.
+3. Hosted Gmail is live (see above; deployment approved by Matthew). Decide
+   whether `ENABLE_GMAIL_SCAN` should stay on, run a signed-in hosted check with the test
+   mailbox only, and merge the sign-in account-picker fix.
 4. In CP4, finish Calendar's OAuth fixes and review, then consider Phase 7 and the remaining live checks.
 
 **Known CP3 gap:** the assignment's "all proposed core features" is not met. Not built: automatic scans, real data in the designed dashboard, a Waiting For view in the workspace and account deletion. Calendar events moved to CP4.

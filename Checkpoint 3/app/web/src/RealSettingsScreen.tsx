@@ -136,6 +136,10 @@ export default function RealSettingsScreen({
       {dirty && !saving && <p className="settings-footnote" role="status">Unsaved changes on this page.</p>}
       <SaveFailure error={saveError} onReload={() => { setSaveError(null); onReload() }} reloading={refreshing} />
       <div className="step-actions">
+        {/* An easy way out from the bottom of the page. Its label says what happens. */}
+        <button className="secondary-button settings-leave" disabled={saving} onClick={onBack} type="button">
+          {dirty ? "Leave without saving" : "Back to dashboard"}
+        </button>
         <button
           className="secondary-button"
           disabled={saving || refreshing}

@@ -4106,3 +4106,8 @@ textarea:focus-visible {
   padding: 18px 24px 6px;
   color: var(--ink);
 }
+
+/* Settings: the way out sits at the left of the save bar, apart from Save. */
+.real-settings-save .step-actions .settings-leave {
+  margin-right: auto;
+}

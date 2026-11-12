@@ -280,5 +280,5 @@ export function autoContinueDelay(status: ScanStatusLike | null, now: number): n
 // not stop automatic scanning, so a stuck message cannot loop forever.
 export function batchMadeProgress(result: ScanStatusLike["result"]): boolean {
   const c = result?.counts ?? {}
-  return ["prepared", "reused", "skipped", "privateTopic", "failed", "blocked"].some((k) => (c[k] ?? 0) > 0)
+  return ["prepared", "reused", "skipped", "privateTopic", "noTopicWord", "failed", "blocked"].some((k) => (c[k] ?? 0) > 0)
 }

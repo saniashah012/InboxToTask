@@ -192,6 +192,7 @@ test('automatic scanning continues only while a backlog is saved, after the cool
 test('a batch that moved nothing forward counts as a stall', () => {
   assert.equal(batchMadeProgress({ counts: { prepared: 3, modelCalls: 3 } }), true);
   assert.equal(batchMadeProgress({ counts: { blocked: 4 } }), true);
+  assert.equal(batchMadeProgress({ counts: { noTopicWord: 2 } }), true, 'skipped for no topic word');
   assert.equal(batchMadeProgress({ counts: { candidates: 0, modelCalls: 0 } }), false);
   assert.equal(batchMadeProgress(null), false);
 });

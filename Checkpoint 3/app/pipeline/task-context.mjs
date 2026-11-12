@@ -8,14 +8,14 @@ const words = text => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? 
 // to Friday" can share no words with the task it changes.
 // A task whose accepted values or source subjects contain a blocked word is never a
 // candidate, because its values would carry that word to the model.
-export function selectTaskContext(rows, message, rules, maxChars=12000, blockedTerms=[]) {
+export function selectTaskContext(rows, message, rules, maxChars=12000, blockedTerms=[], anySender=false) {
   const terms=words(`${message.subject} ${message.body}`); const eligible=[]; let omitted=false;
   if (!Array.isArray(rows) || rows.length>21) throw new PipelineError('INVALID_TASK_CONTEXT');
   for (const row of rows) {
     if (!row || !/^[0-9a-f-]{36}$/i.test(row.id) || !Number.isSafeInteger(row.revision) || row.revision<0
       || !row.acceptedFields || !Array.isArray(row.sources) || !row.sources.length) throw new PipelineError('INVALID_TASK_CONTEXT');
     if (row.sources.length>30) {omitted=true;continue;}
-    if (row.sources.some(s=>filterMessage(s,rules)!=='PERMITTED')) continue;
+    if (row.sources.some(s=>filterMessage(s,rules,anySender)!=='PERMITTED')) continue;
     if (containsBlockedWord([...textValues(row.acceptedFields),...row.sources.map(s=>s.subject)],blockedTerms)) continue;
     if (!row.sources.some(s=>s.threadId===message.threadId)) continue;
     if (row.sources.every(s=>s.id===message.id)) continue;

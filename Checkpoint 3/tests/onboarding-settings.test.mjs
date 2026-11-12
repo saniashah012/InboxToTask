@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { consentDecision, resolveScanConsent } from '../app/web/src/scanConsent.ts';
 import {
-  accessScopeSummary, blockedWordsFor, contextLimitError, hasSourcePermission, parseBlockedWord,
+  accessScopeSummary, blockedWordsFor, contextLimitError, hasScanSource, hasSourcePermission, parseBlockedWord,
   preferencesFromSettings, parseRuleInput, sameSavedFields, scanBlockers, settingsWithPreferences,
   signedInRoute, topicInputError, totalBlockedWords, withConsentDecision,
 } from '../app/web/src/scanSetup.ts';
@@ -115,7 +115,7 @@ test('the revision sent is the one that was loaded, so a stale tab gets PT409', 
 
 test('an empty allowlist processes nothing, even with consent and a connection', () => {
   const blockers = scanBlockers({ ...fresh(), consent: true, paused: false }, 'connected');
-  assert.deepEqual(blockers, ['No permitted senders or domains, so nothing will be processed.']);
+  assert.deepEqual(blockers, ['No permitted senders, domains or categories to check, so nothing will be processed.']);
   assert.match(accessScopeSummary(preferencesFromSettings(fresh())), /nothing is processed/);
 });
 
@@ -244,4 +244,18 @@ test('typed skipped-category words follow the backend word rules', () => {
   assert.match(parseBlockedWord('ab', [], 0).error, /1-100/);
   assert.match(parseBlockedWord('new', Array.from({ length: 100 }, (_, i) => `w${i}`), 100).error, /up to 100/);
   assert.match(parseBlockedWord('new', ['a'], 1000).error, /1000 words in total/);
+});
+
+test('a category to check stands in for a sender or domain, and the summary says so', () => {
+  const prefs = { ...preferencesFromSettings(fresh()), selectedSenders: [], selectedDomains: [], includedTypes: [] };
+  assert.equal(hasScanSource(prefs), false);
+  assert.match(accessScopeSummary(prefs), /nothing is processed/);
+  const topicsOnly = { ...prefs, includedTypes: ['School'] };
+  assert.equal(hasScanSource(topicsOnly), true);
+  assert.equal(hasSourcePermission(topicsOnly), false);
+  assert.match(accessScopeSummary(topicsOnly), /^Permit any sender whose email uses a word from School/);
+  const settings = settingsWithPreferences(fresh(), topicsOnly);
+  assert.deepEqual(scanBlockers({ ...settings, consent: true, paused: false }, 'connected'), []);
+  assert.ok(scanBlockers({ ...settingsWithPreferences(fresh(), prefs), consent: true, paused: false }, 'connected')
+    .some(b => b.startsWith('No permitted senders, domains or categories')));
 });

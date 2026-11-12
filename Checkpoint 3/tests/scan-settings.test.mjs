@@ -141,6 +141,29 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
         [3,rules,context,{include:['school'],exclude:[],includeWords:bad}]),{code:'22023'},JSON.stringify(bad)));
     await as('authenticated',E,()=>assert.rejects(q('select private.starter_topic_words($1)',['school']),{code:'42501'}));
   });
+  await t.test('a topic to check stands in for a permitted sender; with neither, scans are refused',async()=>{
+    const F='88888888-8888-4888-8888-888888888888';
+    await q('insert into auth.users values($1,$2)',[F,'f@example.org']);
+    const none={allow:{labels:[],keywords:[],senders:[],domains:[]},block:{labels:[],senders:['ads@example.org'],domains:[],subjectKeywords:[]}};
+    await save(0,none,context,true,false,'gmail-scan-v1',F,{include:[],exclude:[]});
+    await q('update public.storage_preferences set enabled=true where user_id=$1',[F]);
+    await q("insert into private.google_connections(user_id,state,email,scopes) values($1,'connected','f@example.org',$2)",[F,JSON.stringify(['https://www.googleapis.com/auth/gmail.readonly'])]);
+    const scan=()=>as('service_role',F,()=>scalar('select public.gmail_scan_service($1,$2,$3)',[F,'claim',{mode:'initial'}]));
+    await assert.rejects(scan(),{code:'PT409'});
+    await save(1,none,context,true,false,'gmail-scan-v1',F,{include:['school'],exclude:[]});
+    const claim=await scan(); assert.equal(claim.state,'claimed');
+    // A save makes unfinished work stale, so it is cleared and the next check starts fresh.
+    await as('service_role',F,()=>scalar('select public.gmail_scan_service($1,$2,$3)',[F,'finish',{lease:claim.lease,continuation:{pending:['gmail1'],next:null},result:{modelCalls:0}}]));
+    assert.ok(await scalar('select continuation is not null from private.gmail_scan_work where user_id=$1',[F]));
+    await save(2,none,context,true,false,'gmail-scan-v1',F,{include:['school'],exclude:[]});
+    assert.equal(await scalar('select continuation from private.gmail_scan_work where user_id=$1',[F]),null);
+    const permitted=(from,r)=>scalar('select private.gmail_permitted($1,$2)',[{from,subject:'Hi'},r]);
+    assert.equal(await permitted('anyone@example.net',none),true);
+    assert.equal(await permitted('ads@example.org',none),false);
+    assert.equal(await permitted('anyone@example.net',rules),false);
+    assert.equal(await scalar('select private.scan_sources_ready($1,$2)',[none,{include:[],exclude:[]}]),false);
+    await as('authenticated',F,()=>assert.rejects(q('select private.scan_sources_ready($1,$2)',[none,{include:[]}]),{code:'42501'}));
+  });
     await t.test('anonymous, owner injection and direct writes cannot bypass the RPC',async()=>{
       await as('anon',A,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));
       await as('authenticated',null,()=>assert.rejects(q('select public.scan_settings_get()'),{code:'42501'}));

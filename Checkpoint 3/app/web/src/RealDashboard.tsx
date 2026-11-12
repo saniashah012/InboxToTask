@@ -11,7 +11,7 @@ import { loadTaskSourceLinks, OpenInGmail, TaskSourceEmails, type TaskSourceLink
 import { loadRead, saveRead } from "./readMarks"
 import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
-import type { GmailState } from "./scanSetup"
+import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
   buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
   type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
@@ -241,7 +241,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   }
 
   const blockers = {
-    sources: settings.rules.allow.senders.length + settings.rules.allow.domains.length === 0,
+    sources: !settingsHaveScanSource(settings),
     consent: !settings.consent,
     paused: settings.paused,
     gmail: !gmail.checking && gmail.state !== "connected",
@@ -647,7 +647,7 @@ const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailSt
   switch (state) {
     case "loading": return ["Loading scan status…", "Checking saved settings and the Gmail connection."]
     case "processing": return ["Checking permitted Gmail…", "Counts update when the batch finishes. You can keep reviewing."]
-    case "missing-sources": return ["No sources permitted", "Add an exact sender or domain in Settings. Topics never grant access, so nothing is processed."]
+    case "missing-sources": return ["Nothing to check", "Add a sender, domain or category to check in Settings. Until then nothing is processed."]
     case "paused": return settings.consent ? ["Scanning paused", "Resume in Settings to run a manual check."] : ["Scanning consent needed", "Give scanning consent in Settings before a manual check."]
     case "disconnected": return gmail === "reconnect_required" ? ["Reconnect Gmail", "Gmail access is no longer valid. Reconnect in Settings → Connections."] : gmail === "unknown" ? ["Gmail status unavailable", "Could not confirm the Gmail connection. Reload, or check Settings → Connections."] : ["Gmail not connected", "Connect Gmail in Settings → Connections. No mailbox was accessed."]
     case "cooldown": return ["Cooling down", `You can check again in ${cooldownLeft} s.`]

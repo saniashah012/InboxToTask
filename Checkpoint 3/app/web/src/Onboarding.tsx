@@ -6,7 +6,7 @@ import type { ScanSettings } from "./storageAdapter"
 import {
   accessScopeSummary,
   contextLimitError,
-  hasSourcePermission,
+  hasScanSource,
   preferencesFromSettings,
   settingsWithPreferences,
   withConsentDecision,
@@ -61,8 +61,8 @@ export default function Onboarding({
   const { saving, saveError, setSaveError, run } = useSettingsSave()
   const gmail = useGmailState(step === 4, step)
   const setupSteps = ["Connect", "Choose emails", "Privacy", "Review"]
-  // Topics alone permit nothing, so a sender or domain is required to continue.
-  const hasPreferences = hasSourcePermission(preferences)
+  // A sender or domain is required unless a category to check is chosen.
+  const hasPreferences = hasScanSource(preferences)
   const contextError = contextLimitError(context)
 
   const saveReal = async () => {
@@ -135,11 +135,11 @@ export default function Onboarding({
             <>
               <h2>Which email categories should we check?</h2>
               <p className="setup-description">
-                Choose exact sender or domain permissions. Categories to check narrow that further: a permitted email must use one of their words.
+                Choose exact senders or domains, categories to check, or both. Categories to check need one of their words in an email. With no sender or domain, email from any sender that is not blocked is checked for those words.
               </p>
               <RulesEditor rules={preferences} onChange={setPreferences} section="allowed" />
               <p className="setup-helper requirement-helper">
-                Choose at least one sender or domain. Topics alone permit nothing.
+                Choose at least one sender, domain or category to check.
                  Nothing is saved until the last step.
               </p>
               <FooterActions
@@ -179,7 +179,7 @@ export default function Onboarding({
               <details className="privacy-disclosure">
                 <summary>How privacy filtering works</summary>
                 <ul>
-                  <li>Exact source and subject exclusions override inclusions before an email body is retrieved. Topics are word lists checked before anything is sent to Gemini: an email using a skipped topic's words is skipped, and with topics to check saved, an email using none of their words is skipped too.</li>
+                  <li>Exact source and subject exclusions override inclusions before an email body is retrieved. Topics are word lists checked before anything is sent to Gemini: an email using a skipped topic's words is skipped, and with topics to check saved, an email using none of their words is skipped too. With topics to check and no permitted sender or domain, the subject and body of email from any sender that is not blocked are read by our backend to look for those words; only matching email is sent to Gemini.</li>
                   <li>Neither metadata rules nor word lists can guarantee that all health or financial content is excluded: email that uses none of the words can still be sent. Blocking a sender or domain is the complete protection.</li>
                 </ul>
               </details>
@@ -246,7 +246,7 @@ export default function Onboarding({
                 )}
               </div>
               <p className="setup-helper requirement-helper">
-                {accessScopeSummary(preferences)} Topics never grant source access.
+                {accessScopeSummary(preferences)}
               </p>
               {(
                 <div className="onboarding-consent">

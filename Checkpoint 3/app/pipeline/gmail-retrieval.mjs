@@ -40,7 +40,9 @@ export function senderAuthenticated(data, from) {
     return false;
   });
 }
-const permitted = (data, meta, rules) => filterMessage(meta, rules) === 'PERMITTED' && senderAuthenticated(data, meta.from);
+// Mail from any sender still needs Gmail's authentication result when topics to
+// check stand in for the allowlist (anySender), so forged From headers stay out.
+const permitted = (data, meta, rules, anySender) => filterMessage(meta, rules, anySender) === 'PERMITTED' && senderAuthenticated(data, meta.from);
 async function boundedJson(response, cap) {
   if (!response.body) throw problem('GMAIL_UNAVAILABLE');
   const reader = response.body.getReader(); const chunks = []; let size = 0;
@@ -239,7 +241,7 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
         counts.candidates++; metadataRecords++; counts.blocked++; retry.delete(messageId); pending.shift(); continue;
       }
       counts.candidates++; metadataRecords++;
-      if (!permitted(raw,current,work.rules)) { counts.blocked++; retry.delete(messageId); pending.shift(); continue; }
+      if (!permitted(raw,current,work.rules,required.length>0)) { counts.blocked++; retry.delete(messageId); pending.shift(); continue; }
       if (Date.parse(current.sentAt)<Date.parse(work.start) || Date.parse(current.sentAt)>Date.parse(work.end)) { retry.delete(messageId); pending.shift(); continue; }
       if (containsBlockedWord([current.subject], terms)) { privateTopic(); continue; }
       const subjectHasTopicWord = !required.length || containsBlockedWord([current.subject], required);
@@ -266,7 +268,7 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
               return [];
             }
             const meta = gmailMetadata(item);
-            if (meta.id !== messageId && (suppressed.has(meta.id) || !permitted(item,meta,work.rules))) {
+            if (meta.id !== messageId && (suppressed.has(meta.id) || !permitted(item,meta,work.rules,required.length>0))) {
               // Later mail is never context for this message, so excluding it hides nothing.
               if (Date.parse(meta.sentAt) <= Date.parse(current.sentAt)) excluded = true;
               return [];

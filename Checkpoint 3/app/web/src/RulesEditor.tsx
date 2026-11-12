@@ -1,6 +1,7 @@
 // Chip editor for exact sender/domain access rules, literal subject exclusions
-// and topics. Topics never grant access. Each skipped category opens an editable
-// word list; the backend checks those words before anything reaches Gemini.
+// and topics. Each category opens an editable word list that the backend checks
+// before anything reaches Gemini. With no sender or domain permitted, categories
+// to check decide which senders' email is checked at all.
 import { useId, useState } from "react"
 import {
   excludedTopicSuggestions,
@@ -153,7 +154,7 @@ export default function RulesEditor({
         <div className="rule-heading">
           <div>
             <strong>Email categories to check</strong>
-            <span>With any category here, a permitted email must contain one of its words before it reaches Gemini; email using none of them is skipped. Categories never grant access. Select a category to see or edit its words.</span>
+            <span>With any category here, a permitted email must contain one of its words before it reaches Gemini; email using none of them is skipped. With no permitted sender or domain, these categories decide what is checked. Select a category to see or edit its words.</span>
           </div>
         </div>
         <CategorySelector

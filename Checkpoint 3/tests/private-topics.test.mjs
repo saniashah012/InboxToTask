@@ -12,9 +12,9 @@ const base64url = text => btoa(text).replace(/\+/g,'-').replace(/\//g,'_').repla
 const date = '2026-11-05T12:00:00Z';
 // Allowlisted senders must pass an aligned DKIM or DMARC check (see gmail-retrieval tests).
 const passingAuth = 'mx.google.com; dkim=pass header.i=@example.org header.s=s1; spf=pass smtp.mailfrom=x; dmarc=pass (p=REJECT) header.from=example.org';
-const gmailMessage = (id, {subject='Assignment', body='Please submit the report.', sentAt=date}={}) => ({
+const gmailMessage = (id, {subject='Assignment', body='Please submit the report.', sentAt=date, from='teacher@example.org'}={}) => ({
   id,threadId:'thread1',internalDate:String(Date.parse(sentAt)),payload:{mimeType:'text/plain',
-    headers:[{name:'Authentication-Results',value:passingAuth},{name:'From',value:'teacher@example.org'},{name:'Subject',value:subject}],body:{data:base64url(body)}},
+    headers:[{name:'Authentication-Results',value:passingAuth},{name:'From',value:from},{name:'Subject',value:subject}],body:{data:base64url(body)}},
 });
 const topics = {include:[],exclude:['health','my club'],blockedWords:{health:['diagnosis','lab results'],'my club':['chess club']}};
 const rules = {allow:{senders:[],domains:['example.org']},block:{senders:[],domains:[],subjectKeywords:[]}};
@@ -169,4 +169,25 @@ test('the payload check repeats the required-word rule and never sends the words
   const prepared=prepareInput(plain('Rehearsal moved to Tuesday.'),{});
   assert.deepEqual(prepared.payload.semanticPreferences,{include:['school','band']});
   assert.ok(!JSON.stringify(prepared.payload.semanticPreferences).includes('syllabus'));
+});
+
+test('with no permitted sender, topics to check admit any authenticated, unblocked sender that uses a word',async()=>{
+  const s=setup([gmailMessage('match',{subject:'Homework due'}),
+    gmailMessage('off',{subject:'Hello',body:'Lunch on Friday?'}),
+    // Gmail's result does not authenticate this From domain, so it never counts as any sender.
+    gmailMessage('forged',{subject:'Homework due',from:'dean@forged.example'}),
+    gmailMessage('blocked',{subject:'Homework due',from:'ads@example.org'})]);
+  s.options.work.rules={allow:{senders:[],domains:[]},block:{senders:['ads@example.org'],domains:[],subjectKeywords:[]}};
+  s.options.work.semanticPreferences=checked;
+  const r=await retrieveGmail(s.options);
+  assert.deepEqual(s.inputs.map(i=>i.message.id),['match']);
+  assert.equal(r.counts.noTopicWord,1);assert.equal(r.counts.blocked,2);
+});
+
+test('with no permitted sender and no topic to check, nothing is read beyond metadata',async()=>{
+  const s=setup([gmailMessage('any',{subject:'Homework due'})]);
+  s.options.work.rules={allow:{senders:[],domains:[]},block:{senders:[],domains:[],subjectKeywords:[]}};
+  const r=await retrieveGmail(s.options);
+  assert.deepEqual(s.inputs,[]);assert.equal(r.counts.blocked,1);
+  assert.ok(!s.calls.some(c=>c.startsWith('body:')));
 });

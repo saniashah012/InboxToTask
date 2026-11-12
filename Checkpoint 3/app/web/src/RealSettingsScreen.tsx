@@ -157,10 +157,10 @@ export default function RealSettingsScreen({
             <>
               <SettingsHeading
                 title="Email preferences"
-                description="Saved to your account. Exact sender and domain permissions control access; topic word lists are checked before Gemini, to skip email or to require one of your topics."
+                description="Saved to your account. Exact senders and domains control access. Without any, categories to check do: email from any sender that is not blocked must use one of their words. Topic word lists are checked before Gemini."
               />
               <RulesEditor rules={preferences} onChange={setPreferences} />
-              <p className="settings-footnote">{accessScopeSummary(preferences)} Topics never grant access.</p>
+              <p className="settings-footnote">{accessScopeSummary(preferences)}</p>
               {saveBar}
             </>
           )}

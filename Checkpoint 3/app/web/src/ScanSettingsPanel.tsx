@@ -79,7 +79,7 @@ export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: {
       <p aria-label="Current form scope">Current form scope: {([
         ...settings.rules.allow.senders.filter(v => v.trim()).map(v => `sender ${v.trim()}`),
         ...settings.rules.allow.domains.filter(v => v.trim()).map(v => `domain ${v.trim()}`),
-      ].join(" OR ") || "No inclusions configured; nothing is permitted")}. Any matching exclusion blocks processing. Saving does not start a scan.</p>
+      ].join(" OR ") || (settings.semantic_preferences.include.length ? "Any sender whose email uses a topic word" : "No inclusions configured; nothing is permitted"))}. Any matching exclusion blocks processing. Saving does not start a scan.</p>
       <fieldset disabled={busy}>
         <legend>Source access permissions</legend>
         <span className="scan-help" onMouseEnter={() => setHelp(true)} onMouseLeave={() => setHelp(false)}>
@@ -89,7 +89,7 @@ export default function ScanSettingsPanel({ onSaved, collapseOnSave = false }: {
           {help && <span id={helpId} role="tooltip">Sender and domain controls match exactly. Optional subject exclusions match literal text without case sensitivity. Bodies are not searched for access decisions. Inclusions combine with OR; exclusions always win.</span>}
         </span>
         <p>One entry per line; up to 200 entries of 254 characters per list. Domains do not include subdomains. Words and phrases match literal text without case sensitivity.</p>
-        <p>With no topics of interest selected, all source-permitted topics qualify. Topics never grant access.</p>
+        <p>With no topics of interest selected, all source-permitted topics qualify. With topics of interest and no included sender or domain, any sender that is not excluded is checked for the topics' words.</p>
         {fields.map(([field, label]) => <div className="scan-rule-pair" key={field}>
           {(["allow", "block"] as const).map(group =>
             <label key={group}>{group === "allow" ? "Include" : "Exclude"}: {label}

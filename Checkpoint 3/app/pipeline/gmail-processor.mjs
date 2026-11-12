@@ -24,7 +24,7 @@ export function createGmailProcessor({rpc,user,work,settings,systemPrompt,genera
  return async (email,{remainingMs=60000}={})=>{
   const topics=work.semanticPreferences===undefined?null:semanticPreferences(work.semanticPreferences);
   const rows=await rpc('gmail_task_context',{p_user:user.id,p_lease:work.lease,p_meta:email.message});
-  const context=selectTaskContext(rows,email.message,email.rules,undefined,topics?.terms??[]);
+  const context=selectTaskContext(rows,email.message,email.rules,undefined,topics?.terms??[],!!topics?.requiredTerms?.length);
   const input={...email,contract:'gmail-v1',user:{email:user.email,timeZone},analysisTime:work.end,
     semanticPreferences:work.semanticPreferences,existingTaskContext:context.tasks};
   const prepared=prepareInput(input,settings.contextLimits);

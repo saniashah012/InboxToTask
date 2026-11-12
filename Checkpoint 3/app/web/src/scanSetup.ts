@@ -203,6 +203,21 @@ export function hasSourcePermission(preferences: Pick<SetupPreferences, "selecte
   return preferences.selectedSenders.some(v => v.trim()) || preferences.selectedDomains.some(v => v.trim())
 }
 
+// A scan needs a permitted sender or domain, or else at least one category to
+// check: with no sender or domain, any sender that is not blocked is checked for
+// the categories' words. Must match private.scan_sources_ready.
+export function hasScanSource(preferences: Pick<SetupPreferences, "selectedSenders" | "selectedDomains" | "includedTypes">) {
+  return hasSourcePermission(preferences) || preferences.includedTypes.some(v => v.trim())
+}
+
+export function settingsHaveScanSource(settings: ScanSettings) {
+  return hasScanSource({
+    selectedSenders: settings.rules.allow.senders,
+    selectedDomains: settings.rules.allow.domains,
+    includedTypes: settings.semantic_preferences.include,
+  })
+}
+
 // Signed-in routing: a first save (revision 0) goes through the designed onboarding.
 // Legacy phrase rules need the workspace review form, which is the only screen
 // that can send p_reviewed.
@@ -216,8 +231,8 @@ export type GmailState = "disconnected" | "connected" | "reconnect_required" | "
 // Every reason a manual scan would be refused by saved settings, in plain words.
 export function scanBlockers(settings: ScanSettings, gmail: GmailState): string[] {
   const blockers: string[] = []
-  if (!hasSourcePermission({ selectedSenders: settings.rules.allow.senders, selectedDomains: settings.rules.allow.domains })) {
-    blockers.push("No permitted senders or domains, so nothing will be processed.")
+  if (!settingsHaveScanSource(settings)) {
+    blockers.push("No permitted senders, domains or categories to check, so nothing will be processed.")
   }
   if (!settings.consent) blockers.push("Scanning consent has not been given.")
   if (settings.paused) blockers.push("Scanning is paused.")
@@ -235,7 +250,12 @@ export function accessScopeSummary(preferences: SetupPreferences): string {
     ...preferences.excludedDomains.map(v => `domain ${v}`),
     ...preferences.excludedSubjects.map(v => `subject containing "${v}"`),
   ]
-  const access = allowed.length ? `Permit ${allowed.join(" OR ")}` : "No permitted sources, so nothing is processed"
+  const topics = preferences.includedTypes.map(v => v.trim()).filter(Boolean)
+  const access = allowed.length
+    ? `Permit ${allowed.join(" OR ")}`
+    : topics.length
+      ? `Permit any sender whose email uses a word from ${topics.join(" or ")}`
+      : "No permitted senders, domains or categories to check, so nothing is processed"
   return `${access}${blocked.length ? `, except ${blocked.join(" or ")}` : ""}. Exclusions always win.`
 }
 

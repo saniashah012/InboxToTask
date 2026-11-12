@@ -50,7 +50,9 @@ function validateRules(rules) {
     if (!r.domains.every((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d.trim()))) fail('INVALID_RULES');
   }
 }
-export function filterMessage(message, rules) {
+// With no permitted sender or domain, `anySender` (set when a topic to check is
+// saved) lets any sender that is not blocked through; the topic words then decide.
+export function filterMessage(message, rules, anySender = false) {
   if (['allow','block'].some(g => ['keywords','labels'].some(f => rules[g][f]?.length) || (g === 'allow' && rules[g].subjectKeywords?.length))) return 'RULE_REVIEW_REQUIRED';
   const sender = address(message.from), domain = sender.split('@')[1];
   // Legacy mailbox tags never grant permission; legacy subject blocks stay subject-only.
@@ -59,7 +61,7 @@ export function filterMessage(message, rules) {
   const matches = (r) => r.senders.some((s) => address(s) === sender)
     || r.domains.some((d) => d.trim().toLowerCase() === domain);
   if (matches(rules.block) || contains(rules.block.subjectKeywords, [message.subject])) return 'EXCLUDED';
-  if (![...rules.allow.senders, ...rules.allow.domains].length) return 'NO_ALLOWLIST';
+  if (![...rules.allow.senders, ...rules.allow.domains].length) return anySender ? 'PERMITTED' : 'NO_ALLOWLIST';
   return matches(rules.allow) ? 'PERMITTED' : 'NOT_ALLOWED';
 }
 export function cleanBody(body) {
@@ -123,7 +125,9 @@ export function prepareInput(input, defaults) {
   const limits = { ...defaults, ...input.contextLimits };
   if (!bounded(limits.maxMessages, 0, 10) || !bounded(limits.maxAgeDays, 1, 365)
     || !bounded(limits.maxMessageChars, 100, 30000) || !bounded(limits.maxTotalChars, 100, 60000)) fail('INVALID_LIMITS');
-  const decision = filterMessage(m, input.rules);
+  // Topics to check stand in for a sender allowlist only when none is saved.
+  const anySender = !!semantic?.requiredTerms?.length;
+  const decision = filterMessage(m, input.rules, anySender);
   if (decision !== 'PERMITTED') return { status: 'skipped', messageId: m.id, reason: decision };
   // Retrieval already checked this; repeating it here keeps every model path behind it.
   const terms = semantic?.terms ?? [];
@@ -153,7 +157,7 @@ export function prepareInput(input, defaults) {
     validateMessage(c);
     if (ids.has(c.id) || !m.threadId || c.threadId !== m.threadId) fail('INVALID_CONTEXT_ID_OR_THREAD');
     ids.add(c.id);
-    if (filterMessage(c, input.rules) !== 'PERMITTED') { warnings.push('Some context excluded by privacy rules.'); continue; }
+    if (filterMessage(c, input.rules, anySender) !== 'PERMITTED') { warnings.push('Some context excluded by privacy rules.'); continue; }
     if (containsBlockedWord([c.subject, c.body], terms)) { warnings.push(PRIVATE_CONTEXT_WARNING); continue; }
     const age = Date.parse(m.sentAt) - Date.parse(c.sentAt);
     if (age < 0 || age > limits.maxAgeDays * 86400000) { warnings.push('Some context outside permitted time range.'); continue; }

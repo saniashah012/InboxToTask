@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AUTO_CHECK_INTERVAL_MS, MAX_RETRY_MS, quietStop, TRANSIENT_RETRY_MS, transientRetryDelay, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
+  AUTO_CHECK_INTERVAL_MS, MAX_RETRY_MS, quietStop, skippedByCategories, TRANSIENT_RETRY_MS, transientRetryDelay, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
 } from '../app/web/src/dashboardModel.ts';
 
 const NOW = new Date('2026-11-09T15:00:00Z');
@@ -246,6 +246,14 @@ test('status line: a check that found nothing says so, with relative time', () =
   assert.equal(checkedAgo('2026-11-09T12:00:00Z', at), '3 hr ago');
   assert.equal(checkedAgo('2026-11-07T12:00:00Z', at), null);
   assert.equal(checkedAgo('not a date', at), null);
+});
+
+test('the skipped count is only category-word skips from the latest finished check', () => {
+  const finished = { ...ready, lastFinished: '2026-11-12T21:27:20Z', result: { error: null, counts: { candidates: 9, blocked: 6, noTopicWord: 1, privateTopic: 1, prepared: 1 } } };
+  assert.equal(skippedByCategories(finished), 2, 'blocked senders and notices are not counted');
+  assert.equal(skippedByCategories({ ...finished, running: true }), 0, 'hidden while a check runs');
+  assert.equal(skippedByCategories({ ...finished, result: { error: null, counts: { candidates: 1, prepared: 1 } } }), 0);
+  assert.equal(skippedByCategories(null), 0);
 });
 
 test('automatic checks keep retrying a passing Gmail or AI-service problem, waiting longer each time', () => {

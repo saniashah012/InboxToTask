@@ -15,7 +15,7 @@ import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
-  autoNextCheck, quietStop, TRANSIENT_STOPS, TROUBLE_AFTER, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
+  autoNextCheck, quietStop, skippedByCategories, TRANSIENT_STOPS, TROUBLE_AFTER, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
   AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
   type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
@@ -907,12 +907,13 @@ function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, sett
   if (compactable && !panel.open) {
     const checking = state === "processing" || scanning || Boolean(status?.running)
     const when = status?.lastFinished ? (checkedAgo(status.lastFinished, now) ?? friendlyTime(status.lastFinished)) : null
+    const skipped = skippedByCategories(status)
     const line = checking ? "Checking…" : panel.trouble ? "Having trouble reaching Gmail · retrying automatically" : when ? `Checked ${when}` : "Starting…"
     return (
       <section aria-label="Processing status" className="processing-status processing-status-compact">
         <div className="processing-status-copy" role="status">
           <span aria-hidden="true" className={`compact-dot${checking ? " is-checking" : panel.trouble ? " is-trouble" : ""}`} />
-          <span><strong>Automatic checks on</strong> · {line}{panel.newCount > 0 ? <> · <span className="compact-new">{panel.newCount} new</span></> : null}</span>
+          <span><strong>Automatic checks on</strong> · {line}{panel.newCount > 0 ? <> · <span className="compact-new">{panel.newCount} new</span></> : null}{!checking && skipped > 0 ? <span className="compact-skipped"> · {skipped} skipped by your categories</span> : null}</span>
         </div>
         <div className="processing-status-actions">
           <button className="text-link" disabled={!allowed} onClick={() => onScan(resume ? "more" : "initial")} type="button">Check now</button>
@@ -937,6 +938,7 @@ function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, sett
                 {status?.lastSuccessful ? `Last scan ${friendlyTime(status.lastSuccessful)}` : "No scans yet"}
                 {resume ? " · more email to process" : status?.lastSuccessful ? (coveredFullWeek(status) ? " · covered the past 7 days" : " · new email since the previous check") : ""}
               </>}
+            {skippedByCategories(status) > 0 && ` · ${skippedByCategories(status)} skipped by your categories`}
           </span>
           {auto.on && (
             <span className="scan-last-checked">

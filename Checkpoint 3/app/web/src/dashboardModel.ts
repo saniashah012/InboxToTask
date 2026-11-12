@@ -326,6 +326,15 @@ export function autoNextCheck(status: ScanStatusLike | null, now: number, firstO
   return { mode: "initial", delay: Math.max(0, at - now) }
 }
 
+// Emails the latest finished check skipped because of category words: none of a
+// category to check's words, or a skip word. Senders you did not allow, spam and
+// Google notices are not counted; with an allowlist they would be most of an inbox.
+export function skippedByCategories(status: ScanStatusLike | null): number {
+  if (!status || status.running) return 0
+  const c = status.result?.counts ?? {}
+  return (c.noTopicWord ?? 0) + (c.privateTopic ?? 0)
+}
+
 // A finished check that covered its whole window and found no new email: nothing
 // processed for the first time and nothing failed. Reused messages come from the
 // overlap with the previous check and were already handled.

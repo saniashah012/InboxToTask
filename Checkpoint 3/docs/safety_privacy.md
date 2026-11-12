@@ -52,15 +52,16 @@ A fictional newsletter contained an instruction aimed at the AI. The result was 
 
 ## Budgets, rate limits and cooldowns
 
-These are project-set trial values, not tuned or validated capacity. A handoff finding notes that two calls per batch and 20 requests per day are too low for real use.
+These are project-set trial values, not tuned or validated capacity. A handoff finding noted that two calls per batch and 20 requests per day are too low for real use; the per-batch cap is now three, matching the shared per-minute limit.
 
 | Control | Value | Enforced in |
 | --- | --- | --- |
 | Model requests per user per UTC day | 20 by default. The test account's local limit is 50 for the demo (reported) | Database claim |
 | Tokens per user per UTC day | 200,000 reported or reserved | Database claim |
-| Model calls per batch | 2 | Processor |
+| Model calls per batch | 3 | Processor |
 | Shared requests per model per minute | 3 | Database claim |
-| Scan request cooldown | 60 seconds | `gmail_scan_service` |
+| Scan request cooldown | 30 seconds | `gmail_scan_service` |
+| Automatic scanning | Off by default. When on, checks when the dashboard opens and every minute while it stays open, never with the app closed; a saved backlog is continued first. Each new check covers only email since the last complete check (5-minute overlap), or the full 7 days after a settings change or Gmail reconnect. Stops at the daily allowance, any non-limit error, three batches without progress, or Stop. Each batch passes the same checks as a manual scan | Dashboard, `scan_settings.auto_scan`, `private.gmail_scan_work.last_complete_*` |
 | Scan lease, one per user | 4 minutes | `gmail_scan_service` |
 | Live extraction job, one per user | 90-second lease | Database claim |
 | Attempts per extraction | 3, with a 60-second retry delay | Database claim |

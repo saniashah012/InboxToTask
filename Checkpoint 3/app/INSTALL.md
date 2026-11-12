@@ -220,7 +220,7 @@ A new test mailbox has nothing to scan. Send it a few fictional emails from a se
    `ENABLE_GOOGLE_CONNECTION` should already be on from step 5. Get the key from [Google AI Studio](https://aistudio.google.com/apikey). To override the [default model](prompts/model-settings.json), add `GEMINI_MODEL=<model id>`. Keep the key in this file only, never in a `VITE_*` variable.
 2. Stop and restart the `functions serve` command. Settings load at startup.
 3. In the app, under **Connection and permissions** (select **Edit settings** if you see a summary), save at least one exact sender or domain, give consent, and uncheck **Pause scanning**. Keep the list narrow: everything it permits can go to Gemini.
-4. Under **Check Gmail**, click **Scan past seven days**. The scan buttons stay disabled with a countdown during the 60-second cooldown. Use **Scan more** when work remains.
+4. Under **Check Gmail**, click **Scan past seven days**. The scan buttons stay disabled with a countdown during the 30-second cooldown. Use **Scan more** when work remains.
 
 Without all three settings, the endpoint returns `GMAIL_SCAN_DISABLED`. Without consent, sources or a connection, scans are refused. See the [walkthrough](../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
 

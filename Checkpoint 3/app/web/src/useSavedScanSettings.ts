@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { loadScanSettings, saveScanSettings, type ScanSettings } from "./storageAdapter"
+import { loadScanSettings, saveAutoScan, saveScanSettings, type ScanSettings } from "./storageAdapter"
 
 type SettingsRecord = {
   userId: string
@@ -52,6 +52,15 @@ export function useSavedScanSettings(userId: string | null) {
     return saved
   }, [])
 
+  const saveAuto = useCallback(async (enabled: boolean) => {
+    const owner = currentUser.current
+    const saved = await saveAutoScan(enabled)
+    if (owner && currentUser.current === owner) {
+      setRecord({ userId: owner, status: "ready", settings: saved, refreshing: false })
+    }
+    return saved
+  }, [])
+
   const current = record && record.userId === userId ? record : null
   return {
     status: userId ? current?.status ?? "loading" : "idle",
@@ -59,5 +68,6 @@ export function useSavedScanSettings(userId: string | null) {
     refreshing: current?.refreshing ?? false,
     reload,
     save,
+    saveAuto,
   } as const
 }

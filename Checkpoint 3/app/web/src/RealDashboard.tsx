@@ -13,7 +13,8 @@ import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
-  buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
+  autoNextCheck, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
+  AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
   type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
 import "./storage.css"
@@ -101,6 +102,15 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [scanning, setScanning] = useState(false)
+  // Automatic scanning (saved preference). It stops for this page when the user
+  // stops it, or after repeated batches that make no progress.
+  const [autoHalt, setAutoHalt] = useState<null | "user" | "stalled">(null)
+  const stalls = useRef(0)
+  // Whether a check has started on this page (the first automatic check runs on
+  // opening), and when an automatic check last failed to run (it then waits a
+  // full interval instead of retrying at once).
+  const checkedThisPage = useRef(false)
+  const autoFailedAt = useRef<number | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [notice, setNotice] = useState(initialNotice)
   const [activeTab, setActiveTab] = useState<"tasks" | "passive">("tasks")
@@ -149,6 +159,11 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [cooldownEnd])
+  // Keeps "Checked 3 min ago" current.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
   useEffect(() => {
     if (!scanning && !status?.running) return
     const current = epoch.current
@@ -178,15 +193,41 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     }
   }
 
-  async function scan(mode: "initial" | "more") {
+  async function runScan(mode: "initial" | "more") {
+    const result = await manualScan(mode)
+    if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
+    // A check that caught up is never a stall; repeated backlog batches without
+    // progress are, so a stuck message cannot loop forever.
+    stalls.current = !result.backlog || batchMadeProgress(result) ? 0 : stalls.current + 1
+    if (stalls.current >= 3) setAutoHalt("stalled")
+    // Planned limits are not failures; the status bar explains them.
+    if (result.error && !BATCH_LIMIT_STOPS.includes(result.error) && result.error !== DAILY_LIMIT_STOP) throw new Error(`${scanStopMessage(result.error)} Saved results remain available.`)
+  }
+
+  async function scan(mode: "initial" | "more", auto = false) {
+    checkedThisPage.current = true
     setScanning(true)
+    if (!auto) {
+      // A manual press restarts automatic scanning after it was stopped or stalled.
+      stalls.current = 0; autoFailedAt.current = null; setAutoHalt(null)
+      try { await perform(() => runScan(mode), "This check finished. New suggestions, if any, are under Suggestions.") }
+      finally { setScanning(false) }
+      return
+    }
+    // Automatic checks run in the background: they do not lock review actions,
+    // close menus or clear notices. Only a failure is shown.
+    const current = epoch.current
     try {
-      await perform(async () => {
-        const result = await manualScan(mode)
-        if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
-        if (result.error) throw new Error(`${scanStopMessage(result.error)} Saved results remain available.`)
-      }, "This check finished. New suggestions, if any, are under Suggestions.")
-    } finally { setScanning(false) }
+      await runScan(mode)
+      autoFailedAt.current = null
+    } catch (err) {
+      autoFailedAt.current = Date.now()
+      if (++stalls.current >= 3) setAutoHalt("stalled")
+      if (current === epoch.current) setFailure({ message: (err as Error).message })
+    } finally {
+      if (current === epoch.current) await reload()
+      setScanning(false)
+    }
   }
 
   const model = useMemo(() => buildDashboardModel(snapshot, links), [snapshot, links])
@@ -249,6 +290,22 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const panelState: ScanPanelState = gmail.checking && !status ? "loading" : scanPanelState({ status, loadError: statusFailed, scanning, cooldownLeft, blockers })
   const needsReconnect = status?.result?.error === "GMAIL_RECONNECT_REQUIRED" || gmail.state === "reconnect_required"
 
+  // While the app is open: check on opening, then every minute after the last
+  // check finished, always continuing a saved backlog first. Every check passes
+  // the same server checks as a manual scan; nothing runs with the app closed.
+  const autoOn = Boolean(settings.auto_scan) && autoHalt === null
+  const autoReady = autoOn && !busy && !scanning && !loading && !statusFailed && !needsReconnect
+    && !blockers.sources && !blockers.consent && !blockers.paused && !blockers.gmail
+  useEffect(() => {
+    if (!autoReady) return
+    const next = autoNextCheck(status, Date.now(), !checkedThisPage.current)
+    if (!next) return
+    const backoff = autoFailedAt.current === null ? 0 : autoFailedAt.current + AUTO_CHECK_INTERVAL_MS - Date.now()
+    const timer = window.setTimeout(() => void scan(next.mode, true), Math.max(next.delay, backoff))
+    return () => window.clearTimeout(timer)
+    // scan is recreated each render; the timer only needs the latest status.
+  }, [autoReady, status])
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -301,10 +358,11 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         </nav>
 
         <RealScanStatus
-          state={panelState} status={status} cooldownLeft={cooldownLeft} busy={busy} scanning={scanning}
+          now={now} state={panelState} status={status} cooldownLeft={cooldownLeft} busy={busy} scanning={scanning}
           settings={settings} gmail={gmail.state} needsReconnect={needsReconnect} activityOpen={activityOpen}
           onToggleActivity={() => setActivityOpen((c) => !c)}
           onScan={(mode) => void scan(mode)}
+          auto={{ on: Boolean(settings.auto_scan), halted: autoHalt, onStop: () => setAutoHalt("user") }}
           onSettings={() => onOpenSettings(panelState === "missing-sources" ? "sources" : panelState === "paused" ? "processing" : "connections")}
         />
 
@@ -643,21 +701,39 @@ function friendlyTime(iso: string, now = new Date()): string {
   return `${date} at ${clock}`
 }
 
-const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailState, status: ScanStatus | null, cooldownLeft: number): [string, string] => {
+// Each check handles a few new emails, then stops on purpose to limit AI use.
+const partialDetail = (status: ScanStatus | null) => {
+  const n = status?.result?.counts?.modelCalls ?? 0
+  return n > 0 ? `Checked ${n} new email${n === 1 ? "" : "s"} this time; each scan handles a few at a time.` : "Each scan handles a few new emails at a time."
+}
+
+const stateCopy = (state: ScanPanelState, settings: ScanSettings, gmail: GmailState, status: ScanStatus | null, autoActive: boolean): [string, string] => {
   switch (state) {
     case "loading": return ["Loading scan status…", "Checking saved settings and the Gmail connection."]
     case "processing": return ["Checking permitted Gmail…", "Counts update when the batch finishes. You can keep reviewing."]
     case "missing-sources": return ["Nothing to check", "Add a sender, domain or category to check in Settings. Until then nothing is processed."]
     case "paused": return settings.consent ? ["Scanning paused", "Resume in Settings to run a manual check."] : ["Scanning consent needed", "Give scanning consent in Settings before a manual check."]
     case "disconnected": return gmail === "reconnect_required" ? ["Reconnect Gmail", "Gmail access is no longer valid. Reconnect in Settings → Connections."] : gmail === "unknown" ? ["Gmail status unavailable", "Could not confirm the Gmail connection. Reload, or check Settings → Connections."] : ["Gmail not connected", "Connect Gmail in Settings → Connections. No mailbox was accessed."]
-    case "cooldown": return ["Cooling down", `You can check again in ${cooldownLeft} s.`]
+    case "cooldown": return ["Cooling down", autoActive ? (status?.backlog ? "Scanning continues automatically when the timer finishes." : "The next automatic check starts a minute after this one finished.") : "You can scan again when the timer finishes."]
+    case "partial": return ["More email to check", status?.result?.error === "STORAGE_PROVIDER_LIMIT"
+      ? `The AI service's per-minute limit was reached. ${autoActive ? "Scanning continues automatically in about a minute." : "Wait a minute, then scan again."}`
+      : `${partialDetail(status)} ${autoActive ? "Continuing automatically." : "Scan again when you're ready to continue."}`]
+    case "daily-limit": return ["Daily limit reached", "Today's AI allowance is used up, so scanning stops here. It resets at midnight UTC; saved results remain available."]
     case "failed": return status?.result?.error ? ["Last check stopped", `${scanStopMessage(status.result.error)} Saved results remain available.`] : ["Scan status unavailable", "Could not load scan status. Saved tasks below are unaffected."]
-    case "empty": return ["Ready for your first scan", ""]
-    default: return ["Ready to scan", ""]
+    case "empty": return ["Ready for your first scan", autoActive ? "The first check starts automatically." : ""]
+    default: return [autoActive ? "Watching for new email" : "Ready to scan", autoActive ? "Checks again every minute while the app is open." : ""]
   }
 }
 
-function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings, gmail, needsReconnect, activityOpen, onToggleActivity, onScan, onSettings }: {
+// Whether the latest check covered the full past 7 days or only email since the
+// previous complete check (incremental window, with a few minutes of overlap).
+const coveredFullWeek = (status: ScanStatus | null) => {
+  const start = Date.parse(status?.windowStart ?? ""), end = Date.parse(status?.windowEnd ?? "")
+  return Number.isNaN(start) || Number.isNaN(end) || end - start >= 7 * 86_400_000 - 60_000
+}
+
+function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, settings, gmail, needsReconnect, activityOpen, onToggleActivity, onScan, onSettings, auto }: {
+  now: number
   state: ScanPanelState
   status: ScanStatus | null
   cooldownLeft: number
@@ -670,11 +746,13 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
   onToggleActivity: () => void
   onScan: (mode: "initial" | "more") => void
   onSettings: () => void
+  auto: { on: boolean; halted: null | "user" | "stalled"; onStop: () => void }
 }) {
   // One button: it continues unfinished work when an earlier check left some,
-  // otherwise it starts a new 7-day check. A reconnect always starts fresh.
+  // otherwise it checks right now for email since the last complete check (the
+  // full 7 days the first time, and after a settings change or reconnect).
   const resume = Boolean(status?.backlog) && !needsReconnect
-  const [title, detail] = stateCopy(state, settings, gmail, status, cooldownLeft)
+  const [title, detail] = stateCopy(state, settings, gmail, status, auto.on && !auto.halted)
   const counts = status?.result?.counts
   const allowed = canScan(state) && !busy && !scanning && !status?.running
   const blocked = state === "missing-sources" || state === "paused" || state === "disconnected"
@@ -682,15 +760,26 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
     <section aria-label="Processing status" className={`processing-status state-${state}`}>
       <div className="processing-status-copy">
         {state === "processing" ? <span className="manual-spinner" aria-hidden="true" />
-          : state === "cooldown" ? <span className="manual-cooldown" aria-hidden="true" style={{ "--cooldown-progress": `${Math.min(100, (cooldownLeft / 60) * 100)}%` } as CSSProperties}><span>{cooldownLeft}</span></span>
+          : state === "cooldown" ? <span className="manual-cooldown" aria-hidden="true" style={{ "--cooldown-progress": `${Math.min(100, (cooldownLeft / 30) * 100)}%` } as CSSProperties}><span>{cooldownLeft}</span></span>
             : <span className="status-pulse" />}
         <div role="status">
           <strong>{title}</strong>
           {detail && <span id="rd-scan-why">{detail}</span>}
           <span className="scan-last-checked">
-            {status?.lastSuccessful ? `Last scan ${friendlyTime(status.lastSuccessful)}` : "No scans yet"}
-            {resume ? " · more email to process" : " · covers the past 7 days"}
+            {checkedNoNewEmail(status) && status?.lastFinished
+              ? `Checked ${checkedAgo(status.lastFinished, now) ?? friendlyTime(status.lastFinished)} · no new email`
+              : <>
+                {status?.lastSuccessful ? `Last scan ${friendlyTime(status.lastSuccessful)}` : "No scans yet"}
+                {resume ? " · more email to process" : status?.lastSuccessful ? (coveredFullWeek(status) ? " · covered the past 7 days" : " · new email since the previous check") : ""}
+              </>}
           </span>
+          {auto.on && (
+            <span className="scan-last-checked">
+              {auto.halted === "stalled" ? "Automatic checks paused: the last few made no progress or could not run. Press Scan now to try again."
+                : auto.halted === "user" ? "Automatic checks stopped until you press Scan now or reopen the app."
+                  : <>Automatic checks are on: when the app opens and every minute while it's open · <button className="text-link" onClick={auto.onStop}>Stop</button></>}
+            </span>
+          )}
         </div>
       </div>
       <div className="processing-status-actions">
@@ -700,7 +789,7 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
           className="primary-button rd-scan-button"
           disabled={!allowed}
           onClick={() => onScan(resume ? "more" : "initial")}
-          title={allowed ? (resume ? "Continue where the last check stopped" : "Check permitted Gmail from the past 7 days") : title}
+          title={allowed ? (resume ? "Continue where the last check stopped" : "Check for new permitted Gmail right now") : title}
         >
           <Icon name="refresh" size={16} />
           {scanning || status?.running ? "Scanning…" : "Scan now"}
@@ -712,9 +801,9 @@ function RealScanStatus({ state, status, cooldownLeft, busy, scanning, settings,
           {counts ? <>
             <strong>Last batch</strong>
             <span>{counts.candidates ?? 0} candidates · {counts.permitted ?? 0} permitted · {counts.blocked ?? 0} excluded by your rules · {(counts.privateTopic ?? 0) + (counts.noTopicWord ?? 0)} skipped by topic words · {counts.prepared ?? 0} processed · {counts.reused ?? 0} reused without a model call · {counts.failed ?? 0} could not be processed · {counts.modelCalls ?? 0} model calls</span>
-            {(counts.failed ?? 0) > 0 && <span>{(status?.result?.unresolved ?? 0) > 0 ? `${status?.result?.unresolved} messages stopped after repeated attempts; a new 7-day check tries them again. ` : ""}Other failed messages are retried by the next scan.</span>}
+            {(counts.failed ?? 0) > 0 && <span>{(status?.result?.unresolved ?? 0) > 0 ? `${status?.result?.unresolved} messages stopped after repeated attempts; they are tried again after a settings change or Gmail reconnect, which rechecks the full 7 days. ` : ""}Other failed messages are retried by the next scan.</span>}
           </> : <><strong>No batch recorded</strong><span>Activity appears after your first manual check.</span></>}
-          <span>Scans run only when you press Scan now; automatic scanning is not enabled. Each scan covers the past 7 days, inspects up to 100 permitted messages and makes up to two model calls, within daily limits.</span>
+          <span>{auto.on ? "Automatic checks run when the app opens and every minute while it's open, never with the app closed." : "Scans run only when you press Scan now; automatic checks are off."} The first check, and the first after a settings change or Gmail reconnect, covers the past 7 days; later checks cover email since the previous check. Each batch inspects up to 100 permitted messages and makes up to three model calls, within daily limits.</span>
         </div>
       )}
     </section>

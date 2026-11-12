@@ -118,6 +118,21 @@ The whole feature is off unless `ENABLE_GMAIL_SCAN=true`, `GEMINI_API_KEY` and `
 - **Every-minute checks use time windows with a 5-minute overlap.** Gmail's search index can lag behind delivery, so each automatic check looks back 5 minutes into the previous one. Within the overlap, already-processed email is reused without a model call, and a skipped email is read again to check its words but counted only once. An email Gmail indexes more than about 5 minutes late can still be missed by every-minute checks; it is found by the next full 7-day check (after a settings change or Gmail reconnect), or not at all if none happens within 7 days. Gmail's History API (sync from a stored `historyId` bookmark, as production mail clients do) would remove both the overlap and this gap; it is future work, not built.
 - **Not run live:** settings changed during a scan, rate limits, wrong-account connection, replayed OAuth state, and domain and subdomain rules.
 
+## Gaps from production practice
+
+Compared with how production email and AI tools usually handle stored mail data (Nov 12). What already matches: per-user row-level security, OAuth tokens encrypted with AES-256-GCM using server-only keys, no stored email bodies, 30-day eligibility rules, deletion with suppressions, server-side filtering before any model call, and per-user and shared rate limits. What a release beyond a class study would still need (input for the report's Limitations & Ethics section, #83):
+
+- **Google restricted-scope compliance.** Reading Gmail (`gmail.readonly`) is a restricted scope: production use requires Google's app verification, an annual third-party security assessment and Google's "limited use" rules. The app runs in test mode only.
+- **AI provider terms.** No data processing agreement, no-training commitment or retention terms are recorded for the Gemini key in use (an item in #94). Email text, including the sender, is sent to Gemini.
+- **Enforced retention.** Cleanup is off and unscheduled (see [Retention and deletion](#retention-and-deletion)), so the 30-day limits are not enforced, and minimal identifiers and suppressions have no expiry.
+- **Account deletion and data export.** No one-step "delete my account and all data" or "export my data", which privacy laws such as GDPR and CCPA expect.
+- **Field-level encryption.** Sender, subject, excerpts and summaries rely on the database provider's encryption only; production tools often add column-level encryption with per-customer keys.
+- **Masking outside the product.** Production tools use keyed hashes or tokens for identifiers in logs, analytics and test data. Not designed here beyond the rule against printing email content.
+- **Access auditing.** No audit log or time-limited process for team access to stored user data.
+- **Monitoring and incident response.** No alerting, on-call or breach procedure.
+
+Tokenizing sender addresses inside the product is not on this list: access rules, review cards (#41) and ownership extraction need the real address, and production tools usually protect it with the controls above instead.
+
 ## Proposed class-project implementation
 
 **None of this is implemented.** Details are in [the plan](../IMPLEMENTATION_PLAN.md#class-project-api-abuse-controls-proposed-implementation).

@@ -92,7 +92,7 @@ One tester and about 15 emails do not measure extraction accuracy.
 
 ## Open findings
 None blocked PR #22. Only the first two need SQL.
-- ~~"Last successful batch" does not update when a batch stops at the model-call limit.~~ Fixed by `20261110000000_scan_cooldown_and_batch_stops` (not yet applied).
+- ~~"Last successful batch" does not update when a batch stops at the model-call limit.~~ Fixed by `20261112001000_scan_cooldown_and_batch_stops` (not yet applied).
 - New-task option for an ambiguous update whose task is not listed (suggested, not requested).
 - Every normal reply is marked for review, because quote removal adds a warning.
 - A Gmail 403 from quota would show as "reconnect". Found by reading code, not observed.

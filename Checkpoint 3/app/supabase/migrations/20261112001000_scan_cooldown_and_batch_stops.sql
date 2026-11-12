@@ -1,7 +1,8 @@
 -- Scan cooldown drops from 60 to 30 seconds. A batch that stops at a planned
 -- per-batch limit (model calls, time, Gmail requests) saved its work and now
 -- counts as successful, so "last successful" updates (known issue F6).
--- Same functions as 20261105223000 apart from those two changes.
+-- Same functions as 20261112000000 (gmail_scan_service, with its scan_sources_ready
+-- source check) and 20261105223000 (gmail_scan_status) apart from those two changes.
 create or replace function public.gmail_scan_service(p_user uuid,p_action text,p_data jsonb default '{}') returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare s public.scan_settings; c private.google_connections; w private.gmail_scan_work; g bigint; storage_enabled boolean;
@@ -13,7 +14,7 @@ begin
  select * into c from private.google_connections where user_id=p_user for update;
  if s.user_id is null or g is null or storage_enabled is distinct from true or not s.consent or s.paused or s.requires_review
    or s.disclosure_version is distinct from 'gmail-scan-v1'
-   or jsonb_array_length(s.rules->'allow'->'senders')+jsonb_array_length(s.rules->'allow'->'domains')=0
+   or not private.scan_sources_ready(s.rules,s.semantic_preferences)
    or c.state is distinct from 'connected'
    or not(c.scopes ? 'https://www.googleapis.com/auth/gmail.readonly')
    or not exists(select 1 from auth.users where id=p_user and lower(email)=lower(c.email)) then

@@ -207,7 +207,7 @@ A scan after the final unpause was not repeated live. Not run live: settings cha
 | F3 | Waiting out a retry window used up the bounded retry attempts, so a message could be abandoned without a real retry. | Fixed |
 | F4 | Warnings repeated by the model appeared twice in saved results. | Fixed for new results |
 | F5 | Every normal reply is marked for review, because quote removal adds a warning. Noisy but safe. | Open |
-| F6 | "Last successful batch" does not update when a batch stops at the model-call limit, though its results saved. Cosmetic. | Fixed by migration `20261110000000_scan_cooldown_and_batch_stops` (not yet applied); the dashboard shows a neutral "More email to check" state |
+| F6 | "Last successful batch" does not update when a batch stops at the model-call limit, though its results saved. Cosmetic. | Fixed by migration `20261112001000_scan_cooldown_and_batch_stops` (not yet applied); the dashboard shows a neutral "More email to check" state |
 | F8 | Connecting again within 30 seconds of a cancelled attempt was refused by the connection cooldown, correctly, but the message was vague and sat below the buttons, so it looked as if nothing happened. | Fixed wording and placement |
 | F9 | After Google rejected a token during a scan, the status kept saying connected and the page still offered **Scan more**. The scan itself stopped correctly and read nothing. | Fixed: the scan now rechecks with Google, and only a refused refresh changes the status. Covered by automated tests, not repeated live |
 | F12 | A refused-scan message stayed on the page after the user fixed the setting. | Fixed: saving settings clears it |

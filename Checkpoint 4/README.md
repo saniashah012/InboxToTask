@@ -1,6 +1,6 @@
 # Checkpoint 4: Comprehensive Evaluation & Final Report
 
-Due December 3, 2026 at 11:30 PM. Day-to-day work is tracked in the CP4 issues and the pinned working agreement (#39). The [CP4 plan](CP4_PLAN.md) has the evaluation design and the decisions, updated November 12.
+Due December 3, 2026 at 11:30 PM. Day-to-day work is tracked in the CP4 issues, the pinned working agreement (#39) and the [InboxToTask CP4](https://github.com/users/mzheng-01/projects/1) project board, which is the board to keep up to date. The [CP4 plan](CP4_PLAN.md) has the evaluation design and the decisions, updated November 12.
 
 | Required by the [instructions](CP4_INSTRUCTIONS.md) | Location |
 | --- | --- |

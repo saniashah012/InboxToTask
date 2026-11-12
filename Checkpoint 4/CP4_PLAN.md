@@ -4,7 +4,7 @@ Written November 6, 2026, against the [CP4 instructions](CP4_INSTRUCTIONS.md). *
 
 > **Status (November 12, 2026):** this plan started as a November 6 proposal. The team's decisions,
 > owners and dates now live in the pinned **CP4 working agreement (#39)** and the CP4 issues on the
-> project board; where this plan disagrees with them, they win. Sections 2, 3 and 8 and the checklists
+> [InboxToTask CP4](https://github.com/users/mzheng-01/projects/1) project board; where this plan disagrees with them, they win. Sections 2, 3 and 8 and the checklists
 > below were updated on November 12 to match: Calendar is required (D3), automatic checks while the
 > app is open shipped (D4), and the schedule follows #39. What shipped is recorded in
 > [current state](<../Checkpoint 3/CURRENT_STATE.md#november-12-2026-cp4-study-release>).
@@ -263,7 +263,7 @@ The earlier fallback (run the study on `ManualWorkspace` if the dashboard wasn't
 
 ### Owners
 
-Owners and reviewers are assigned on each CP4 issue on the project board, not in this plan.
+Owners and reviewers are assigned on each CP4 issue and on the [InboxToTask CP4](https://github.com/users/mzheng-01/projects/1) board, not in this plan.
 
 ## 9. Workstream D: final artifact
 

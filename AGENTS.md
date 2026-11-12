@@ -34,7 +34,7 @@ Read the task-relevant entry points below and follow their imports. Avoid scanni
 
 ## CP4 task tracking
 
-CP4 work is tracked in GitHub issues and the team's CP4 project board. The pinned "CP4 working agreement" issue is the source of truth; this is what agents need from it.
+CP4 work is tracked in GitHub issues and the team's project board, [InboxToTask CP4](https://github.com/users/mzheng-01/projects/1) (`gh project ... 1 --owner mzheng-01`; its statuses are Todo, In Progress, In review and Done). That is the only board to keep up to date: the older "InboxToTask Project Board" linked to the repository (`saniashah012`'s project 1) is not maintained, so don't read or change statuses there. The pinned "CP4 working agreement" issue is the source of truth; this is what agents need from it.
 
 - Before starting a task, find its issue. Read its "Done when" checklist, its "Depends on" and "Used by" lists, its owner and its reviewer. If no issue covers the work, tell your person instead of creating one.
 - A PR that completes an issue says `Closes #N` in its description; one that only advances it says `Part of #N`. The reviewer named on the issue approves the PR, confirms the "Done when" list and closes the issue.

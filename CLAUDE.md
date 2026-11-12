@@ -7,7 +7,8 @@ Follow scoped frontend/backend instructions linked there.
 [CLAUDE_HANDOFF.md](CLAUDE_HANDOFF.md) contains continuation details and known rough
 edges. [The implementation plan](<Checkpoint 3/IMPLEMENTATION_PLAN.md>) is the
 requirements/acceptance checklist; dated reports are evidence for their own runs.
-[The CP4 plan](<Checkpoint 4/CP4_PLAN.md>) has the evaluation design; CP4 tasks and dates are in the issues.
+[The CP4 plan](<Checkpoint 4/CP4_PLAN.md>) has the evaluation design; CP4 tasks and dates are in the issues, and their
+statuses on the [InboxToTask CP4](https://github.com/users/mzheng-01/projects/1) board (not the older repository-linked board).
 
 For CP4, follow "CP4 task tracking" in [AGENTS.md](AGENTS.md): find the task's issue
 first and work to its "Done when" list. After a change, find every open issue it affects

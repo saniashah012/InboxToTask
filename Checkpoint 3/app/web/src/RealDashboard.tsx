@@ -9,6 +9,8 @@ import { manualScan, manualScanStatus, resolveTaskChange, reviewTaskChange, scan
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
 import { loadTaskSourceLinks, OpenInGmail, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
 import { loadRead, saveRead } from "./readMarks"
+import { changeKey, countAdded, scanSummary, suggestionKey } from "./newItems"
+import { useNewItems } from "./useNewItems"
 import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
@@ -127,6 +129,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [now, setNow] = useState(() => Date.now())
   // epoch changes when this account's dashboard unmounts; sequence orders reloads.
   const epoch = useRef(0), sequence = useRef(0)
+  const latestSnapshot = useRef<Snapshot>(snapshot)
+  latestSnapshot.current = snapshot
 
   const reload = useCallback(async () => {
     const current = epoch.current, request = ++sequence.current
@@ -210,12 +214,21 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     if (!auto) {
       // A manual press restarts automatic scanning after it was stopped or stalled.
       stalls.current = 0; autoFailedAt.current = null; setAutoHalt(null)
-      try { await perform(() => runScan(mode), "This check finished. New suggestions, if any, are under Suggestions.") }
-      finally { setScanning(false) }
+      const current = epoch.current
+      const before = scanIds(latestSnapshot.current)
+      try {
+        const finished = await perform(() => runScan(mode), "")
+        if (current !== epoch.current) return
+        // perform() reloaded saved records, so this counts only what was actually saved.
+        const summary = scanSummaryBetween(before, scanIds(latestSnapshot.current))
+        if (finished) setNotice(`This check finished. ${summary}`)
+        else setFailure((f) => (f ? { message: `${f.message} ${summary}` } : f))
+      } finally { setScanning(false) }
       return
     }
     // Automatic checks run in the background: they do not lock review actions,
-    // close menus or clear notices. Only a failure is shown.
+    // close menus or clear notices. Only a failure is shown; what they add shows
+    // through the "New" labels and tab counts.
     const current = epoch.current
     try {
       await runScan(mode)
@@ -238,6 +251,22 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const openWaiting = model.waiting.filter((w) => !w.row.resolved).length
   const openTasks = model.active.filter((t) => t.row.status === "approved")
   const change = changeId ? [...model.changes].find((c) => c.row.id === changeId) ?? null : null
+
+  // New = saved after your last visit to the tab; unread = not opened or acted on yet.
+  const marks = useNewItems({
+    userId,
+    loaded: !loading && !loadFailed,
+    review: [
+      ...model.suggestions.map((s) => ({ key: suggestionKey(s.row.id), createdAt: s.row.created_at })),
+      ...model.changes.map((c) => ({ key: changeKey(c.row.id), createdAt: c.row.created_at })),
+    ],
+    passive: model.information.map((e) => ({ createdAt: e.created_at })),
+    showing: loading ? null : activeTab === "tasks" ? (view === "suggestions" ? "review" : null) : "passive",
+  })
+  const newSuggestions = model.suggestions.filter((s) => marks.isNew("review", s.row.created_at))
+  const olderSuggestions = model.suggestions.filter((s) => !marks.isNew("review", s.row.created_at))
+  const newReviewCount = newSuggestions.length + model.changes.filter((c) => marks.isNew("review", c.row.created_at)).length
+  const newPassiveCount = model.information.filter((e) => marks.isNew("passive", e.created_at)).length
 
   const sourceForSuggestion = (s: SuggestionItem | ChangeItem | WaitingItem, title: string): SourceView => ({
     title, sender: s.source?.sender, subject: s.source?.subject, sentAt: s.source?.sent_at, quote: s.quote, messageId: s.messageId, extraction: s.extraction,
@@ -274,11 +303,11 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   }
   const move = (from: Category, row: StoredRow, to: Category, suggestionId: string) =>
     void perform(() => runMove(from, row, to), `Moved to ${categoryLabel[to]}.`, () => { setNotice(""); setToast({ kind: "moved", id: suggestionId, from, to }) })
-  const moveItems = (from: Category, row: StoredRow, suggestionId: string | null | undefined, hasQuote = true) => {
+  const moveItems = (from: Category, row: StoredRow, suggestionId: string | null | undefined, hasQuote = true, onAct?: () => void) => {
     if (!suggestionId) return null
     const targets = moveTargets(from, row, hasQuote)
     if (!targets.length) return null
-    return <>{targets.map((to) => <button key={to} onClick={() => { setMenuId(null); move(from, row, to, suggestionId) }}>Move to {categoryLabel[to]}</button>)}</>
+    return <>{targets.map((to) => <button key={to} onClick={() => { setMenuId(null); onAct?.(); move(from, row, to, suggestionId) }}>Move to {categoryLabel[to]}</button>)}</>
   }
 
   const blockers = {
@@ -350,10 +379,10 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
 
         <nav aria-label="Inbox categories" className="tabs">
           <button aria-selected={activeTab === "tasks"} className={activeTab === "tasks" ? "tab active" : "tab"} onClick={() => setActiveTab("tasks")} role="tab">
-            Tasks<span className="tab-count">{reviewCount + model.active.length}</span>
+            Tasks<span className="tab-count">{reviewCount + model.active.length}</span>{newReviewCount > 0 && <NewCount n={newReviewCount} />}
           </button>
           <button aria-selected={activeTab === "passive"} className={activeTab === "passive" ? "tab active" : "tab"} onClick={() => setActiveTab("passive")} role="tab">
-            Passive communication<span className="tab-count">{model.information.length}</span>
+            Passive communication<span className="tab-count">{model.information.length}</span>{newPassiveCount > 0 && <NewCount n={newPassiveCount} />}
           </button>
         </nav>
 
@@ -387,6 +416,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                 {(["suggestions", "active", "completed", "dismissed"] as const).map((v) => (
                   <button aria-selected={view === v} className={view === v ? "review-tab active" : "review-tab"} key={v} onClick={() => { setView(v); setMenuId(null) }} role="tab">
                     {v[0].toUpperCase() + v.slice(1)}<span>{counts[v]}</span>
+                    {v === "suggestions" && newReviewCount > 0 && <NewCount n={newReviewCount} />}
                     {v === "active" && pendingUpdates > 0 && <span className="pending-update-count">{pendingUpdates} update</span>}
                   </button>
                 ))}
@@ -401,34 +431,47 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
               ) : loadFailed && !snapshot.tasks.length && !snapshot.suggestions.length ? null : (
                 <>
                   {view === "suggestions" && <>
-                    {model.suggestions.length > 0 && <div className="task-list">{model.suggestions.map((s) => (
-                      <RealTaskRow key={s.row.id} kind="suggestion" fields={s.fields} today={today} busy={busy}
-                        context={s.source?.sender ?? "Source unavailable"} menuOpen={menuId === s.row.id}
-                        badges={<>{s.sibling && <span className="task-context">{s.sibling.index} of {s.sibling.of} from this email</span>}{s.edited && <span className="updated-badge">Edited by you</span>}{s.extraction?.needs_review && <span className="provisional-badge">Needs verification</span>}{!s.quote && <span className="updated-badge">Evidence expired</span>}</>}
-                        onMenu={() => setMenuId((c) => (c === s.row.id ? null : s.row.id))}
-                        onSource={() => setSource(sourceForSuggestion(s, s.fields.action))}
-                        primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
-                          onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added. No Calendar event was created.")}>Add task</button>}
-                        menu={<><button onClick={() => { setMenuId(null); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
-                          {moveItems("suggestions", s.row, s.row.id, Boolean(s.quote))}
-                          <button className="danger-action" onClick={() => void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) })}>Dismiss suggestion</button></>}
-                      />))}</div>}
+                    {[{ group: newSuggestions, fresh: true }, { group: olderSuggestions, fresh: false }].map(({ group, fresh }) => group.length > 0 && <div key={fresh ? "new" : "older"}>
+                      {fresh && <NewDivider since={marks.lastVisit("review")} />}
+                      {fresh && olderSuggestions.length > 0 && <span className="visually-hidden">End of new suggestions.</span>}
+                      <div className="task-list">{group.map((s) => {
+                        const seen = () => marks.markSeen(suggestionKey(s.row.id))
+                        return (
+                          <RealTaskRow key={s.row.id} kind="suggestion" fields={s.fields} today={today} busy={busy}
+                            isNew={fresh} unread={marks.isUnread(suggestionKey(s.row.id))}
+                            context={s.source?.sender ?? "Source unavailable"} menuOpen={menuId === s.row.id}
+                            badges={<>{s.sibling && <span className="task-context">{s.sibling.index} of {s.sibling.of} from this email</span>}{s.edited && <span className="updated-badge">Edited by you</span>}{s.extraction?.needs_review && <span className="provisional-badge">Needs verification</span>}{!s.quote && <span className="updated-badge">Evidence expired</span>}</>}
+                            onMenu={() => setMenuId((c) => (c === s.row.id ? null : s.row.id))}
+                            onSource={() => { seen(); setSource(sourceForSuggestion(s, s.fields.action)) }}
+                            primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
+                              onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added. No Calendar event was created.") }}>Add task</button>}
+                            menu={<><button onClick={() => { setMenuId(null); seen(); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
+                              {moveItems("suggestions", s.row, s.row.id, Boolean(s.quote), seen)}
+                              <button className="danger-action" onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) }) }}>Dismiss suggestion</button></>}
+                          />)
+                      })}</div>
+                    </div>)}
                     {model.changes.length > 0 && <>
                       <h3 className="rd-subhead">Proposed changes to your tasks</h3>
-                      <div className="task-list">{model.changes.map((c) => (
-                        <article className="task-row is-suggestion" key={c.row.id}>
+                      <div className="task-list">{model.changes.map((c) => {
+                        const unread = marks.isUnread(changeKey(c.row.id)), fresh = marks.isNew("review", c.row.created_at)
+                        const seen = () => marks.markSeen(changeKey(c.row.id))
+                        return (
+                        <article className={`task-row is-suggestion ${unread ? "rd-unread" : "rd-seen"}`} key={c.row.id}>
                           <div className="task-main">
                             <div className="task-title-line">
-                              <h3>{c.row.kind === "cancel" ? "Proposed cancellation" : "Proposed edit"}: {c.target?.accepted_fields?.action ?? c.row.baseline?.action ?? "Task"}</h3>
+                              <h3>{unread && <UnreadDot />}{c.row.kind === "cancel" ? "Proposed cancellation" : "Proposed edit"}: {c.target?.accepted_fields?.action ?? c.row.baseline?.action ?? "Task"}</h3>
+                              {fresh && <NewBadge />}
                               <span className="updated-badge">{c.row.kind === "cancel" ? "Cancellation detected" : `${c.row.changed_fields?.length ?? 0} field${c.row.changed_fields?.length === 1 ? "" : "s"} changed`}</span>
                               {c.stale && <span className="provisional-badge">Task changed since</span>}
                               {!c.open && <span className="provisional-badge">Task no longer open</span>}
                             </div>
                             <p className="task-caption">{c.row.reason}</p>
                           </div>
-                          <button className="email-link" onClick={() => setSource(sourceForSuggestion(c, "Proposed change"))}>View source email</button>
-                          <button className="primary-button row-button" onClick={() => setChangeId(c.row.id)}>Review change</button>
-                        </article>))}</div>
+                          <button className="email-link" onClick={() => { seen(); setSource(sourceForSuggestion(c, "Proposed change")) }}>View source email</button>
+                          <button className="primary-button row-button" onClick={() => { seen(); setChangeId(c.row.id) }}>Review change</button>
+                        </article>)
+                      })}</div>
                     </>}
                     {model.unresolvedChanges.length > 0 && <>
                       <h3 className="rd-subhead">Changes that need you to choose the task</h3>
@@ -489,7 +532,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
           </div>
         ) : (
           loading ? <div className="empty-state" role="status"><span className="spinner" aria-hidden="true" /><h3>Loading summaries…</h3></div>
-            : model.information.length ? <PassiveSection key={`info-${userId}`} userId={userId} items={model.information} sources={snapshot.sources} evidence={snapshot.evidence} onSource={setSource} />
+            : model.information.length ? <PassiveSection key={`info-${userId}`} userId={userId} items={model.information} sources={snapshot.sources} evidence={snapshot.evidence} onSource={setSource}
+              isNew={(e) => marks.isNew("passive", e.created_at)} since={marks.lastVisit("passive")} />
               : <EmptyState title="No informational summaries" detail="Summaries of permitted emails that don’t need action appear here after a manual check." />
         )}
       </main>
@@ -552,8 +596,10 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
   return <div className="empty-state"><div className="empty-state-mark"><Icon name="check" /></div><h3>{title}</h3><p>{detail}</p></div>
 }
 
-function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onMenu, onSource, onComplete, primary, menu }: {
+function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onMenu, onSource, onComplete, primary, menu, isNew, unread }: {
   kind: "suggestion" | "active" | "completed" | "cancelled" | "dismissed"
+  isNew?: boolean
+  unread?: boolean
   fields: TaskFields
   today: string
   busy: boolean
@@ -570,7 +616,7 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
   const done = kind === "completed" || kind === "cancelled"
   const caption = [fields.condition && `Condition: ${fields.condition}`, ...fields.requirements].filter(Boolean).join(" · ")
   return (
-    <article className={`task-row ${done ? "is-complete" : ""} ${kind === "suggestion" || kind === "dismissed" ? "is-suggestion" : ""}`}>
+    <article className={`task-row ${done ? "is-complete" : ""} ${kind === "suggestion" || kind === "dismissed" ? "is-suggestion" : ""} ${unread === undefined ? "" : unread ? "rd-unread" : "rd-seen"}`}>
       {(kind === "active" || kind === "completed") && onComplete && (
         <button aria-label={kind === "completed" ? `Undo completion of ${fields.action}` : `Complete ${fields.action}`} aria-pressed={kind === "completed"} className="checkbox" disabled={busy} onClick={onComplete}>
           {kind === "completed" && <Icon name="check" size={15} />}
@@ -578,7 +624,8 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
       )}
       <div className="task-main">
         <div className="task-title-line">
-          <h3>{fields.action}</h3>
+          <h3>{unread && <UnreadDot />}{fields.action}</h3>
+          {isNew && <NewBadge />}
           {context && <span className="task-context">{context}</span>}
           {badges}
         </div>
@@ -631,12 +678,14 @@ function ConfidenceBadge({ category, value }: { category: string; value: number 
 
 // Passive communication: informational emails as cards in the Tasks style, with
 // Unread/Read tabs. Read marks stay in this browser (same storage as before).
-function PassiveSection({ userId, items, sources, evidence, onSource }: {
+function PassiveSection({ userId, items, sources, evidence, onSource, isNew, since }: {
   userId: string
   items: StoredRow[]
   sources: StoredRow[]
   evidence: StoredRow[]
   onSource: (view: SourceView) => void
+  isNew: (e: StoredRow) => boolean
+  since: string | null
 }) {
   const [read, setRead] = useState(() => loadRead(userId))
   const [view, setView] = useState<"unread" | "read">("unread")
@@ -650,7 +699,10 @@ function PassiveSection({ userId, items, sources, evidence, onSource }: {
     const quote = evidence.find((q) => q.extraction_id === e.id && q.quote)
     return { e, src, quote }
   }).sort((a, b) => Date.parse(b.src?.sent_at ?? b.e.created_at) - Date.parse(a.src?.sent_at ?? a.e.created_at))
-  const shown = cards.filter((c) => read.has(c.e.source_id) === (view === "read"))
+  // New cards first, under a divider; each group keeps newest-first order.
+  const inView = cards.filter((c) => read.has(c.e.source_id) === (view === "read"))
+  const shown = [...inView.filter((c) => isNew(c.e)), ...inView.filter((c) => !isNew(c.e))]
+  const firstOlder = shown.findIndex((c) => !isNew(c.e))
   const counts = { unread: cards.filter((c) => !read.has(c.e.source_id)).length, read: cards.filter((c) => read.has(c.e.source_id)).length }
   return (
     <section className="task-section">
@@ -662,14 +714,16 @@ function PassiveSection({ userId, items, sources, evidence, onSource }: {
         ))}
       </div>
       <p className="rd-sort-note">Newest first · read marks are remembered in this browser</p>
-      {shown.length > 0 ? <div className="task-list">{shown.map(({ e, src, quote }) => {
+      {shown.length > 0 && isNew(shown[0].e) && <NewDivider since={since} />}
+      {shown.length > 0 ? <div className="task-list">{shown.map(({ e, src, quote }, i) => {
         const isRead = read.has(e.source_id)
         const title = src?.subject || "(no subject)"
         return (
-          <article className={`task-row rd-info-row${isRead ? " rd-is-read" : ""}`} key={e.id}>
+          <article className={`task-row rd-info-row${isRead ? " rd-is-read rd-seen" : " rd-unread"}${i === firstOlder && i > 0 ? " rd-first-older" : ""}`} key={e.id}>
             <div className="task-main">
               <div className="task-title-line">
-                <h3>{title}</h3>
+                <h3>{!isRead && <UnreadDot />}{title}</h3>
+                {isNew(e) && <NewBadge />}
                 {src?.sender && <span className="task-context">{src.sender}</span>}
                 {e.needs_review && <span className="rd-chip">Needs verification</span>}
               </div>
@@ -976,4 +1030,36 @@ function ReminderModal({ followup, busy, onSave, onCancel }: { followup: StoredR
       </div>
     </Modal>
   )
+}
+
+// A small green dot before an unread card's title. The visually hidden word carries the
+// meaning for screen readers, so color is never the only signal.
+function UnreadDot() {
+  return <><span aria-hidden="true" className="rd-unread-dot" /><span className="visually-hidden">Unread: </span></>
+}
+function NewBadge() {
+  return <span className="rd-new-badge">New</span>
+}
+function NewCount({ n }: { n: number }) {
+  return <span className="rd-new-count">· {n} new</span>
+}
+function NewDivider({ since }: { since: string | null }) {
+  return <p className="rd-new-divider">{since ? `New since your last visit · ${friendlyTime(since)}` : "New since your last visit"}</p>
+}
+
+// IDs of saved items, to say what a finished check added.
+function scanIds(s: Snapshot) {
+  const m = buildDashboardModel(s, null)
+  return {
+    suggestions: [...m.suggestions, ...m.dismissed].map((x) => x.row.id as string),
+    changes: [...m.changes, ...m.unresolvedChanges].map((x) => x.row.id as string),
+    passive: m.information.map((x) => x.id as string),
+  }
+}
+function scanSummaryBetween(before: ReturnType<typeof scanIds>, after: ReturnType<typeof scanIds>) {
+  return scanSummary({
+    suggestions: countAdded(new Set(before.suggestions), after.suggestions),
+    changes: countAdded(new Set(before.changes), after.changes),
+    passive: countAdded(new Set(before.passive), after.passive),
+  })
 }

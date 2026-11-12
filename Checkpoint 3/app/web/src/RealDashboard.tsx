@@ -509,7 +509,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                             </div>
                             <p className="task-caption">{c.row.reason}</p>
                           </div>
-                          <button className="email-link" onClick={() => { seen(); setSource(sourceForSuggestion(c, "Proposed change")) }}>View source email</button>
+                          <button className="email-link" onClick={() => { seen(); setSource(sourceForSuggestion(c, "Proposed change")) }}>View details</button>
                           <button className="primary-button row-button" onClick={() => { seen(); setChangeId(c.row.id) }}>Review change</button>
                         </article>)
                       })}</div>
@@ -677,7 +677,7 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
           {fields.deadline?.wording && <span className="rd-wording" title="Timing as stated in the email">“{fields.deadline.wording}”</span>}
         </div>
       </div>
-      <button className="email-link" onClick={onSource}>View source email</button>
+      <button className="email-link" onClick={onSource}>View details</button>
       {primary}
       {menu && onMenu && (
         <div className="menu-wrap">
@@ -774,7 +774,7 @@ function PassiveSection({ userId, items, sources, evidence, onSource, isNew, sin
             <button className="email-link" onClick={() => {
               onSource({ title, sender: src?.sender, subject: src?.subject, sentAt: src?.sent_at, quote: quote?.quote ?? null, messageId: quote?.message_id ?? src?.message_id ?? null, extraction: e, summary: e.summary })
               if (!isRead) mark(e.source_id, true)
-            }}>View source email</button>
+            }}>View details</button>
             <button className="secondary-button row-button" onClick={() => mark(e.source_id, !isRead)}>{isRead ? "Mark as unread" : "Mark as read"}</button>
           </article>
         )
@@ -972,7 +972,7 @@ function WaitingSection({ items, openCount, busy, today, onSource, onToggle, onR
                 {due && <span>Promised {due.dateLabel}{due.timeLabel && due.timeLabel !== "Date only" ? ` · ${due.timeLabel}` : ""}</span>}
                 {!w.row.resolved && followup?.confirmed_reminder_at && <span><Icon name="clock" size={15} />Follow up {formatWhen(followup.confirmed_reminder_at)}</span>}
                 {!w.row.resolved && followup && <span>Suggested: {followup.action}</span>}
-                <button className="text-link" onClick={() => onSource(w)}>View source email</button>
+                <button className="text-link" onClick={() => onSource(w)}>View details</button>
               </div>
             </div>
             <div className="rd-waiting-actions">

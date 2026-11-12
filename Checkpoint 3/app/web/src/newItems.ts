@@ -62,8 +62,10 @@ export function initialState(reviewKeys: string[], reviewTimes: (string | null |
   return { seen: [...new Set(reviewKeys)].slice(-MAX_SEEN), review: latest(reviewTimes), passive: latest(passiveTimes) }
 }
 
+// A tab with no recorded visit was empty when this browser first loaded it, so
+// everything that has arrived since is new.
 export function isNew(createdAt: string | null | undefined, lastVisit: string | null): boolean {
-  return lastVisit !== null && validTime(createdAt) && Date.parse(createdAt) > Date.parse(lastVisit)
+  return validTime(createdAt) && (lastVisit === null || Date.parse(createdAt) > Date.parse(lastVisit))
 }
 
 export function markSeen(state: NewItemsState, key: string): NewItemsState {

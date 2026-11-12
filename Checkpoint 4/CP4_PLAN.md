@@ -257,22 +257,7 @@ These block any hosted Gmail deployment. Today they're unscheduled, even though 
 
 ## 8. Schedule
 
-Updated November 12 to the key dates in the CP4 working agreement (#39), which is authoritative. Fall break is November 21–29, with nothing scheduled.
-
-| Date | Milestone |
-| --- | --- |
-| Wed Nov 11 | Study accounts created (#55, #56) |
-| Thu Nov 12 | Protocol (#58) |
-| Fri Nov 13 | Other study materials: task script, consent, questionnaire, inboxes written (#59–#64) |
-| **Mon Nov 16** | Study emails sent; hosted rollout of the study version |
-| Tue Nov 17, noon | Calendar decision (#53) |
-| **Tue Nov 17, evening** | **Study freeze:** nothing merges to `main` or deploys until the last session |
-| Wed Nov 18 | Pilot session (#68) |
-| Nov 18–20 | Study sessions (#69–#72) |
-| Mon Nov 30 | Analysis (#76–#79) |
-| Wed Dec 2 | Report assembled (#84) |
-| **Thu Dec 3, 11:30 PM** | **Submit** |
-| Fri Dec 4, 9:00 AM | Forum post (#93) |
+Dates live in the CP4 working agreement (#39) and on each CP4 issue; they are not copied here, so they can't go stale.
 
 The earlier fallback (run the study on `ManualWorkspace` if the dashboard wasn't ready by November 15) is no longer needed: the designed dashboard runs on real data. If hosted Gmail misbehaves, the study still runs on frozen results (#67).
 

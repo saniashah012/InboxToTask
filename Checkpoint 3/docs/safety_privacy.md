@@ -115,6 +115,7 @@ The whole feature is off unless `ENABLE_GMAIL_SCAN=true`, `GEMINI_API_KEY` and `
 - **Normal replies are marked for review** because quote removal adds a warning (F5). It is noisy but safe.
 - **A request already sent cannot be recalled.** Pausing stops new work only.
 - **One past exposure:** a local token-encryption key was printed in a development session, then rotated, and local connections were cleared. Whether hosted used the same value is an open check.
+- **Every-minute checks use time windows with a 5-minute overlap.** Gmail's search index can lag behind delivery, so each automatic check looks back 5 minutes into the previous one. Within the overlap, already-processed email is reused without a model call, and a skipped email is read again to check its words but counted only once. An email Gmail indexes more than about 5 minutes late can still be missed by every-minute checks; it is found by the next full 7-day check (after a settings change or Gmail reconnect), or not at all if none happens within 7 days. Gmail's History API (sync from a stored `historyId` bookmark, as production mail clients do) would remove both the overlap and this gap; it is future work, not built.
 - **Not run live:** settings changed during a scan, rate limits, wrong-account connection, replayed OAuth state, and domain and subdomain rules.
 
 ## Gaps from production practice

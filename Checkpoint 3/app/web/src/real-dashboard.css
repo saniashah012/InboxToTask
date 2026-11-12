@@ -83,3 +83,36 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 .rd-confidence.is-low { color:#b91c1c; }
 .rd-summary-head > span:first-child { color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
 .app-shell .row-button.rd-small-button { height:28px; padding:0 10px; font-size:11px; justify-self:end; }
+/* Automatic checks on: a slim, expandable status line. */
+.app-shell .processing-status.processing-status-compact { min-height:0; padding:8px 12px 8px 16px; }
+.processing-status-compact .processing-status-copy { gap:10px; font-size:.85rem; color:var(--muted); }
+.processing-status-compact .processing-status-copy strong { font-size:.85rem; font-weight:700; color:var(--ink); overflow:visible; }
+.processing-status-compact .processing-status-actions { gap:6px; }
+.processing-status-compact .text-link { font-size:.85rem; }
+/* Automatic checks on: a slow "breathing" glow shows it is watching; while a check
+   runs, a faster ripple shows it is working. */
+.compact-dot { position:relative; width:8px; height:8px; flex:0 0 8px; border-radius:50%; background:var(--green); box-shadow:0 0 0 3px var(--green-soft); animation:compact-breathe 2.8s ease-in-out infinite; }
+.compact-dot.is-checking { animation:compact-pulse 1s ease-in-out infinite; }
+.compact-dot.is-checking::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:2px solid var(--green); opacity:0; animation:compact-ripple 1.2s ease-out infinite; }
+@keyframes compact-breathe { 0%, 100% { box-shadow:0 0 0 2px var(--green-soft); opacity:.85; } 50% { box-shadow:0 0 0 5px var(--green-soft); opacity:1; } }
+@keyframes compact-pulse { 50% { box-shadow:0 0 0 6px var(--green-soft); } }
+@keyframes compact-ripple { 0% { transform:scale(1); opacity:.6; } 100% { transform:scale(2.4); opacity:0; } }
+.compact-new { color:var(--green); font-weight:700; }
+.compact-skipped { font-size:.8rem; color:var(--muted); }
+.compact-dot.is-trouble { background:var(--amber); box-shadow:0 0 0 3px #f6ecd6; animation:none; }
+.scan-panel-toggle { display:inline-grid; place-items:center; width:30px; height:30px; padding:0; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; }
+.scan-panel-toggle:hover { background:var(--green-soft); color:var(--green); }
+.scan-panel-toggle:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.scan-panel-toggle svg { transition:transform .15s ease; }
+.scan-panel-toggle svg.is-open { transform:rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .compact-dot, .compact-dot.is-checking, .compact-dot.is-checking::after { animation:none; } .scan-panel-toggle svg { transition:none; } }
+
+/* View details sits just before the row's main action; both are packed at the right. */
+/* Actions sit together at the right edge; the text takes the rest of the row. */
+@media (min-width: 1051px) {
+  .app-shell .task-row { grid-template-columns:24px minmax(235px, 1fr) auto auto 34px; column-gap:10px; }
+  .app-shell .task-row.is-suggestion { grid-template-columns:minmax(235px, 1fr) auto auto 34px; }
+  .app-shell .task-row > .row-button, .app-shell .task-row > .calendar-button, .app-shell .task-row > .email-link { justify-self:end; white-space:nowrap; }
+}
+/* Smaller main action on each card. */
+.app-shell .task-row > .row-button:not(.rd-small-button) { height:30px; padding:0 12px; font-size:12px; }

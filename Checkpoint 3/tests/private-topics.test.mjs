@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { blockedTerms, containsBlockedWord, matchText, STARTER_BLOCKED_WORDS, STARTER_TOPIC_WORDS } from '../app/pipeline/private-topics.mjs';
 import { prepareInput, semanticPreferences } from '../app/pipeline/core.mjs';
-import { retrieveGmail } from '../app/pipeline/gmail-retrieval.mjs';
+import { retrieveGmail, SCAN_OVERLAP_MS, skipCountStart } from '../app/pipeline/gmail-retrieval.mjs';
 import { createGmailProcessor } from '../app/pipeline/gmail-processor.mjs';
 import { selectTaskContext } from '../app/pipeline/task-context.mjs';
 
@@ -190,4 +190,20 @@ test('with no permitted sender and no topic to check, nothing is read beyond met
   const r=await retrieveGmail(s.options);
   assert.deepEqual(s.inputs,[]);assert.equal(r.counts.blocked,1);
   assert.ok(!s.calls.some(c=>c.startsWith('body:')));
+});
+
+test('a skipped email is counted once: not again in the overlap with the previous check',async()=>{
+  // Incremental window 11:54–12:00; the previous complete check covered up to 11:59.
+  const start='2026-11-05T11:54:00Z';
+  assert.equal(skipCountStart(start,date),Date.parse(start)+SCAN_OVERLAP_MS);
+  assert.equal(skipCountStart('2026-10-29T12:00:00Z',date),Date.parse('2026-10-29T12:00:00Z'),'a full 7-day check counts every skip');
+  const s=setup([gmailMessage('old-skip',{subject:'Hello',body:'Lunch?',sentAt:'2026-11-05T11:56:00Z'}),
+    gmailMessage('new-skip',{subject:'Hello',body:'Coffee?',sentAt:'2026-11-05T11:59:30Z'}),
+    gmailMessage('old-private',{subject:'Your diagnosis',sentAt:'2026-11-05T11:57:00Z'}),
+    gmailMessage('kept',{subject:'Homework due',sentAt:'2026-11-05T11:59:40Z'})]);
+  s.options.work={...s.options.work,start,end:date,semanticPreferences:checked};
+  const r=await retrieveGmail(s.options);
+  // Both overlap emails are still skipped and never reach a model; only the new one is counted.
+  assert.deepEqual(s.inputs.map(i=>i.message.id),['kept']);
+  assert.equal(r.counts.noTopicWord,1);assert.equal(r.counts.privateTopic,0);
 });

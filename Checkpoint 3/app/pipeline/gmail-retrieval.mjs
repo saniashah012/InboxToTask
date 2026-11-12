@@ -12,8 +12,19 @@ const MESSAGE_FAILURES = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAI
   'GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_MESSAGE_REVIEW_REQUIRED','MODEL_INPUT_TOO_LARGE','INVALID_TASK_CONTEXT',
   'GMAIL_EXTRACTION_FAILED','STORAGE_RETRY_LATER','STORAGE_ATTEMPT_LIMIT']);
 // The message list skips Spam and Trash, but thread and single-message reads do not.
+// Must match the overlap in migration 20261112010000_incremental_scan_window.sql
+// (last_complete_end - interval '5 minutes').
+export const SCAN_OVERLAP_MS = 5 * 60_000;
+const FULL_WINDOW_MS = 7 * 86_400_000;
+// Skips are counted from here. A window shorter than 7 days is an incremental check,
+// whose first SCAN_OVERLAP_MS the previous complete check already covered.
+export function skipCountStart(start, end) {
+  const from = Date.parse(start), to = Date.parse(end);
+  if (Number.isNaN(from) || Number.isNaN(to) || to - from >= FULL_WINDOW_MS - 60_000) return Number.isNaN(from) ? -Infinity : from;
+  return Math.min(to, from + SCAN_OVERLAP_MS);
+}
 const hiddenFromScans = data => Array.isArray(data?.labelIds) && data.labelIds.some(label => label === 'SPAM' || label === 'TRASH');
-const CONTEXT_OMISSIONS = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_INVALID_RESPONSE','GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_METADATA_UNVERIFIABLE']);
+const CONTEXT_OMISSIONS = new Set(['GMAIL_MESSAGE_GONE','GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_INVALID_RESPONSE','GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_METADATA_UNVERIFIABLE']);
 const id = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
 const METADATA_HEADERS = ['From','Subject','Authentication-Results'];
 const domainOf = value => typeof value === 'string' && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(value) ? value : null;
@@ -62,25 +73,32 @@ async function boundedJson(response, cap) {
 
 // Fixed endpoint and backend token supplier. No raw provider prose escapes.
 export function createGmailClient({ accessToken, fetchImpl = fetch }) {
-  const get = async (path, params, cap) => {
+  // Each failure gets its own code: a timeout, a network error, a Gmail server error,
+  // a message that no longer exists, or another refused request.
+  const get = async (path, params, cap, missing = 'GMAIL_REQUEST_REJECTED') => {
     const token = await accessToken();
     let response;
     try {
       response = await fetchImpl(`https://gmail.googleapis.com/gmail/v1/users/me/${path}?${params}`, {
         headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(10000),
       });
-    } catch { throw problem('GMAIL_UNAVAILABLE'); }
+    } catch (error) { throw problem(['TimeoutError','AbortError'].includes(error?.name) ? 'GMAIL_TIMEOUT' : 'GMAIL_UNAVAILABLE'); }
     if (!response.ok) {
       await response.body?.cancel();
-      throw problem(response.status === 429 ? 'GMAIL_RATE_LIMITED' : [401,403].includes(response.status) ? 'GMAIL_RECONNECT_REQUIRED' : 'GMAIL_UNAVAILABLE');
+      const status = response.status;
+      throw problem(status === 429 ? 'GMAIL_RATE_LIMITED' : [401,403].includes(status) ? 'GMAIL_RECONNECT_REQUIRED'
+        : status === 404 ? missing : status >= 500 ? 'GMAIL_SERVER_ERROR' : 'GMAIL_REQUEST_REJECTED');
     }
+    // 204 No Content: Gmail's answer to a list with no matching messages (common for
+    // the short windows of automatic checks). It is an empty result, not an outage.
+    if (response.status === 204) { await response.body?.cancel(); return {}; }
     return boundedJson(response, cap);
   };
   const message = async (messageId, format) => {
     if (!id(messageId)) throw problem('GMAIL_INVALID_RESPONSE');
     const params = new URLSearchParams({ format, fields: format === 'metadata' ? 'id,threadId,labelIds,internalDate,payload(headers)' : 'id,threadId,internalDate,payload' });
     if (format === 'metadata') for (const header of METADATA_HEADERS) params.append('metadataHeaders',header);
-    return get(`messages/${messageId}`, params, format === 'full' ? 2000000 : 16000);
+    return get(`messages/${messageId}`, params, format === 'full' ? 2000000 : 16000, 'GMAIL_MESSAGE_GONE');
   };
   return {
     async list(start, end, pageToken) {
@@ -98,7 +116,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
       if (!id(threadId)) throw problem('GMAIL_INVALID_RESPONSE');
       const params = new URLSearchParams({ format: 'metadata',fields:'id,messages(id,threadId,labelIds,internalDate,payload(headers))' });
       for (const header of METADATA_HEADERS) params.append('metadataHeaders',header);
-      const data = await get(`threads/${threadId}`,params,100000);
+      const data = await get(`threads/${threadId}`,params,100000,'GMAIL_MESSAGE_GONE');
       if (!Array.isArray(data.messages) || data.messages.length > 100) throw problem('GMAIL_CONTEXT_LIMIT');
       return data.messages;
     },
@@ -207,8 +225,14 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
     terms = semantic?.terms ?? []; required = semantic?.requiredTerms ?? [];
   }
   catch { return { counts, error:'SCAN_SETTINGS_INVALID', backlog:!!work.continuation, failures:{}, unresolved:0, continuation:work.continuation ?? null }; }
-  const privateTopic = () => { counts.privateTopic++; retry.delete(messageId); pending.shift(); };
-  const noTopicWord = () => { counts.noTopicWord++; retry.delete(messageId); pending.shift(); };
+  // Every-minute checks overlap the previous complete check by SCAN_OVERLAP_MS so an
+  // email Gmail indexed late is not missed. An email skipped in that overlap was
+  // already skipped and counted by the previous check under the same settings, so
+  // it is skipped again but not counted again. A full 7-day check counts every skip.
+  const countSkipsFrom = skipCountStart(work.start, work.end);
+  const counted = sentAt => !(Date.parse(sentAt) < countSkipsFrom);
+  const privateTopic = sentAt => { if (counted(sentAt)) counts.privateTopic++; retry.delete(messageId); pending.shift(); };
+  const noTopicWord = sentAt => { if (counted(sentAt)) counts.noTopicWord++; retry.delete(messageId); pending.shift(); };
   let messageId;
   let pending = [...(work.continuation?.pending ?? [])]; let next = work.continuation?.next ?? null;
   let listed = !!work.continuation && !work.continuation.unlisted; let lastError = null; let requests = 0; let metadataRecords = 0;
@@ -243,15 +267,15 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       counts.candidates++; metadataRecords++;
       if (!permitted(raw,current,work.rules,required.length>0)) { counts.blocked++; retry.delete(messageId); pending.shift(); continue; }
       if (Date.parse(current.sentAt)<Date.parse(work.start) || Date.parse(current.sentAt)>Date.parse(work.end)) { retry.delete(messageId); pending.shift(); continue; }
-      if (containsBlockedWord([current.subject], terms)) { privateTopic(); continue; }
+      if (containsBlockedWord([current.subject], terms)) { privateTopic(current.sentAt); continue; }
       const subjectHasTopicWord = !required.length || containsBlockedWord([current.subject], required);
       counts.permitted++;
       await boundary(); const full = await gmail.full(messageId);
       if (JSON.stringify(gmailMetadata(full)) !== JSON.stringify(current)) throw problem('GMAIL_METADATA_CHANGED');
       const body = gmailBody(full,RAW_BODY_CHARS);
       // The whole decoded body, quoted history included, so this blocks at least as much as the cleaned text.
-      if (containsBlockedWord([body], terms)) { privateTopic(); continue; }
-      if (!subjectHasTopicWord && !containsBlockedWord([body], required)) { noTopicWord(); continue; }
+      if (containsBlockedWord([body], terms)) { privateTopic(current.sentAt); continue; }
+      if (!subjectHasTopicWord && !containsBlockedWord([body], required)) { noTopicWord(current.sentAt); continue; }
       const cleanedChars = cleanBody(body).body.length;
       if (!cleanedChars) throw problem('GMAIL_BODY_EMPTY');
       if (cleanedChars > limits.maxMessageChars || cleanedChars > limits.maxTotalChars) throw problem('GMAIL_BODY_LIMIT');
@@ -310,12 +334,16 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       await boundary();
       const result = await consume({ message:{...current,body},threadContext:context.reverse(),rules:work.rules,contextLimits:limits,retrievalWarnings:[...new Set(retrievalWarnings)] },{remainingMs:90000-(now()-started)});
       counts.modelCalls += result?.modelCalls ?? 0;
-      if (result?.privateTopic) counts.privateTopic++; else if (result?.noTopicWord) counts.noTopicWord++; else counts.prepared++;
+      if (result?.privateTopic) { if (counted(current.sentAt)) counts.privateTopic++; }
+      else if (result?.noTopicWord) { if (counted(current.sentAt)) counts.noTopicWord++; }
+      else counts.prepared++;
       if (result?.reused) counts.reused++;
       retry.delete(messageId); pending.shift();
     } catch (error) {
-      const code = error?.code ?? 'GMAIL_UNAVAILABLE';
-      if (code === 'STORAGE_SUPPRESSED') { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
+      // An error without its own code is a bug or an unexpected response, not Gmail.
+      const code = error?.code ?? 'SCAN_UNEXPECTED_ERROR';
+      // Deleted or moved since it was listed: skip it, as a message moved to Spam or Trash is.
+      if (code === 'STORAGE_SUPPRESSED' || code === 'GMAIL_MESSAGE_GONE') { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
       if (!MESSAGE_FAILURES.has(code)) { lastError = code; break; }
       counts.failed++; failures[code] = (failures[code] ?? 0)+1; pending.shift();
       // Waiting out a retry window made no attempt, so it must not use one up.

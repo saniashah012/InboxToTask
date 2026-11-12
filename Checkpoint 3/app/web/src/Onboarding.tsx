@@ -84,7 +84,7 @@ export default function Onboarding({
   return (
     <div className="onboarding-shell">
       <header className="onboarding-header">
-        <Brand />
+        <Brand onHome={saving ? undefined : real.onLeave} />
         <div className="topbar-actions">
           <span className="demo-mode-badge">Signed in · {authEmail}</span>
           <button className="text-link onboarding-return" disabled={saving} onClick={real.onLeave}>

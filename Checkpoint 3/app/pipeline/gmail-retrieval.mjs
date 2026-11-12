@@ -13,7 +13,7 @@ const MESSAGE_FAILURES = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAI
   'GMAIL_EXTRACTION_FAILED','STORAGE_RETRY_LATER','STORAGE_ATTEMPT_LIMIT']);
 // The message list skips Spam and Trash, but thread and single-message reads do not.
 const hiddenFromScans = data => Array.isArray(data?.labelIds) && data.labelIds.some(label => label === 'SPAM' || label === 'TRASH');
-const CONTEXT_OMISSIONS = new Set(['GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_INVALID_RESPONSE','GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_METADATA_UNVERIFIABLE']);
+const CONTEXT_OMISSIONS = new Set(['GMAIL_MESSAGE_GONE','GMAIL_BODY_LIMIT','GMAIL_BODY_ENCODING','GMAIL_INVALID_RESPONSE','GMAIL_METADATA_CHANGED','GMAIL_RESPONSE_TOO_LARGE','GMAIL_METADATA_UNVERIFIABLE']);
 const id = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
 const METADATA_HEADERS = ['From','Subject','Authentication-Results'];
 const domainOf = value => typeof value === 'string' && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(value) ? value : null;
@@ -62,17 +62,21 @@ async function boundedJson(response, cap) {
 
 // Fixed endpoint and backend token supplier. No raw provider prose escapes.
 export function createGmailClient({ accessToken, fetchImpl = fetch }) {
-  const get = async (path, params, cap) => {
+  // Each failure gets its own code: a timeout, a network error, a Gmail server error,
+  // a message that no longer exists, or another refused request.
+  const get = async (path, params, cap, missing = 'GMAIL_REQUEST_REJECTED') => {
     const token = await accessToken();
     let response;
     try {
       response = await fetchImpl(`https://gmail.googleapis.com/gmail/v1/users/me/${path}?${params}`, {
         headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(10000),
       });
-    } catch { throw problem('GMAIL_UNAVAILABLE'); }
+    } catch (error) { throw problem(['TimeoutError','AbortError'].includes(error?.name) ? 'GMAIL_TIMEOUT' : 'GMAIL_UNAVAILABLE'); }
     if (!response.ok) {
       await response.body?.cancel();
-      throw problem(response.status === 429 ? 'GMAIL_RATE_LIMITED' : [401,403].includes(response.status) ? 'GMAIL_RECONNECT_REQUIRED' : 'GMAIL_UNAVAILABLE');
+      const status = response.status;
+      throw problem(status === 429 ? 'GMAIL_RATE_LIMITED' : [401,403].includes(status) ? 'GMAIL_RECONNECT_REQUIRED'
+        : status === 404 ? missing : status >= 500 ? 'GMAIL_SERVER_ERROR' : 'GMAIL_REQUEST_REJECTED');
     }
     return boundedJson(response, cap);
   };
@@ -80,7 +84,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
     if (!id(messageId)) throw problem('GMAIL_INVALID_RESPONSE');
     const params = new URLSearchParams({ format, fields: format === 'metadata' ? 'id,threadId,labelIds,internalDate,payload(headers)' : 'id,threadId,internalDate,payload' });
     if (format === 'metadata') for (const header of METADATA_HEADERS) params.append('metadataHeaders',header);
-    return get(`messages/${messageId}`, params, format === 'full' ? 2000000 : 16000);
+    return get(`messages/${messageId}`, params, format === 'full' ? 2000000 : 16000, 'GMAIL_MESSAGE_GONE');
   };
   return {
     async list(start, end, pageToken) {
@@ -98,7 +102,7 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
       if (!id(threadId)) throw problem('GMAIL_INVALID_RESPONSE');
       const params = new URLSearchParams({ format: 'metadata',fields:'id,messages(id,threadId,labelIds,internalDate,payload(headers))' });
       for (const header of METADATA_HEADERS) params.append('metadataHeaders',header);
-      const data = await get(`threads/${threadId}`,params,100000);
+      const data = await get(`threads/${threadId}`,params,100000,'GMAIL_MESSAGE_GONE');
       if (!Array.isArray(data.messages) || data.messages.length > 100) throw problem('GMAIL_CONTEXT_LIMIT');
       return data.messages;
     },
@@ -314,8 +318,10 @@ export async function retrieveGmail({ gmail, work, check, consume, now = Date.no
       if (result?.reused) counts.reused++;
       retry.delete(messageId); pending.shift();
     } catch (error) {
-      const code = error?.code ?? 'GMAIL_UNAVAILABLE';
-      if (code === 'STORAGE_SUPPRESSED') { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
+      // An error without its own code is a bug or an unexpected response, not Gmail.
+      const code = error?.code ?? 'SCAN_UNEXPECTED_ERROR';
+      // Deleted or moved since it was listed: skip it, as a message moved to Spam or Trash is.
+      if (code === 'STORAGE_SUPPRESSED' || code === 'GMAIL_MESSAGE_GONE') { counts.skipped++; retry.delete(messageId); pending.shift(); continue; }
       if (!MESSAGE_FAILURES.has(code)) { lastError = code; break; }
       counts.failed++; failures[code] = (failures[code] ?? 0)+1; pending.shift();
       // Waiting out a retry window made no attempt, so it must not use one up.

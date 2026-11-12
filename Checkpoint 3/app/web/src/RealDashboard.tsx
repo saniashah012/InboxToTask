@@ -5,17 +5,17 @@ import inboxToTaskLogo from "./assets/inbox-to-task-logo.png"
 import { Icon, Modal } from "./designedUi"
 import { supabase } from "./supabase"
 import { googleConnectionStatus, loadStorageSnapshot, reviewStoredRecord, type Deadline, type ScanSettings, type Snapshot, type StoredRow, type TaskFields } from "./storageAdapter"
-import { manualScan, manualScanStatus, resolveTaskChange, reviewTaskChange, scanStopMessage, type ScanStatus } from "./manualScanAdapter"
+import { isScanBusy, manualScan, manualScanStatus, ScanRequestError, resolveTaskChange, reviewTaskChange, scanStopMessage, type ScanStatus } from "./manualScanAdapter"
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
 import { loadTaskSourceLinks, OpenInGmail, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
 import { loadRead, saveRead } from "./readMarks"
-import { changeKey, countAdded, scanSummary, suggestionKey } from "./newItems"
+import { changeKey, countAdded, NOTHING_ADDED, scanSummary, suggestionKey } from "./newItems"
 import { useNewItems } from "./useNewItems"
 import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
-  autoNextCheck, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
+  autoNextCheck, quietStop, TRANSIENT_STOPS, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
   AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
   type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
@@ -113,6 +113,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   // full interval instead of retrying at once).
   const checkedThisPage = useRef(false)
   const autoFailedAt = useRef<number | null>(null)
+  // Automatic checks in a row that stopped on a passing Gmail or AI-service problem.
+  const [quietRetries, setQuietRetries] = useState(0)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [notice, setNotice] = useState(initialNotice)
   const [activeTab, setActiveTab] = useState<"tasks" | "passive">("tasks")
@@ -205,7 +207,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     stalls.current = !result.backlog || batchMadeProgress(result) ? 0 : stalls.current + 1
     if (stalls.current >= 3) setAutoHalt("stalled")
     // Planned limits are not failures; the status bar explains them.
-    if (result.error && !BATCH_LIMIT_STOPS.includes(result.error) && result.error !== DAILY_LIMIT_STOP) throw new Error(`${scanStopMessage(result.error)} Saved results remain available.`)
+    if (result.error && !BATCH_LIMIT_STOPS.includes(result.error) && result.error !== DAILY_LIMIT_STOP) throw new ScanRequestError(`${scanStopMessage(result.error)} Saved results remain available.`, result.error, true)
   }
 
   async function scan(mode: "initial" | "more", auto = false) {
@@ -216,13 +218,26 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
       stalls.current = 0; autoFailedAt.current = null; setAutoHalt(null)
       const current = epoch.current
       const before = scanIds(latestSnapshot.current)
+      // With automatic checks on, a check already running or cooling down is not an
+      // error: it finishes on its own and its results appear by themselves.
+      let alreadyRunning = false, stopped = false
+      setQuietRetries(0)
       try {
-        const finished = await perform(() => runScan(mode), "")
+        const finished = await perform(async () => {
+          try { await runScan(mode) } catch (err) {
+            if (autoOn && isScanBusy(err)) { alreadyRunning = true; return }
+            // One message only: the status panel already says why the check stopped.
+            if (err instanceof ScanRequestError && err.fromResult) { stopped = true; return }
+            throw err
+          }
+        }, "")
         if (current !== epoch.current) return
         // perform() reloaded saved records, so this counts only what was actually saved.
-        const summary = scanSummaryBetween(before, scanIds(latestSnapshot.current))
-        if (finished) setNotice(`This check finished. ${summary}`)
-        else setFailure((f) => (f ? { message: `${f.message} ${summary}` } : f))
+        const added = scanSummaryBetween(before, scanIds(latestSnapshot.current))
+        if (!finished) setFailure((f) => (f ? { message: `${f.message} ${added}` } : f))
+        else if (alreadyRunning) setNotice("A check is already running. New items will appear on their own.")
+        else if (stopped) setNotice(added === NOTHING_ADDED ? "" : added)
+        else setNotice(`This check finished. ${added}`)
       } finally { setScanning(false) }
       return
     }
@@ -233,10 +248,24 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     try {
       await runScan(mode)
       autoFailedAt.current = null
+      setQuietRetries(0)
     } catch (err) {
-      autoFailedAt.current = Date.now()
-      if (++stalls.current >= 3) setAutoHalt("stalled")
-      if (current === epoch.current) setFailure({ message: (err as Error).message })
+      const code = err instanceof ScanRequestError ? err.code : ""
+      if (isScanBusy(err)) {
+        // Another check running or cooling down (another tab, or this browser's clock
+        // slightly ahead of the server's) is not a failure: wait and try again quietly.
+        autoFailedAt.current = Date.now()
+      } else if (TRANSIENT_STOPS.includes(code)) {
+        // A passing Gmail or AI-service problem: the schedule retries it quietly.
+        autoFailedAt.current = null
+        setQuietRetries((n) => n + 1)
+      } else {
+        autoFailedAt.current = Date.now()
+        if (++stalls.current >= 3) setAutoHalt("stalled")
+        // One message only: a stop the panel shows is not repeated in a banner.
+        const shownInPanel = err instanceof ScanRequestError && err.fromResult
+        if (current === epoch.current && !shownInPanel) setFailure({ message: (err as Error).message })
+      }
     } finally {
       if (current === epoch.current) await reload()
       setScanning(false)
@@ -316,24 +345,26 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     paused: settings.paused,
     gmail: !gmail.checking && gmail.state !== "connected",
   }
-  const panelState: ScanPanelState = gmail.checking && !status ? "loading" : scanPanelState({ status, loadError: statusFailed, scanning, cooldownLeft, blockers })
+  const autoOn = Boolean(settings.auto_scan) && autoHalt === null
+  // While an automatic check is quietly retrying a passing problem, the panel does not show it.
+  const shownStatus = status?.result && quietStop(status, autoOn, quietRetries) ? { ...status, result: { ...status.result, error: null } } : status
+  const panelState: ScanPanelState = gmail.checking && !status ? "loading" : scanPanelState({ status: shownStatus, loadError: statusFailed, scanning, cooldownLeft, blockers })
   const needsReconnect = status?.result?.error === "GMAIL_RECONNECT_REQUIRED" || gmail.state === "reconnect_required"
 
   // While the app is open: check on opening, then every minute after the last
   // check finished, always continuing a saved backlog first. Every check passes
   // the same server checks as a manual scan; nothing runs with the app closed.
-  const autoOn = Boolean(settings.auto_scan) && autoHalt === null
   const autoReady = autoOn && !busy && !scanning && !loading && !statusFailed && !needsReconnect
     && !blockers.sources && !blockers.consent && !blockers.paused && !blockers.gmail
   useEffect(() => {
     if (!autoReady) return
-    const next = autoNextCheck(status, Date.now(), !checkedThisPage.current)
+    const next = autoNextCheck(status, Date.now(), !checkedThisPage.current, quietRetries)
     if (!next) return
     const backoff = autoFailedAt.current === null ? 0 : autoFailedAt.current + AUTO_CHECK_INTERVAL_MS - Date.now()
     const timer = window.setTimeout(() => void scan(next.mode, true), Math.max(next.delay, backoff))
     return () => window.clearTimeout(timer)
     // scan is recreated each render; the timer only needs the latest status.
-  }, [autoReady, status])
+  }, [autoReady, status, quietRetries])
 
   return (
     <div className="app-shell">
@@ -387,7 +418,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         </nav>
 
         <RealScanStatus
-          now={now} state={panelState} status={status} cooldownLeft={cooldownLeft} busy={busy} scanning={scanning}
+          now={now} state={panelState} status={shownStatus} cooldownLeft={cooldownLeft} busy={busy} scanning={scanning}
           settings={settings} gmail={gmail.state} needsReconnect={needsReconnect} activityOpen={activityOpen}
           onToggleActivity={() => setActivityOpen((c) => !c)}
           onScan={(mode) => void scan(mode)}

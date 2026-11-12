@@ -223,3 +223,24 @@ test('HTML text that a mail client hides never reaches extraction',()=>{
  data.payload={mimeType:'text/html',body:{data:base64url('<p>Visible.</p><div style="display:none">unclosed hidden')}};
  assert.equal(gmailBody(data,100),'Visible.');
 });
+
+test('Gmail failures get their own codes, and a message gone since listing is skipped',async()=>{
+  const client=status=>createGmailClient({accessToken:async()=>'secret-token',fetchImpl:async()=>new Response('private diagnostic',{status})});
+  const codeOf=async(promise)=>{try{await promise;return null}catch(e){assert.ok(!e.message.includes('private'));return e.code}};
+  assert.equal(await codeOf(client(503).list('2026-11-01T00:00:00Z',date)),'GMAIL_SERVER_ERROR');
+  assert.equal(await codeOf(client(400).list('2026-11-01T00:00:00Z',date)),'GMAIL_REQUEST_REJECTED');
+  assert.equal(await codeOf(client(404).metadata('m')),'GMAIL_MESSAGE_GONE');
+  assert.equal(await codeOf(client(401).metadata('m')),'GMAIL_RECONNECT_REQUIRED');
+  const timeout=createGmailClient({accessToken:async()=>'t',fetchImpl:async()=>{throw Object.assign(new Error('x'),{name:'TimeoutError'});}});
+  assert.equal(await codeOf(timeout.list('2026-11-01T00:00:00Z',date)),'GMAIL_TIMEOUT');
+  const offline=createGmailClient({accessToken:async()=>'t',fetchImpl:async()=>{throw new TypeError('network');}});
+  assert.equal(await codeOf(offline.list('2026-11-01T00:00:00Z',date)),'GMAIL_UNAVAILABLE');
+  // A listed message deleted before it was read is skipped; the rest are processed.
+  const s=setup([message('gone'),message('kept')]);
+  s.options.gmail.metadata=async id=>{if(id==='gone')throw Object.assign(new Error('GMAIL_MESSAGE_GONE'),{code:'GMAIL_MESSAGE_GONE'});return message(id);};
+  const r=await retrieveGmail(s.options);
+  assert.equal(r.error,null);assert.equal(r.counts.skipped,1);assert.deepEqual(s.inputs.map(i=>i.message.id),['kept']);
+  // An error without a code is reported as unexpected, not as Gmail being unreachable.
+  const b=setup([message('m')]);b.options.consume=async()=>{throw new TypeError('bug');};
+  assert.equal((await retrieveGmail(b.options)).error,'SCAN_UNEXPECTED_ERROR');
+});

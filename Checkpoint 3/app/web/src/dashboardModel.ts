@@ -287,8 +287,29 @@ export const AUTO_CHECK_INTERVAL_MS = 60_000
 // check finished. Stop codes other than planned per-batch limits (daily limit,
 // reconnect, failures) end automatic checks until the next manual Scan now. The
 // caller also checks the saved preference, Stop, stalls and blockers.
-export function autoNextCheck(status: ScanStatusLike | null, now: number, firstOnPage: boolean): { mode: "initial" | "more"; delay: number } | null {
+// Passing problems reaching Gmail or the AI service. Automatic checks retry these
+// quietly, up to MAX_QUIET_RETRIES times in a row, before showing them.
+export const TRANSIENT_STOPS = ["GMAIL_UNAVAILABLE", "GMAIL_TIMEOUT", "GMAIL_SERVER_ERROR", "GMAIL_RATE_LIMITED", "PROVIDER_HTTP_429"]
+export const MAX_QUIET_RETRIES = 3
+export const TRANSIENT_RETRY_MS = 30_000
+
+// Whether the status panel should hide this stop for now: a passing problem that an
+// automatic check is still retrying.
+export function quietStop(status: ScanStatusLike | null, autoActive: boolean, quietRetries: number): boolean {
+  const error = status?.result?.error ?? null
+  return autoActive && !!error && TRANSIENT_STOPS.includes(error) && quietRetries < MAX_QUIET_RETRIES
+}
+
+export function autoNextCheck(status: ScanStatusLike | null, now: number, firstOnPage: boolean, quietRetries = 0): { mode: "initial" | "more"; delay: number } | null {
   if (!status || status.running) return null
+  const stop = status.result?.error ?? null
+  if (stop && TRANSIENT_STOPS.includes(stop)) {
+    if (quietRetries >= MAX_QUIET_RETRIES) return null
+    const parse = (iso: string | null | undefined) => { const t = iso ? Date.parse(iso) : NaN; return Number.isNaN(t) ? null : t }
+    const finished = parse(status.lastFinished)
+    const at = Math.max(parse(status.cooldownUntil) ?? now, finished === null ? now : finished + TRANSIENT_RETRY_MS)
+    return { mode: status.backlog ? "more" : "initial", delay: Math.max(0, at - now) }
+  }
   if (status.backlog) {
     const delay = autoContinueDelay(status, now)
     return delay === null ? null : { mode: "more", delay }

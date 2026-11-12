@@ -244,3 +244,13 @@ test('Gmail failures get their own codes, and a message gone since listing is sk
   const b=setup([message('m')]);b.options.consume=async()=>{throw new TypeError('bug');};
   assert.equal((await retrieveGmail(b.options)).error,'SCAN_UNEXPECTED_ERROR');
 });
+
+test('a list with no matching messages (Gmail 204 No Content) is an empty result, not an outage',async()=>{
+  const gmail=createGmailClient({accessToken:async()=>'t',fetchImpl:async()=>new Response(null,{status:204,headers:{'content-type':'application/json; charset=UTF-8'}})});
+  assert.deepEqual(await gmail.list('2026-11-12T19:41:00Z','2026-11-12T19:48:00Z'),{ids:[],next:null});
+  // End to end: a short automatic-check window with no new email finishes cleanly.
+  const r=await retrieveGmail({gmail:{...gmail,metadata:async()=>{throw new Error('not called');}},
+    work:{start:'2026-11-12T19:41:00Z',end:'2026-11-12T19:48:00Z',rules:work().rules,contextLimits:work().contextLimits},
+    check:async()=>{},consume:async()=>({modelCalls:0})});
+  assert.equal(r.error,null);assert.equal(r.backlog,false);assert.equal(r.counts.candidates,0);
+});

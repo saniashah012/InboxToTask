@@ -78,6 +78,9 @@ export function createGmailClient({ accessToken, fetchImpl = fetch }) {
       throw problem(status === 429 ? 'GMAIL_RATE_LIMITED' : [401,403].includes(status) ? 'GMAIL_RECONNECT_REQUIRED'
         : status === 404 ? missing : status >= 500 ? 'GMAIL_SERVER_ERROR' : 'GMAIL_REQUEST_REJECTED');
     }
+    // 204 No Content: Gmail's answer to a list with no matching messages (common for
+    // the short windows of automatic checks). It is an empty result, not an outage.
+    if (response.status === 204) { await response.body?.cancel(); return {}; }
     return boundedJson(response, cap);
   };
   const message = async (messageId, format) => {

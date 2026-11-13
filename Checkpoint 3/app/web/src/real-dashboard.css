@@ -109,7 +109,15 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 
 /* View details sits just before the row's main action; both are packed at the right. */
 /* Actions sit together at the right edge; the text takes the rest of the row. */
-@media (min-width: 1051px) {
+/* "View details" stays visible down to phone width: the designed CSS hid it at 1050px and
+   below, which left no way to open a card's sender and evidence (#51). */
+.app-shell .task-row > .email-link { display:inline-block; }
+@media (max-width: 720px) {
+  .app-shell .task-row:not(.rd-info-row) > .email-link { grid-column:2; justify-self:start; }
+  .app-shell .task-row.is-suggestion:not(.rd-info-row) > .email-link { grid-column:1; }
+  .app-shell .task-row > .menu-wrap { grid-row:1; grid-column:-2; }
+}
+@media (min-width: 721px) {
   .app-shell .task-row { grid-template-columns:24px minmax(235px, 1fr) auto auto 34px; column-gap:10px; }
   .app-shell .task-row.is-suggestion { grid-template-columns:minmax(235px, 1fr) auto auto 34px; }
   .app-shell .task-row > .row-button, .app-shell .task-row > .calendar-button, .app-shell .task-row > .email-link { justify-self:end; white-space:nowrap; }

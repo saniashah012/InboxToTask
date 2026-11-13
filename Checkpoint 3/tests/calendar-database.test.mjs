@@ -68,5 +68,33 @@ test('Calendar SQL authorization, leases, duplicate protection, revisions and OA
    await call('google_connection_service',[A,'oauth_release',{generation:pending.generation}]);
    assert.deepEqual((await call('google_connection_service',[A,'refresh_claim',{}])).scopes,scopes);
   });
+  await t.test('Gmail-only reconnect after revocation drops Calendar and reports the revoked state',async()=>{
+   // A refresh that Google rejects as revoked moves the connection to reconnect_required.
+   await q("update private.google_connections set expires_at=now()-interval '1 hour',last_started_at=null where user_id=$1",[A]);
+   const lease=await call('google_connection_service',[A,'refresh_claim',{}]);assert.equal(lease.state,'refresh');
+   assert.equal((await call('google_connection_service',[A,'refresh_fail',{generation:lease.generation,lease:lease.lease,reason:'revoked'}])).state,'reconnect_required');
+   assert.equal((await call('google_connection_service',[A,'refresh_claim',{requiredScope:scopes[1]}])).state,'reconnect_required');
+   // Reconnect without asking for Calendar.
+   assert.equal((await call('google_connection_service',[A,'start',{hash:'b'.repeat(64),email:'a@example.org',verifier:'encrypted-verifier'}])).state,'started');
+   const pending=await call('google_connection_service',[null,'consume',{hash:'b'.repeat(64)}]);
+   assert.equal(pending.state,'consumed');assert.equal(pending.calendar,false);assert.equal(pending.connectionState,'reconnect_required');
+   const done=await call('google_connection_service',[A,'finish',{generation:pending.generation,subject:'123',email:'a@example.org',scopes:[scopes[0]],credentials:'fresh',expiresAt:'2099-01-01T00:00:00Z'}]);
+   assert.equal(done.state,'connected');
+   await call('google_connection_service',[A,'oauth_release',{generation:pending.generation}]);
+   const status=await as('authenticated',A,()=>call('google_connection_status',[]));
+   assert.equal(status.state,'connected');assert.deepEqual(status.scopes,[scopes[0]]);
+   const claimed=await call('google_connection_service',[A,'refresh_claim',{}]);assert.equal(claimed.state,'ready');assert.equal(claimed.credentials,'fresh');
+   assert.equal((await call('google_connection_service',[A,'refresh_claim',{requiredScope:scopes[1]}])).state,'scope_required');
+   await assert.rejects(rpc(A,'claim',{taskId:id,taskRevision:0,draft}),/GOOGLE_CALENDAR_SCOPE_REQUIRED/);
+  });
+  await t.test('a full disconnect clears saved credentials, so a later reconnect has nothing old to reuse',async()=>{
+   const out=await call('google_connection_service',[A,'disconnect',{}]);assert.equal(out.state,'disconnecting');
+   assert.equal((await call('google_connection_service',[A,'start',{hash:'c'.repeat(64),email:'a@example.org',verifier:'v'}])).state,'disconnecting');
+   assert.equal((await call('google_connection_service',[A,'disconnect_finish',{generation:out.generation}])).state,'disconnected');
+   await q('update private.google_connections set last_started_at=null where user_id=$1',[A]);
+   assert.equal((await call('google_connection_service',[A,'start',{hash:'c'.repeat(64),email:'a@example.org',verifier:'v'}])).state,'started');
+   const pending=await call('google_connection_service',[null,'consume',{hash:'c'.repeat(64)}]);
+   assert.equal(pending.connectionState,'disconnected');assert.equal(pending.credentials,null);assert.deepEqual(pending.scopes,[]);
+  });
  } finally {await db.close();}
 });

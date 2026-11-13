@@ -85,10 +85,11 @@ export async function googleConnectionAction(action: "connect" | "connect_calend
       GOOGLE_REVOCATION_PENDING: "Access is blocked in this app, but Google revocation is pending. Retry disconnect.",
       GOOGLE_PROVIDER_UNAVAILABLE: "Google could not be reached. Try again shortly.",
       GOOGLE_CONNECTION_STALE: "The connection changed. Reload its status before trying again.",
+      GOOGLE_CREDENTIALS_UNAVAILABLE: "The saved Google access can no longer be used. Reconnect Google.",
     }
     throw new Error(messages[code] ?? "The Google connection could not be updated. Reload its status and try again.")
   }
-  return data as { authorizationUrl?: string; state?: string }
+  return data as { authorizationUrl?: string; state?: string; revoked?: boolean }
 }
 
 const tables = {

@@ -9,7 +9,15 @@ Calendar writes were performed. This document is a deployment proposal, not appr
 **Rebase note, November 5, 2026:** `mzheng/calendar-rebase` carries this work on the full PR #22
 branch without the `31aef8e` cherry-pick. The migration was renamed from `20261106020000` to
 `20261110000000` so it sorts after `20261106040000`, which is already applied locally. Its contents
-are unchanged, so the SHA-256 below still holds. After the rebase, on Gmail base `f48e204`:
+are unchanged, so the SHA-256 below still holds.
+
+**Rebase note, November 13, 2026:** the work is now on `claude/calendar-designed-ui`, rebased onto
+`main` at `455cba4`. The migration is renumbered again, to `20261113000000`, so it sorts after
+`20261112010000_incremental_scan_window`, the newest migration applied on hosted. Its contents
+changed on November 9 (the `consume` result also returns `connectionState`), so any SHA-256
+recorded below for the earlier file no longer matches; recompute it before a hosted rollout. The
+migration numbers in the steps below are updated; the Gmail ledger they name is the November 5
+one and must be rechecked against the current hosted ledger first. After the rebase, on Gmail base `f48e204`:
 `npm test` 171/171, `test:calendar` 17/17, frontend type check and build pass, all with migrations
 `010000` to `040000` in the PGlite schema. Evidence below predates the rebase. No local
 Supabase migration, OAuth round trip or Calendar write has been run.
@@ -46,7 +54,7 @@ Supabase migration, OAuth round trip or Calendar write has been run.
 
 ## Durable duplicate and error handling
 
-[Calendar migration](../app/supabase/migrations/20261110000000_calendar_events.sql)
+[Calendar migration](../app/supabase/migrations/20261113000000_calendar_events.sql)
 adds a private execution receipt keyed by owner/task/Google subject, independent of
 the older storage review preview records. This avoids replacing the shared
 `storage_action` function or changing existing preview approval semantics.
@@ -75,7 +83,7 @@ reloading/reviewing current task state. There is no automatic event recreation.
 
 ## Coordination
 
-Calendar now uses **20261110000000**, after the teammate-owned
+Calendar now uses **20261113000000** (renumbered November 13), after the teammate-owned
 **20261106010000_gmail_manual_resolution.sql** and PR #22's
 **20261106000000_gmail_scan_hardening.sql**. The earlier Calendar 010000 reservation
 was superseded when the user reported the Gmail migration collision. The Gmail
@@ -89,7 +97,7 @@ that teammate is available here; owner review remains a release gate. Forward:
 
 > Calendar changes are isolated on the Calendar branch above. Please review
 > `_shared/google-connection.mjs`, `_shared/google-runtime.ts`, and the new wrapper
-> in `20261110000000_calendar_events.sql`. Gmail-only authorization still requests
+> in `20261113000000_calendar_events.sql`. Gmail-only authorization still requests
 > identity + gmail.readonly; Calendar is requested only by connect_calendar.
 > Denied/partial grants preserve credentials; refresh-token rotation is serialized
 > with callback completion; explicit refreshed scopes update capability metadata.
@@ -121,9 +129,9 @@ Recompute it after any compatibility fixes; approval must name the reviewed vers
 
 1. Read-only preflight on IS492_c3 (`ltxhxqxpatemgkhjzmaq`): verify the migration
    ledger through the agreed Gmail `20261106040000` migration, expected Google/task tables/RPCs, no version
-   `20261110000000`, no active rollout, and a current verified recovery backup.
+   `20261113000000`, no active rollout, and a current verified recovery backup.
    Stop on mismatch. Verify the Calendar API and consent scope in the Gmail project.
-2. Apply **only** `20261110000000_calendar_events.sql`, transactionally with its
+2. Apply **only** `20261113000000_calendar_events.sql`, transactionally with its
    normal migration ledger entry. Prefer the coordinator's reviewed one-migration
    runner. Do not run an unrestricted `db push`, history repair, or reset. Existing
    migrations are unchanged. Verify private-table/function grants and owner status

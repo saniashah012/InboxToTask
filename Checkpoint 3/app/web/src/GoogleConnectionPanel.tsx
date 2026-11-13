@@ -38,7 +38,9 @@ export default function GoogleConnectionPanel() {
           window.location.assign(destination.href)
           return
         }
-        setNotice(action === "disconnect" ? (hadCalendar ? "Google disconnected for Gmail and Calendar. Connecting again still requires saved scanning consent." : "Gmail disconnected. Connecting again still requires saved scanning consent.") : "A backend access token is available. No email was read.")
+        // The backend could not tell Google (its saved access no longer opens), so say where to finish.
+        if (action === "disconnect" && result.revoked === false) setNotice("Google is disconnected in this app, but Google could not be told. To finish, remove InboxToTask under Third-party access in your Google Account.")
+        else setNotice(action === "disconnect" ? (hadCalendar ? "Google disconnected for Gmail and Calendar. Connecting again still requires saved scanning consent." : "Gmail disconnected. Connecting again still requires saved scanning consent.") : "A backend access token is available. No email was read.")
       }
     } catch (err) { if (live.current) setError((err as Error).message) }
     finally {

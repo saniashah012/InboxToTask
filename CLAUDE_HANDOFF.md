@@ -4,8 +4,9 @@ Updated November 5, 2026 (Central), after live local manual-scan testing and the
 PR and runtime state before acting; this describes that moment, not today. Read
 [AGENTS.md](AGENTS.md), then [current state](<Checkpoint 3/CURRENT_STATE.md>), then this.
 
-**Calendar:** Sania's work is rebased onto the Gmail branch on local branch `mzheng/calendar-rebase`,
-with its migration renamed to `20261110000000`. Not applied, enabled or live-tested.
+**Calendar:** the latest work is on the local branch `claude/calendar-designed-ui`, rebased onto
+`main` on November 13 with its migration renumbered to `20261113000000`. Not pushed, applied,
+enabled or live-tested; see [current state](<Checkpoint 3/CURRENT_STATE.md>) and #44.
 
 **Repository:** `C:/Users/mzhen/Desktop/School/IS492/IS-492-Project`
 
@@ -30,7 +31,7 @@ suppress raw errors: a parser error once printed a secret (see Security below).
 | `feadf66` | Live-test fixes, manual resolution of ambiguous updates, test log |
 | `cef7f06` | Source-email links from another session, kept as a separate commit by user request |
 | PR #20 (Sania, chips) | Separate; recheck its state. Both it and PR #22 change `STORAGE.md` |
-| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is on GitHub at `da4417d`, not merged, with its migration renamed `20261110000000`; offline tests reported passing, no live test, and its recorded OAuth reconnect failures block release |
+| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is on GitHub at `da4417d`, not merged, with its migration renamed `20261106050000`; it is superseded by local `claude/calendar-designed-ui` (rebased November 13, migration `20261113000000`, reconnect fixes with offline tests, no live test) |
 
 **Ownership right now:** the "Gmail features in Figma prototype" session coordinates hosted changes and owns
 `CURRENT_STATE.md` and the hosted records. The "CP3 progress check" session owns `docs/demo-script.md` and tonight's
@@ -64,8 +65,8 @@ followed by the November 9 deployment; whether it stays on is the user's decisio
 8. `20261106030000_gmail_task_source_links.sql`
 9. `20261106040000_gmail_token_recheck.sql`
 
-Calendar's `20261110000000_calendar_events.sql` (`20261106020000` on Sania's branch) runs after 9, as a
-separate later step. It is not on hosted. It redefines `google_connection_service`, so review that
+Calendar's `20261113000000_calendar_events.sql` (`20261106020000` on Sania's branch) runs after every
+migration on `main`, as a separate later step. It is not on hosted. It redefines `google_connection_service`, so review that
 against the Gmail flow before applying it.
 
 ## Local runtime

@@ -188,13 +188,20 @@ export function createGoogleConnection({ rpc, cipher, provider }) {
     },
     async disconnect(user) {
       const claim=await rpc(user,'disconnect');
-      if(claim.state==='disconnected') return;
+      if(claim.state==='disconnected') return {revoked:true};
+      let revoked=true;
       if(claim.credentials) {
-        const saved=await cipher.open(user,'credentials',claim.credentials);
-        await provider.revoke(saved.refreshToken);
+        // Saved credentials that no longer open (for example after a token-key
+        // change) cannot be revoked from here. Finish the disconnect anyway so
+        // the account is not left in "disconnecting", and report that Google
+        // was not told, so the user can remove access in their Google Account.
+        let saved=null;
+        try { saved=await cipher.open(user,'credentials',claim.credentials); } catch { revoked=false; }
+        if(saved) await provider.revoke(saved.refreshToken);
       }
       const result=await rpc(user,'disconnect_finish',{generation:claim.generation});
       if(result.state!=='disconnected') throw fail('GOOGLE_CONNECTION_STALE');
+      return {revoked};
     },
   };
 }
@@ -225,7 +232,7 @@ export function createGoogleHandler({ connection, verifyUser, allowedOrigins=/**
       if(body.action==='connect') return json(200,await connection.start(user));
       if(body.action==='connect_calendar') return json(200,await connection.start(user,true));
       if(body.action==='disconnect_calendar') return json(200,await connection.disconnectCalendar(user));
-      if(body.action==='disconnect') { await connection.disconnect(user.id); return json(200,{state:'disconnected',scanningEnabled:false}); }
+      if(body.action==='disconnect') { const {revoked}=await connection.disconnect(user.id); return json(200,{state:'disconnected',revoked,scanningEnabled:false}); }
       await connection.accessToken(user.id);
       return json(200,{state:'connected',scanningEnabled:false});
     } catch(error) {

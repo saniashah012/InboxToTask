@@ -48,7 +48,7 @@ Hosted now has 30 migration versions, through `20261112010000`. No secrets or fe
 
 **Decisions recorded today:** categories to check are literal word lists that narrow what reaches Gemini, and with no sender they decide which senders are checked (this supersedes the "meaningful topics, not literal terms" line in the [plan](IMPLEMENTATION_PLAN.md)); participants will not connect their own email (#94); scored study tasks use one standard setup with automatic scanning off, and an optional, logged exploration follows (#58, #59, #60, #101).
 
-**Still open:** PRs #36 and #37 are replaced by #108, and both were closed on November 12. Calendar's latest work is on the local, unpushed branch `claude/calendar-designed-ui` (see #44, #45); the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
+**Still open:** PRs #36 and #37 are replaced by #108, and both were closed on November 12. Calendar's latest work is on the local, unpushed branch `claude/calendar-designed-ui`, rebased onto `main` on November 13 with offline checks passing and no live test (see #44, #45, #46); the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
 
 **Docs record (November 12, evening):** branch `mzheng/docs-nov12` (unpushed when written) brought the living docs up to date with this release and added [Checkpoint 4](<../Checkpoint 4/README.md>). A second review on branch `claude/docs-review-fable-65324d`, on top of it, then removed four statements from the CP4 plan that a public repository shouldn't carry and corrected stale lines in this file, the handoff, the implementation plan, `INSTALL.md`, the local setup guide, safety and privacy, the root README and the CP4 plan. Docs only; no code, hosted or board changes. Verified: PR merge times, issue numbers and the board against GitHub; migration names, limits and line counts against the code; relative links and anchors; `git diff --check`. Not run: the test suites (no `node_modules` in the review worktree). A later one-line correction on branch `mzheng/current-state-pr37` (unpushed when written) records that PR #37 was closed on November 12 (5:25 PM Central), where this file had said it should be closed; verified against GitHub and with `git diff --check`.
 
@@ -166,14 +166,26 @@ The app does not fetch or display email bodies on demand.
   `prompt=select_account` to product sign-in was merged on November 12 (#35); it is not yet
   browser-checked on the live site. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Details are in the
   [rollout record](docs/hosted-backup-verification-2026-11-06.md#signed-in-checks-reported-by-sania).
-- **Google Calendar moved to CP4 by user decision.** It is not in CP3 or on hosted. The latest work
-  (November 12) is on the local, unpushed branch `claude/calendar-designed-ui`: event creation, the
-  reconnect fixes with a Calendar-only disconnect, and the dashboard choice; it needs a rebase onto
-  current `main` (see #44). The older rebase is on
-  the unmerged GitHub branch `mzheng/calendar-rebase` at `da4417d`, with migration `20261106050000`, offline tests reported and no live test. That
-  commit still has the OAuth reconnect failures found in review, which block its release:
-  a Gmail-only reconnect after full revocation, reconnecting after a key rotation, and reuse of a revoked refresh
-  token. ICS export is the CP3 calendar path and writes nothing to Google.
+- **Google Calendar moved to CP4 by user decision.** It is not in CP3, on `main` or on hosted. The
+  latest work is on the local, unpushed branch `claude/calendar-designed-ui`: event creation, the
+  reconnect fixes with a Calendar-only disconnect, and the dashboard choice.
+  **November 13 (#44):** the branch was rebased onto `main` at `455cba4` (three commits, plus one
+  for the items here). The dashboard, onboarding and settings edits were reapplied to the files
+  `main` split out of `App.tsx`. The migration is renumbered to `20261113000000_calendar_events`,
+  after `20261112010000`; no later migration defines `google_connection_service`, which it wraps.
+  One more reconnect defect was fixed: after a token-key change, Disconnect could not open the
+  saved credentials and left the account in "disconnecting", which also blocked Reconnect. It
+  now finishes, and tells the user to remove the app's access in their Google Account because
+  Google could not be told. The three reconnect cases (Gmail-only reconnect after full
+  revocation, reconnect after a key change, a revoked refresh token never reused) have offline
+  tests at the handler level and, for the first and the cleared credentials, against the
+  migrations in PGlite. Verified November 13: `npm test` (222 + 56 pass), `npm run test:calendar`
+  (19 pass), `tsc --noEmit`, the web build and `deno check` of every function. Not done: any
+  browser check, any run against the local stack or Google (#46), and the migration is not
+  applied anywhere. The Calendar plan's recorded SHA-256 predates the November 9 migration change.
+  The older rebase is on the unmerged GitHub branch `mzheng/calendar-rebase` at `da4417d`, with
+  migration `20261106050000`; it still has the reconnect failures found in review and is
+  superseded. ICS export is the CP3 calendar path and writes nothing to Google.
 - **The two defects to fix before hosted scanning now have a fix in
   `20261109220000_source_delete_quotes_and_boundary`**, applied on hosted November 9 and locally on November 12: deleting a Gmail
   source now also clears quotes of that message in other sources' evidence, and
@@ -196,7 +208,7 @@ Sania reports that Vercel's production branch is `main` (Settings > Git), and th
 Next (as of November 12):
 
 1. Check the live site signed in: account picker, Settings save and exits, a categories-only scan, New/Unread labels, quiet automatic checks (#54, #51).
-2. Calendar: rebase `claude/calendar-designed-ui`, finish #44's reconnect checks, push and review before the noon November 17 decision (#53).
+2. Calendar: push `claude/calendar-designed-ui` for review (#44), build the onboarding step and Settings status (#45), then the local test (#46), before the noon November 17 decision (#53).
 3. Study materials (#58–#64, #101) to match the release; hosted items left in #52 (security review, OAuth test users for the study inboxes, a model spending limit).
 4. Close PR #37 (#36 is closed). Background scanning with the app closed (#49) stays after the study.
 

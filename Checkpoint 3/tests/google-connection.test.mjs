@@ -127,6 +127,25 @@ test('Calendar-only disconnect revokes the whole grant, then starts a Gmail-only
  assert.equal(authorizedCalendar,false);assert.match(result.authorizationUrl,/^https:\/\/accounts\.google\.com\//);
 });
 
+test('disconnect after a token-key rotation finishes without the old ciphertext, and reconnect then works',async()=>{
+ const retired=createTokenCipher({keys:JSON.stringify({v0:Buffer.alloc(32,9).toString('base64')}),activeKey:'v0'});
+ const credentials=await retired.seal(user.id,'credentials',{accessToken:'a',refreshToken:'unreadable'});
+ const calls=[];
+ const connection=createGoogleConnection({cipher:cipher(),
+  provider:{async revoke(token){calls.push(`revoke:${token}`);}},
+  rpc:async(_,action)=>{calls.push(action);
+   if(action==='disconnect')return {state:'disconnecting',generation:2,credentials};
+   if(action==='disconnect_finish')return {state:'disconnected'};
+   throw new Error('Unexpected RPC');}});
+ // Nothing can be revoked at Google, and the caller is told so.
+ assert.deepEqual(await connection.disconnect(user.id),{revoked:false});
+ assert.deepEqual(calls,['disconnect','disconnect_finish']);
+ const t=trial({previous:true,previousCipher:retired,connectionState:'disconnected'});
+ await t.connection.start(user);
+ await t.connection.callback(new URLSearchParams({state:t.state,code:'fictional-code'}));
+ assert.equal((await t.c.open(user.id,'credentials',t.saved.credentials)).refreshToken,'fictional-refresh');
+});
+
 test('wrong account, partial consent, missing offline token, stale commit never report connected',async()=>{
   for(const [options,code] of [
     [{identity:{subject:'12345',email:'other@example.org'}},'GOOGLE_ACCOUNT_MISMATCH'],

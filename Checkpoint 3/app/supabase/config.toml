@@ -454,3 +454,8 @@ entrypoint = "./functions/google_callback/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/gmail_scan/index.ts"
+
+[functions.calendar_event]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/calendar_event/index.ts"

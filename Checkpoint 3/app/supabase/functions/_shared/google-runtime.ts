@@ -2,7 +2,7 @@ import { createUserVerifier } from './auth.mjs';
 import { createGoogleConnection, createGoogleHandler, createGoogleProvider, createGoogleRpc, createTokenCipher } from './google-connection.mjs';
 
 // Fail closed on absent/invalid secrets. No secret values or diagnostics logged.
-export function googleRuntime(callback = false) {
+export function googleRuntimeOptions() {
   const env = (key: string) => Deno.env.get(key) ?? '';
   const origins = env('APP_ORIGINS').split(',').map((v) => v.trim()).filter(Boolean);
   let connection;
@@ -22,6 +22,10 @@ export function googleRuntime(callback = false) {
     });
     enabled = env('ENABLE_GOOGLE_CONNECTION') === 'true';
   } catch { /* Disabled until configured. */ }
-  return createGoogleHandler({connection, enabled, callback, returnUrl, allowedOrigins:origins,
-    verifyUser:createUserVerifier({url:env('SUPABASE_URL'),publicKey:env('SUPABASE_ANON_KEY')})});
+  return {connection, enabled, returnUrl, allowedOrigins:origins,
+    verifyUser:createUserVerifier({url:env('SUPABASE_URL'),publicKey:env('SUPABASE_ANON_KEY')})};
+}
+
+export function googleRuntime(callback = false) {
+  return createGoogleHandler({...googleRuntimeOptions(), callback});
 }

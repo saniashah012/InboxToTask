@@ -7,6 +7,7 @@ import {
   accessScopeSummary,
   contextLimitError,
   hasScanSource,
+  noSendersLabel,
   preferencesFromSettings,
   settingsWithPreferences,
   withConsentDecision,
@@ -220,7 +221,7 @@ export default function Onboarding({
                     ...preferences.selectedSenders.map((value) => `From: ${value}`),
                     ...preferences.selectedDomains.map((value) => `Domain: ${value}`),
                   ]}
-                  emptyLabel="None, so nothing will be processed"
+                  emptyLabel={noSendersLabel(preferences)}
                 />
                 <ReviewPreference
                   label="Semantic topics to omit"

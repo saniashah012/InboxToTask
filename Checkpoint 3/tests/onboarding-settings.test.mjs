@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { consentDecision, resolveScanConsent } from '../app/web/src/scanConsent.ts';
 import {
-  accessScopeSummary, blockedWordsFor, contextLimitError, hasScanSource, hasSourcePermission, parseBlockedWord,
+  accessScopeSummary, blockedWordsFor, contextLimitError, hasScanSource, hasSourcePermission, noSendersLabel, parseBlockedWord,
   preferencesFromSettings, parseRuleInput, sameSavedFields, scanBlockers, settingsWithPreferences,
   settingsChanges, settingsSavedNotice, NO_SETTINGS_CHANGES,
   signedInRoute, topicInputError, totalBlockedWords, withConsentDecision,
@@ -280,6 +280,11 @@ test('a category to check stands in for a sender or domain, and the summary says
   assert.equal(hasScanSource(topicsOnly), true);
   assert.equal(hasSourcePermission(topicsOnly), false);
   assert.match(accessScopeSummary(topicsOnly), /^Permit any sender whose email uses a word from School/);
+  // Onboarding's review step must not say "nothing will be processed" when a category stands in.
+  assert.match(noSendersLabel(prefs), /nothing will be processed/);
+  assert.doesNotMatch(noSendersLabel(topicsOnly), /nothing/);
+  assert.match(noSendersLabel(topicsOnly), /any sender/);
+  assert.match(noSendersLabel({ includedTypes: ['  '] }), /nothing will be processed/);
   const settings = settingsWithPreferences(fresh(), topicsOnly);
   assert.deepEqual(scanBlockers({ ...settings, consent: true, paused: false }, 'connected'), []);
   assert.ok(scanBlockers({ ...settingsWithPreferences(fresh(), prefs), consent: true, paused: false }, 'connected')

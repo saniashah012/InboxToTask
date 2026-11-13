@@ -210,6 +210,14 @@ export function hasScanSource(preferences: Pick<SetupPreferences, "selectedSende
   return hasSourcePermission(preferences) || preferences.includedTypes.some(v => v.trim())
 }
 
+// What onboarding's review step says when no sender or domain is chosen: with a
+// category to check, the category stands in for a sender (see hasScanSource).
+export function noSendersLabel(preferences: Pick<SetupPreferences, "includedTypes">) {
+  return preferences.includedTypes.some(v => v.trim())
+    ? "None, so any sender you haven't excluded is checked for your categories' words"
+    : "None, so nothing will be processed"
+}
+
 export function settingsHaveScanSource(settings: ScanSettings) {
   return hasScanSource({
     selectedSenders: settings.rules.allow.senders,

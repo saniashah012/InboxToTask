@@ -1,8 +1,8 @@
 # InboxToTask — Participant Session Script
 
-**Checkpoint 4 | Issue #59 | Draft for protocol alignment**
+**Checkpoint 4 | Issue #59 | Working draft — pending final protocol alignment and pilot dry-read**
 
-> **Facilitator note (not read aloud):** Read quoted passages verbatim. Bracketed items are instructions or details to confirm before the pilot. Use the finalized consent sheet, protocol, task prompts, Calendar scenario, and questionnaire without improvising their contents. Do not commit participant names, email addresses, signed consent, or identifying records to the public repository.
+> **Facilitator note (not read aloud):** Read only the passages labeled **Read aloud** verbatim. All **Facilitator action** text, checklists, and bracketed placeholders are for the session runner and must not be read to participants. Replace or resolve all placeholders against approved study materials before running a session. Use the finalized consent sheet, protocol, task prompts, Calendar scenario, and questionnaire without improvising their contents. Do not commit participant names, email addresses, signed consent, or identifying records to the public repository.
 
 ## Before the participant arrives (not read aloud)
 
@@ -40,6 +40,8 @@
 
 ## 4. First condition — assigned by counterbalancing
 
+**Facilitator sequence (not read aloud):** If InboxToTask is assigned first, complete its scored email task **and the Calendar task in Section 6** before proceeding to the second (manual) condition. If manual is assigned first, complete manual first; then perform the InboxToTask scored email task and Calendar task together as the second condition. The optional exploration in Section 7 takes place only after **both conditions and the Calendar task** are complete. Follow the final protocol if it specifies a different approved sequence.
+
 **Facilitator action:** Use the protocol assignment. The first condition may be manual or InboxToTask; do not always present the manual condition first. Read the corresponding script below. Start and stop the timer according to the finalized protocol.
 
 ### Manual condition script (use whenever manual is assigned)
@@ -68,9 +70,11 @@
 
 “Now we will try the other way of working with email. This set of fictional emails is different, but the goal is similar. Please keep saying what you are thinking as you work.”
 
-**Facilitator action:** Present the other condition using the corresponding script in Section 4, with the other assigned inbox. Apply its finalized time limit. Do not reveal the answer keys or comment on the participant's accuracy.
+**Facilitator action:** Present the other condition using the corresponding script in Section 4, with the other assigned inbox. If this is the InboxToTask condition, perform Section 6 immediately after its scored email task. Apply the finalized time limits. Do not reveal the answer keys or comment on the participant's accuracy.
 
 ## 6. Calendar task — InboxToTask condition only
+
+**Placement note (not read aloud):** This section is placed here for reference, **not** as a mandatory chronological step after Section 5. Run it directly after the scored InboxToTask email task, whether InboxToTask is the first or second condition. Record its timing separately if the approved protocol requires that.
 
 **Facilitator action:** Run this task as part of the InboxToTask condition at the point specified in the finalized protocol. If the InboxToTask condition is first, do not accidentally postpone it until after the manual condition. Use the exact meeting scenario and success criteria from Issue #65.
 
@@ -82,7 +86,7 @@
 
 ## 7. Optional exploration — after all scored tasks
 
-**Facilitator action:** Offer this only after all scored email tasks and the Calendar task are finished, and before the questionnaire. Allow approximately 5–8 minutes. Participation is optional and unscored. Ensure the approved consent covers this activity. Do not ask the participant to connect their personal inbox.
+**Facilitator action:** Offer this only after both scored email conditions and the Calendar task are finished, and before the questionnaire. Allow approximately 5–8 minutes. Participation is optional and unscored. Ensure the approved consent covers this activity. Do not ask the participant to connect their personal inbox. If a participant chooses to send a fictional email from their own sending account, follow the approved consent and privacy procedure; never publish their address.
 
 **Read aloud:**
 
@@ -137,17 +141,3 @@
 “Do you have any final questions about the study?”
 
 **Facilitator action:** Follow the approved debrief and any withdrawal/contact instructions from the consent form. Confirm that the study data is recorded under the participant code. Do not put identifying information or signed consent in the public repository. Perform the between-session reset according to Issue #101.
-
----
-
-## Pilot and protocol-alignment checklist (not read aloud)
-
-- [ ] Confirm exact task prompts and recording method with `task_prompts.md` and Issue #58.
-- [ ] Confirm counterbalancing assignments, time limits, and condition-specific sequence with `protocol.md`.
-- [ ] Confirm Calendar scenario, scoring and fallback with Issue #65.
-- [ ] Confirm consent language and questionnaire items with Issues #60 and related approved materials.
-- [ ] Confirm post-session interview wording with `interview_guide.md`.
-- [ ] Ask one person outside the team to dry-read the full script and record actual reading time: **[DATE / READER CODE / DURATION / NOTES]**.
-- [ ] Revise any confusing or inconsistent wording before checking off Issue #59.
-
-**Status:** Complete working draft; pending protocol alignment, approved materials, and external dry-read. Do not mark the GitHub issue complete until these checks are finished.

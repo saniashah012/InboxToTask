@@ -139,8 +139,9 @@ changed, and logs `ok` or `failed`. It acts only on the two accounts listed by h
 Calendar events and any exploration email are removed by hand first; the steps are in
 [reset.md](<../Checkpoint 4/docs/study_materials/reset.md>), and the "Study reset" section of
 [calendar-behavior.md](docs/calendar-behavior.md) now describes this in place of a backend
-script that deletes events in Google. That change of design, and restoring the daily scan
-allowance on reset (one switch in the file), are assumptions Matthew has not yet confirmed.
+script that deletes events in Google. Matthew confirmed removing Calendar events by hand on
+November 16. Restoring the daily scan allowance on reset (one switch in the file) is an
+assumption he has not yet confirmed.
 **Verified offline only:** `npm run test:study-reset` 11/11 in PGlite (restore after a session
 driven through the app's RPCs, every refusal, rollback on a forced failure, the role lockout,
 re-running the file); `npm test` 237/237 and 56/56; `git diff --check`. **Not verified:**

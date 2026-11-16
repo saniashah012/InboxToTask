@@ -17,5 +17,6 @@ public repository.** Use participant codes, and keep identifying records private
 | `codebook.md` | Thematic analysis codes and how disagreements were resolved |
 | `inbox_a/`, `inbox_b/` | Fictional inboxes A (#62) and B (#63): one file per email in `emails/`, plus the answer key (gold labels) |
 | [`loading_inboxes.md`](loading_inboxes.md) | How to load, check and reload a study inbox with the test sender (#57) |
+| [`reset.md`](reset.md) | How to reset study accounts A and B to the freeze after every session (#101) |
 | `benchmark/` | Labeled development and held-out sets, and the list of ablation variants |
 | `results/` | De-identified session scores and benchmark output |

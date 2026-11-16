@@ -235,12 +235,16 @@ contract are authoritative and this page should be corrected.
 
 ## Study reset
 
-Between study sessions, a backend script resets the study accounts. It refuses any account that
-is not a study account; deletes in Google every event the app has a record of, including
-uncertain ones; searches the primary calendar for any remaining event carrying the app's marker
-and deletes it; performs the rest of the reset, which clears the event records; and prints how
-many events were removed and how many remain. Running it against the hosted project is a hosted
-change and is approved and recorded like any other (#101).
+Between study sessions the study accounts are reset; the steps are in the
+[reset runbook](<../../Checkpoint 4/docs/study_materials/reset.md>). Calendar is cleared first,
+by the facilitator: while still signed in as the study account, they remove each event the
+participant created with the app's own Remove from calendar, then delete anything left in that
+account's Google Calendar by hand. A database reset then restores the frozen data and clears the
+remaining event records, and only when told Calendar is cleared; it refuses any account that is
+not a study account and never calls Google. So the app still writes to Google only through a
+Calendar action a person chose, and only on events it created; deleting by hand in Google is
+the account holder's own action, not the app's. Running the reset against the hosted project is
+a hosted change and is approved and recorded like any other (#101).
 
 ## Limitations for CP4
 

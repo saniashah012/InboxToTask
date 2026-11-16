@@ -78,6 +78,30 @@ inbox email folder does not exist yet" because #62 and #63 have not added their 
 threading and inbox order are untested; the email file format is not yet agreed with the
 owners of #62–#64. Nothing hosted changed.
 
+**November 16, between-session study reset (#101), same branch (unpushed when written; not
+merged, not installed on hosted):** [study_reset.sql](app/supabase/operations/study_reset.sql)
+is an operations file, not a migration. Run once as `postgres`, it creates a private
+`study_reset` schema that `anon`, `authenticated` and `service_role` cannot use.
+`take_snapshot('A')` copies a study account's rows after the freeze scan (#67) and proves they
+can be put back; `reset('<code>', 'A', <calendar cleared>)` deletes that account's app data and
+re-inserts the snapshot in one transaction, moves the storage generation and settings revision
+forward instead of back, checks a digest against the freeze and that no other account's rows
+changed, and logs `ok` or `failed`. It acts only on the two accounts listed by hand in
+`study_reset.accounts`, never calls Google, and leaves the Google connection rows alone.
+Calendar events and any exploration email are removed by hand first; the steps are in
+[reset.md](<../Checkpoint 4/docs/study_materials/reset.md>), and the "Study reset" section of
+[calendar-behavior.md](docs/calendar-behavior.md) now describes this in place of a backend
+script that deletes events in Google. That change of design, and restoring the daily scan
+allowance on reset (one switch in the file), are assumptions Matthew has not yet confirmed.
+**Verified offline only:** `npm run test:study-reset` 11/11 in PGlite (restore after a session
+driven through the app's RPCs, every refusal, rollback on a forced failure, the role lockout,
+re-running the file); `npm test` 237/237 and 56/56; `git diff --check`. **Not verified:**
+nothing has run on hosted Postgres, so table ownership, access to `auth.users` and the role
+lockout there are untested, and the two rehearsals #101 requires have not happened. A reset
+refuses if a Google connect or permission prompt was started on the account after the freeze,
+so permissions must be granted before it. `task_script.md` still needs a line keeping
+participants out of Settings, Connections. Nothing hosted changed.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

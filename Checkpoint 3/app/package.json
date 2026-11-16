@@ -15,6 +15,7 @@
     "test:onboarding": "node --experimental-strip-types --test ../tests/onboarding-settings.test.mjs",
     "test:calendar": "node --experimental-strip-types --test ../tests/calendar-form.test.mjs ../tests/calendar-export.test.mjs ../tests/calendar-event.test.mjs ../tests/calendar-database.test.mjs",
     "test:study": "node --test ../tests/study-send.test.mjs",
+    "test:study-reset": "node --test ../tests/study-reset.test.mjs",
     "study:send": "node study/send.mjs",
     "supabase:prepare": "node pipeline/prepare-edge.mjs",
     "fixtures:cp2": "node pipeline/import-cp2.mjs",

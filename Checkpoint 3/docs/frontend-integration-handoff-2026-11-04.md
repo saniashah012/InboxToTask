@@ -212,7 +212,7 @@ clear backend contract the Gmail adapter can consume without duplicate logic.
 ## Optional Calendar integration
 
 *Note, November 16, 2026:* this section is the November 5 plan. The CP4 Calendar work, on `main`
-since November 16 and off by default, follows [Calendar behavior](calendar-behavior.md)
+since November 16 and off by default (switched off on hosted), follows [Calendar behavior](calendar-behavior.md)
 (for example, an unticked onboarding checkbox instead of a Skip step); what is built and verified
 is in [current state](../CURRENT_STATE.md).
 

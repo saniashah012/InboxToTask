@@ -24,7 +24,8 @@ fictional mail for separately controlled live acceptance. Keep credentials priva
 
 The CP4 `calendar_event` endpoint (create, read, update, remove) is off unless
 `ENABLE_CALENDAR_EVENTS=true` and needs migration `20261113000000_calendar_events`. It is on
-`main` since November 16 but not deployed to hosted; see
+`main` since November 16 and deployed to hosted the same day with the migration applied, but
+`ENABLE_CALENDAR_EVENTS` is not set there, so it refuses signed-in requests as disabled; see
 [Calendar behavior](../../docs/calendar-behavior.md) and [the storage contract](STORAGE.md).
 
 The product uses shared Google-only sign-in and a normal signed-in root workspace;

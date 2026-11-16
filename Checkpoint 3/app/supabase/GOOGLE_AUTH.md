@@ -56,7 +56,7 @@ then the designed dashboard. Do not turn the development password form into a
 product prerequisite. Calendar permission can also be requested later when the
 user chooses Add to Calendar; its backend and separately approved event executor
 are not implemented by this Gmail-only milestone. In CP4 they are on `main` since
-November 16, off by default and not on hosted, with Calendar offered as an unticked
+November 16, off by default (on hosted, switched off), with Calendar offered as an unticked
 checkbox on the Connect step instead of a Skip step; see
 [Calendar behavior](../../docs/calendar-behavior.md).
 

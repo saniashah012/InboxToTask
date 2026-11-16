@@ -11,7 +11,7 @@ Updated November 5, 2026. This describes the code in this repository and its ver
 | Fictional preview and demo | **Removed.** Signed-out visitors see Google sign-in only | Code |
 | Automatic scheduled scans | **Not implemented** | Code: no schedule exists |
 | Hosted (Vercel and hosted Supabase) | **Gmail scanning not deployed; signed-in checks partial** | Reported by the hosted session: 20 ledger versions through `20261106040000`, applied 03:50 UTC November 6. Gmail functions are not deployed there, so connecting and scanning work only locally. Reported by Sania on preview `ffa915a`: settings save and reload, sign-out and back in, the stale-tab 409 (`PT409`), and two-account isolation in the tested workspace flows passed. Test values were restored, consent stayed off, and no inboxes were connected. Not covered: onboarding, chips, RLS penetration, review, manual resolution and source links. These checks predate the current `main`. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Vercel's production branch is `main`, per Sania. PR #22 merged there at `59461b6`; CI passed on that commit and production returned a new build. See also [current state](../CURRENT_STATE.md) |
-| Google Calendar events | **Postponed to CP4** by user decision. On `main` since November 16 (#116), off by default, and not on hosted: the `calendar_event` function (create, read, update, remove), migration `20261113000000_calendar_events`, the Add to calendar and Manage event screens, and the reconnect fixes with a Calendar-only disconnect. Off by default (`VITE_CALENDAR_EVENTS_ENABLED`, `ENABLE_CALENDAR_EVENTS`). It supersedes `mzheng/calendar-rebase` (`da4417d`). Intended behavior: [Calendar behavior](calendar-behavior.md) | Offline tests pass; create, update, remove and several screens checked in a local browser against Google (November 15); reconnect cases and lost results not run live ([current state](../CURRENT_STATE.md)) |
+| Google Calendar events | **Postponed to CP4** by user decision. On `main` since November 16 (#116), off by default; on hosted since November 16 but switched off (`ENABLE_CALENDAR_EVENTS` and `VITE_CALENDAR_EVENTS_ENABLED` not set), so the live site does not offer it: the `calendar_event` function (create, read, update, remove), migration `20261113000000_calendar_events`, the Add to calendar and Manage event screens, and the reconnect fixes with a Calendar-only disconnect. Off by default (`VITE_CALENDAR_EVENTS_ENABLED`, `ENABLE_CALENDAR_EVENTS`). It supersedes `mzheng/calendar-rebase` (`da4417d`). Intended behavior: [Calendar behavior](calendar-behavior.md) | Offline tests pass; create, update, remove and several screens checked in a local browser against Google (November 15); reconnect cases and lost results not run live ([current state](../CURRENT_STATE.md)) |
 | ICS file export | Implemented on accepted tasks in the workspace and in the `/storage` development tester | Automated tests and an isolated browser check of the form. Tester-reported: one all-day and one timed import checked in Google Calendar. Duplicate imports untested |
 
 ## End-to-end diagram
@@ -33,7 +33,7 @@ flowchart LR
     Pipeline["Canonical pipeline<br/>Filter, clean, prompt, validate"]
     Fixture["Edge: analysis_email<br/>Cases E01-E20 only, off by default"]
     Cleanup["Edge: storage_cleanup<br/>Off, not scheduled"]
-    Calendar["Edge: calendar_event (CP4)<br/>Off unless ENABLE_CALENDAR_EVENTS=true, not on hosted"]
+    Calendar["Edge: calendar_event (CP4)<br/>Off unless ENABLE_CALENDAR_EVENTS=true; on hosted, switched off"]
     DB[("PostgreSQL<br/>Public tables with RLS<br/>Private jobs, usage, credentials")]
   end
 
@@ -123,7 +123,7 @@ The handler rechecks the scan lease and saved permission before each external re
 | Client UI | [StorageDashboard](../app/web/src/StorageDashboard.tsx) | Development only: fixture trials, activity totals, ICS export, task deletion |
 | Backend | [gmail_scan](../app/supabase/functions/gmail_scan/index.ts) | Authenticated manual scan, disabled by default |
 | Backend | [Google connection](../app/supabase/functions/_shared/google-connection.mjs) | Separate Gmail OAuth, encrypted tokens, refresh and revocation; optional Calendar permission and Calendar-only disconnect |
-| Backend | [calendar_event](../app/supabase/functions/calendar_event/index.ts) | CP4, off by default, not deployed to hosted: create, read, update and remove one app-owned event per task after the user confirms ([Calendar behavior](calendar-behavior.md)) |
+| Backend | [calendar_event](../app/supabase/functions/calendar_event/index.ts) | CP4, off by default; deployed to hosted November 16 but switched off: create, read, update and remove one app-owned event per task after the user confirms ([Calendar behavior](calendar-behavior.md)) |
 | Backend | [Pipeline](../app/pipeline/) | Rules, body cleanup, prompt input, Gemini adapter, validation |
 | Database | [Migrations](../app/supabase/migrations/) | Tables, RLS, service-only scan and storage functions, deletion triggers |
 | Prompts | [Prompts](../app/prompts/) | System prompt with rule examples, output schemas, model settings |
@@ -173,4 +173,4 @@ The system prompt uses one-line rule examples. Reference few-shot examples are s
 
 ## Not yet built
 
-The following items are planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, a Waiting For view in the workspace (records are saved but not displayed), scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes (postponed to CP4; on `main` since November 16, off by default, not on hosted), a complete account-deletion flow, and a verified hosted rollout.
+The following items are planned or open, with requirements in [the implementation plan](../IMPLEMENTATION_PLAN.md): real data in the designed dashboard, a Waiting For view in the workspace (records are saved but not displayed), scheduled scans, approved-tester access, global budgets and a database kill switch, connected Calendar writes (postponed to CP4; on `main` since November 16, off by default, on hosted but switched off), a complete account-deletion flow, and a verified hosted rollout.

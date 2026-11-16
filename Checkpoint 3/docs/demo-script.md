@@ -143,7 +143,8 @@ Say these plainly:
 - Google Calendar event creation is on a separate unmerged branch with offline tests only, never
   tested live, and is planned for CP4. (*Note, November 16:* true at the CP3 demo; Calendar events
   have since been partly checked locally against Google and merged to `main` (#116), off by
-  default and not on hosted. See
+  default; its migration and functions are on hosted, switched off, so the live site does not
+  offer Calendar. See
   [current state](../CURRENT_STATE.md) and [Calendar behavior](calendar-behavior.md).) Its recorded OAuth reconnect failures block release. ICS file export is the current calendar path. All-day and
   timed imports were each checked once by a tester in Google Calendar, and importing the same task
   twice is untested. The file holds only the title and schedule, with no sync or undo.

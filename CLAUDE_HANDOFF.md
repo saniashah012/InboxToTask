@@ -11,10 +11,12 @@ all-tasks status read, with the migration changed in place, and the frontend scr
 calendar, Manage event, dashboard cards and follow-ups, an onboarding checkbox) were built.
 Offline tests pass; create, update, remove and several screens were checked in a local
 browser against Google; event links that check Google on a click were added on November 16. The
-migration is applied on the local stack only. PR #116 was merged to `main` on November 16
-(`44ad77f`), so Calendar is on `main`, off by default (`VITE_CALENDAR_EVENTS_ENABLED`,
-`ENABLE_CALENDAR_EVENTS`), and not on hosted: the migration, the `calendar_event` deploy and the
-production Calendar scope are separate approved steps under #53. See
+migration was applied locally on November 15. PR #116 was merged to `main` on November 16
+(`44ad77f`), so Calendar is on `main`, off by default. Later on November 16 its migration and
+the `google_connection`, `google_callback` and `calendar_event` functions reached hosted, switched
+off (`ENABLE_CALENDAR_EVENTS` and `VITE_CALENDAR_EVENTS_ENABLED` are not set), so the live site
+does not offer Calendar. The production web flag, the Calendar API and scope in Google Cloud and
+the backend flag remain under #53, each needing approval. See
 [current state](<Checkpoint 3/CURRENT_STATE.md>), [Calendar behavior](<Checkpoint 3/docs/calendar-behavior.md>) and #44–#46.
 
 **Repository:** `C:/Users/mzhen/Desktop/School/IS492/IS-492-Project`
@@ -40,7 +42,7 @@ suppress raw errors: a parser error once printed a secret (see Security below).
 | `feadf66` | Live-test fixes, manual resolution of ambiguous updates, test log |
 | `cef7f06` | Source-email links from another session, kept as a separate commit by user request |
 | PR #20 (Sania, chips) | Separate; recheck its state. Both it and PR #22 change `STORAGE.md` |
-| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is on GitHub at `da4417d`, not merged, with its migration renamed `20261106050000`; it is superseded by `claude/calendar-designed-ui` (PR #116, merged to `main` November 16, off by default, not on hosted; rebased November 13, migration `20261113000000`, reconnect fixes with offline tests; screens and first local live checks November 15, see the Calendar note above) |
+| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is on GitHub at `da4417d`, not merged, with its migration renamed `20261106050000`; it is superseded by `claude/calendar-designed-ui` (PR #116, merged to `main` November 16, off by default; on hosted since November 16, switched off; rebased November 13, migration `20261113000000`, reconnect fixes with offline tests; screens and first local live checks November 15, see the Calendar note above) |
 
 **Ownership right now:** the "Gmail features in Figma prototype" session coordinates hosted changes and owns
 `CURRENT_STATE.md` and the hosted records. The "CP3 progress check" session owns `docs/demo-script.md` and tonight's
@@ -75,7 +77,7 @@ followed by the November 9 deployment; whether it stays on is the user's decisio
 9. `20261106040000_gmail_token_recheck.sql`
 
 Calendar's `20261113000000_calendar_events.sql` (`20261106020000` on Sania's branch) is on `main`
-since November 16 and sorts after every earlier migration. It is not applied on hosted; that is a separate approved step (#53). It redefines `google_connection_service`, so review that
+since November 16 and sorts after every earlier migration. It was applied on hosted on November 16, with Calendar switched off. It redefines `google_connection_service`, so review that
 against the Gmail flow before applying it.
 
 ## Local runtime
@@ -136,7 +138,7 @@ None blocked PR #22. Only the first two need SQL.
 1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code. Vercel production is `main` per Sania, so every merge deploys.
 2. Calendar is on `main` since November 16 (#116), off by default: run the remaining live cases and
    the three reconnect cases (#46); after reconnecting, retest revocation (L17), refused refresh (L20)
-   and a normal scan. Then the hosted steps and the decision (#53), each with approval.
+   and a normal scan. Then the remaining hosted steps and the decision (#53), each with approval.
 3. Onboarding work is on `claude/onboarding-connect-0e9360` at `91234dd`, not merged. Onboarding preview `91234dd` is ready, with its remaining checks still pending. Until confirmed merged, treat onboarding as not connected.
 4. **Phase 5:** connect real data to the designed dashboard. `App.tsx` line 565 sends every signed-in
    user to the plain `ManualWorkspace`, so the designed onboarding and PR #20's chips cannot be reached.

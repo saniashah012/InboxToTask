@@ -88,7 +88,9 @@ script are not started.
 Hosted now has 31 migration versions, through `20261113000000`. `VITE_CALENDAR_EVENTS_ENABLED` is not set for the production web build, and the Google Calendar API and the `calendar.events.owned` scope are not added to the production Google Cloud project, so the live site does not offer Calendar. **Not verified:** no signed-in request has reached `calendar_event` on hosted, and connecting or reconnecting Google through the new function versions has not been run on the live site. **Remaining before Calendar is usable on the live site (#53):** set `VITE_CALENDAR_EVENTS_ENABLED` for the production web build and redeploy it; enable the Calendar API and add the scope in Google Cloud; then check connect, add and remove with a study account. The reconnect cases (#46) are still not run against Google.
 
 **November 16: one layout for source email and proposed-change popups.** Branch
-`mzheng/source-popup-layout` (stacked on `mzheng/record-calendar-merge`; unpushed when written).
+`mzheng/source-popup-layout`, PR #120. Merged to `main` on November 16 at 2:16 PM Central
+(merge commit `bfe32cc`), right after PR #119 (the Calendar record, merge commit `0c2bc91`,
+2:14 PM). Both were production deployments, merged at Matthew's request in chat.
 Frontend only; no backend, migration or hosted change.
 - "View details" opens the same layout in every tab (Suggestions, Active, Completed, Dismissed,
   Passive communication, and proposed changes): the "Email history" list from
@@ -109,6 +111,8 @@ suggestion's and an active task's popups, and the cancellation popup (closed wit
 dismissing). Not checked: the Dismissed tab (empty), the edit-proposal popup and its blocked
 states (no such proposals existed), a task with several linked emails, phone width, and the
 live site. Escape does not close these popups (existing behavior, not changed here).
+After the merge, CI passed on `bfe32cc` and Vercel reported the production deployment
+complete; the live site was not opened in a browser afterwards.
 
 ## Gmail phases
 

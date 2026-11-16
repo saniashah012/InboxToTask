@@ -38,7 +38,7 @@ corepack pnpm exec tsc --noEmit
 corepack pnpm build
 ```
 
-Do not run npm install here or create a second lockfile. There is no frontend test/lint script at present; do not invent a passing check. Use a browser check for changed interactions and describe the real coverage.
+Do not run npm install here or create a second lockfile. There is no frontend test or lint script in this directory. Rules kept as pure functions do have offline tests, run from `Checkpoint 3/app`: for example `npm.cmd run test:calendar` covers [src/calendarForm.ts](src/calendarForm.ts), and `npm.cmd test` covers the dashboard model and onboarding settings. Run the one that covers what you changed. For everything else, check the changed interaction in a browser and report exactly what you saw working, so a reader can tell tested behavior from untested.
 
 ## Auth and UI behavior
 

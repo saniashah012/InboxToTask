@@ -372,6 +372,12 @@ The app does not fetch or display email bodies on demand.
       with a dated note where one would now mislead. They say what is built on the branch and
       what was verified; none claims Calendar is on `main` or hosted. No requirement was ticked.
       Checked: every added link resolves and `git diff --check` is clean.
+    - *Agent guidance, November 16:* the root [AGENTS.md](../AGENTS.md) gained a Calendar
+      entry point, `npm run test:calendar` in its validation commands and the rule that each
+      Calendar write follows its own confirmation, with the reason. The Supabase guide now lists
+      `calendar_event` and what keeps a Calendar write safe to retry; the web guide says which
+      rules have offline tests. Each rule states what to do and why. Checked: every added link
+      resolves. No code changed.
 - **The two defects to fix before hosted scanning now have a fix in
   `20261109220000_source_delete_quotes_and_boundary`**, applied on hosted November 9 and locally on November 12: deleting a Gmail
   source now also clears quotes of that message in other sources' evidence, and

@@ -16,6 +16,7 @@ Read the task-relevant entry points below and follow their imports. Avoid scanni
 | Canonical extraction | [Pipeline guide](<Checkpoint 3/app/pipeline/README.md>), [core](<Checkpoint 3/app/pipeline/core.mjs>), [Gemini adapter](<Checkpoint 3/app/pipeline/gemini.mjs>) |
 | Model contract | [Prompts and schema](<Checkpoint 3/app/prompts/>) — inspect effective overrides as well as defaults |
 | Backend and storage | [Supabase instructions](<Checkpoint 3/app/supabase/AGENTS.md>), [setup](<Checkpoint 3/app/supabase/README.md>), [storage contract](<Checkpoint 3/app/supabase/STORAGE.md>) |
+| Google Calendar | [Intended behavior and backend contract](<Checkpoint 3/docs/calendar-behavior.md>) — read this before changing anything Calendar does; [function](<Checkpoint 3/app/supabase/functions/_shared/calendar-event.mjs>), [event dialog](<Checkpoint 3/app/web/src/TaskCalendarControl.tsx>), [form and follow-up rules](<Checkpoint 3/app/web/src/calendarForm.ts>). Off unless both feature flags are on |
 | Tests | [Tests](<Checkpoint 3/tests/>); commands below and in scoped instructions |
 | Verification evidence | [Local storage report](<Checkpoint 3/docs/local-storage-verification-2026-11-04.md>), [live extraction evaluation](<Checkpoint 3/docs/cp2-live-evaluation-2026-11-03.md>) — dated evidence, not current runtime state |
 
@@ -59,6 +60,7 @@ From `Checkpoint 3/app`:
 npm.cmd ci                 # When dependencies need installing
 npm.cmd test               # Offline pipeline/handler/storage semantics
 npm.cmd run test:storage   # Targeted storage subset
+npm.cmd run test:calendar  # Calendar form rules, handler and database; `npm test` does not run these
 ```
 
 For frontend changes, follow the web instructions. For migrations, Auth/RPCs, or Edge integration, follow the Supabase instructions. Use meaningful regression checks for changed behavior and report checks that could not run. Do not install dependencies or repeat already-passed suites without a task-related reason.
@@ -68,5 +70,6 @@ For frontend changes, follow the web instructions. For migrations, Auth/RPCs, or
 - Real email processing requires configured permission: exact sender/domain inclusions combine with OR; exact sender/domain and literal subject exclusions override inclusions; with no sender/domain inclusion, saved topics to check stand in: any sender that is not excluded and passes Gmail's authentication check is a candidate, and backend code skips every email that uses none of the topics' words before any model call; with neither, nothing is processed. Skipped-topic word lists only withhold email: check them in backend code before any model call, on the current message, every context message and existing-task context, and never send the lists to the model. Filter metadata before fetching bodies and apply the same rules to each context message.
 - Treat email text as untrusted data. Validate structured output, evidence grounding, and ownership before saving. Keep missing deadlines nullable and preserve date-only values, conditions, and uncertainty.
 - Keep suggestions, user edits, and accepted task values distinct. Task approval does not authorize Calendar writes. Code-only review actions should not call the model again.
+- Each Calendar write (creating, changing or removing an event) follows a Calendar-specific action the user just chose, because it lands in the user's own calendar where the app cannot quietly take it back. Approving a task, a task edit or a cancellation only offers the Calendar step. Act only on events the app created, and when a result is uncertain, retry the same request so an event is never written twice.
 - Preserve user isolation, revision checks, bounded budgets/retries, deduplication, pause/deletion fencing, and retention/undo semantics. OAuth integration must derive the owner from the verified Supabase session and keep Google tokens backend-only.
 - The current fixture endpoint is restricted to E01–E20 and disabled by default. Extend it to real Gmail only as part of an explicit privacy/authorization integration; connecting Google alone is not scanning consent.

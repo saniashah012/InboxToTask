@@ -75,7 +75,7 @@ slide 5 first.
 | 3:00 | Live | Point at the new budget form card in **Review** | "Each suggestion has its evidence quote and a link, **Open conversation in Gmail**. This is a proposal with its source, not a task yet." |
 | 3:15 | Live | Click **Approve task** on that card | "Approval makes no model call and writes nothing to Calendar." Read the notice: "Task approved. No Calendar event was created." |
 | 3:30 | Live | **Review** proposal for the report (expected: Nov 20 to Nov 24, slides untouched). This reply has never been run, so check what appears. Click **Approve edit** | "A reply moved the deadline. The accepted value doesn't change until I approve." Only if the proposal targets the report: "Two tasks share this thread, and it targeted the right one." Then open **Accepted tasks** |
-| 3:50 | Live | **Accepted tasks**: show "2 tasks from this conversation". Click **Show saved excerpt** on a task | "Each task keeps an email history with its evidence behind **Show saved excerpt**." |
+| 3:50 | Live | **Accepted tasks**: show "2 tasks from this conversation". Open a task's **View details** | "Each task keeps an email history with each email's **Saved excerpt** as evidence." |
 | 4:15 | Live (Calendar) | On the budget form task you just approved, click **Export calendar file**, then **Download ICS** | "Approval doesn't create a calendar event. The user explicitly exports a file. It holds only the title and the schedule." Point at the confirmation "Calendar file download started. Import it into your chosen calendar." |
 | 4:40 | 4. Edge cases (live) | **Review** and **Information** | See Part B. "It flags the ambiguous date (L05) rather than guessing." Then L06: "One test is not proof of resistance. The stronger defense is structural: the model has no tools, output is validated, and only the user can approve." |
 | 5:10 | Live | **Connection and permissions**, check **Pause scanning**, **Save scanning settings**, then try a scan if the buttons are enabled | "The scan is refused, and saved results stay." Then click **Edit settings**, uncheck and save. If the countdown is still running, skip the scan and say it comes back when the countdown ends |
@@ -141,8 +141,10 @@ Say these plainly:
 
 - Automatic scans are not implemented. Scans are manual.
 - Google Calendar event creation is on a separate unmerged branch with offline tests only, never
-  tested live, and is planned for CP4. (*Note, November 16:* true at the CP3 demo; the CP4 branch
-  has since been built and partly checked locally against Google. See
+  tested live, and is planned for CP4. (*Note, November 16:* true at the CP3 demo; Calendar events
+  have since been partly checked locally against Google and merged to `main` (#116), off by
+  default; its migration and functions are on hosted, switched off, so the live site does not
+  offer Calendar. See
   [current state](../CURRENT_STATE.md) and [Calendar behavior](calendar-behavior.md).) Its recorded OAuth reconnect failures block release. ICS file export is the current calendar path. All-day and
   timed imports were each checked once by a tester in Google Calendar, and importing the same task
   twice is untested. The file holds only the title and schedule, with no sync or undo.

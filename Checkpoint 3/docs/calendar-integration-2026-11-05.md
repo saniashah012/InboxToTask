@@ -24,9 +24,10 @@ Supabase migration, OAuth round trip or Calendar write has been run.
 
 **Note, November 16, 2026:** this plan records the November 5 design and its rebases. Since
 then the `calendar_event` function gained `read`, `update` and `remove`, the migration was
-changed in place and applied on the local stack only, the designed screens were built, and some
-actions were checked in a local browser against Google. Still not merged, not on hosted and off by
-default. For intended behavior see [Calendar behavior](calendar-behavior.md); for what is built
+changed in place and applied locally, the designed screens were built, and some actions were
+checked in a local browser against Google. It was merged to `main` on November 16 (#116), off by
+default, and the same day its migration and functions reached hosted, switched off, so the live
+site does not offer Calendar. The Google Cloud steps in this plan were not done for production. For intended behavior see [Calendar behavior](calendar-behavior.md); for what is built
 and verified see [current state](../CURRENT_STATE.md). Where this plan differs, those win.
 
 ## Behavior and boundaries

@@ -1,7 +1,8 @@
 # Google sign-in and backend connection
 
 This implements app sign-in and an account-bound Google connection. Connecting does not
-itself retrieve Gmail messages, enable scanning, call a model, or connect Calendar. Manual
+itself retrieve Gmail messages, enable scanning, call a model, or connect Calendar (on the
+unmerged CP4 Calendar branch, Calendar is added only if the user ticks it). Manual
 scanning is a separate, disabled-by-default feature; see [UC8](../../docs/use-cases.md#uc8-real-gmail-to-review-workflow).
 Signed-in users at `/` get the persistent workspace with Gmail connection controls;
 preview at `/` remains simulated. Development controls are on `/storage` only through a
@@ -54,7 +55,10 @@ rules and explicit scanning consent, optional Calendar connection / Skip for now
 then the designed dashboard. Do not turn the development password form into a
 product prerequisite. Calendar permission can also be requested later when the
 user chooses Add to Calendar; its backend and separately approved event executor
-are not implemented by this Gmail-only milestone.
+are not implemented by this Gmail-only milestone. In CP4 they are built on the unmerged
+branch `claude/calendar-designed-ui`, off by default, with Calendar offered as an unticked
+checkbox on the Connect step instead of a Skip step; see
+[Calendar behavior](../../docs/calendar-behavior.md).
 
 Preserve the [custom sender/domain/subject filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan),
 including its info icon, existing label rules, and unresolved subject-inclusion
@@ -169,7 +173,9 @@ written above, even if an external tutorial uses `_CLIENT_SECRET`.
 6. Under **Data Access > Add or remove scopes**, add `openid`,
    `https://www.googleapis.com/auth/userinfo.email`, and
    `https://www.googleapis.com/auth/gmail.readonly`. The last is a restricted
-   scope. Calendar access is a later milestone.
+   scope. Calendar access is a later milestone: to try the CP4 Calendar branch
+   (`ENABLE_CALENDAR_EVENTS`), also add `https://www.googleapis.com/auth/calendar.events.owned`
+   here and enable the Google Calendar API in this project; the Gmail client is reused.
 
 ### 5. Create the Gmail OAuth client
 
@@ -245,7 +251,8 @@ Create these Web application OAuth clients:
 | Supabase app sign-in | OpenID/email/profile | The Supabase Auth callback URL shown by your environment; hosted normally `https://<project-ref>.supabase.co/auth/v1/callback` |
 | Backend Gmail connection | `openid email https://www.googleapis.com/auth/gmail.readonly` | Exact `GOOGLE_CALLBACK_URL`; local `http://127.0.0.1:54321/functions/v1/google_callback`, hosted `https://<project-ref>.supabase.co/functions/v1/google_callback` |
 
-Enable Gmail API for the connection project. Calendar scopes/APIs are not needed.
+Enable Gmail API for the connection project. Calendar scopes/APIs are not needed unless
+Calendar events are turned on (CP4 branch; see step 4).
 If adding authorized JavaScript origins, enter origins such as
 `http://127.0.0.1:5173`, without callback paths. Redirect URIs must match exactly,
 including host, scheme, port, and path; localhost and 127.0.0.1 are different.

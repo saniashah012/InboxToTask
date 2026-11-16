@@ -4,6 +4,17 @@ Updated November 5, 2026 (Central), after live local manual-scan testing and the
 PR and runtime state before acting; this describes that moment, not today. Read
 [AGENTS.md](AGENTS.md), then [current state](<Checkpoint 3/CURRENT_STATE.md>), then this.
 
+**Calendar:** the latest work is on branch `claude/calendar-designed-ui`, rebased onto
+`main` on November 13 with its migration renumbered to `20261113000000`, and pushed as PR #116. On
+November 15 the `calendar_event` function gained `read`, `update` and `remove` actions and an
+all-tasks status read, with the migration changed in place, and the frontend screens (Add to
+calendar, Manage event, dashboard cards and follow-ups, an onboarding checkbox) were built.
+Offline tests pass; create, update, remove and several screens were checked in a local
+browser against Google; event links that check Google on a click were added on November 16. The
+migration is applied on the local stack only. Not merged, not on hosted, and off by default
+(`VITE_CALENDAR_EVENTS_ENABLED`, `ENABLE_CALENDAR_EVENTS`); see
+[current state](<Checkpoint 3/CURRENT_STATE.md>), [Calendar behavior](<Checkpoint 3/docs/calendar-behavior.md>) and #44–#46.
+
 **Repository:** `C:/Users/mzhen/Desktop/School/IS492/IS-492-Project`
 
 ## Boundaries
@@ -27,7 +38,7 @@ suppress raw errors: a parser error once printed a secret (see Security below).
 | `feadf66` | Live-test fixes, manual resolution of ambiguous updates, test log |
 | `cef7f06` | Source-email links from another session, kept as a separate commit by user request |
 | PR #20 (Sania, chips) | Separate; recheck its state. Both it and PR #22 change `STORAGE.md` |
-| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is on GitHub at `da4417d`, not merged, with its migration renamed `20261106050000`; offline tests reported passing, no live test, and its recorded OAuth reconnect failures block release |
+| Calendar events | **Postponed to CP4 by user decision.** Sania's original is on origin at `b6f84e6`. Rebased `mzheng/calendar-rebase` is on GitHub at `da4417d`, not merged, with its migration renamed `20261106050000`; it is superseded by `claude/calendar-designed-ui` (PR #116, not merged; rebased November 13, migration `20261113000000`, reconnect fixes with offline tests; screens and first local live checks November 15, see the Calendar note above) |
 
 **Ownership right now:** the "Gmail features in Figma prototype" session coordinates hosted changes and owns
 `CURRENT_STATE.md` and the hosted records. The "CP3 progress check" session owns `docs/demo-script.md` and tonight's
@@ -61,11 +72,13 @@ followed by the November 9 deployment; whether it stays on is the user's decisio
 8. `20261106030000_gmail_task_source_links.sql`
 9. `20261106040000_gmail_token_recheck.sql`
 
-Calendar's migration is not on hosted or on `main`. It redefines `google_connection_service`, so
-review that against the Gmail flow when Calendar resumes in CP4.
+Calendar's `20261113000000_calendar_events.sql` (`20261106020000` on Sania's branch) runs after every
+migration on `main`, as a separate later step. It is not on hosted. It redefines `google_connection_service`, so review that
+against the Gmail flow before applying it.
 
 ## Local runtime
-- All nine migrations above are applied locally without reset. Calendar's is not.
+- All nine migrations above are applied locally without reset. Calendar's was not then; it was
+  applied to the local stack on November 15 (see [current state](<Checkpoint 3/CURRENT_STATE.md>)).
 - `ENABLE_GMAIL_SCAN` was turned on the night of November 5 for the local demo; no scan has been confirmed since. Turn it off after the demo. A Gemini key remains in private `app/supabase/functions/.env`.
   `GOOGLE_RETURN_URL` points at the product root.
 - Vite and `functions serve` were started from the previous session as background tasks. They
@@ -119,8 +132,9 @@ None blocked PR #22. Only the first two need SQL.
 
 ## Next work, in order
 1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code. Vercel production is `main` per Sania, so every merge deploys.
-2. In CP4, resume Calendar from `mzheng/calendar-rebase`: review the shared OAuth changes, then after
-   reconnecting, retest revocation (L17), refused refresh (L20) and a normal scan.
+2. Calendar continues on `claude/calendar-designed-ui` (PR #116), not `mzheng/calendar-rebase`: finish
+   and verify the event links, then run the remaining live cases and the three reconnect cases (#46);
+   after reconnecting, retest revocation (L17), refused refresh (L20) and a normal scan.
 3. Onboarding work is on `claude/onboarding-connect-0e9360` at `91234dd`, not merged. Onboarding preview `91234dd` is ready, with its remaining checks still pending. Until confirmed merged, treat onboarding as not connected.
 4. **Phase 5:** connect real data to the designed dashboard. `App.tsx` line 565 sends every signed-in
    user to the plain `ManualWorkspace`, so the designed onboarding and PR #20's chips cannot be reached.

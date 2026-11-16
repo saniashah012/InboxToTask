@@ -124,3 +124,34 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 }
 /* Smaller main action on each card. */
 .app-shell .task-row > .row-button:not(.rd-small-button) { height:30px; padding:0 12px; font-size:12px; }
+/* Add to calendar: choose Google Calendar or a calendar file when Calendar is not authorized. */
+.rd-embedded .calendar-choice-options { display:grid; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr)); gap:10px; margin:12px 0; }
+.rd-embedded .calendar-choice-options > button { display:grid; gap:4px; padding:12px 14px; text-align:left; border:1px solid var(--soft-line); border-radius:10px; background:transparent; cursor:pointer; }
+.rd-embedded .calendar-choice-options > button:hover:not(:disabled), .rd-embedded .calendar-choice-options > button:focus-visible { border-color:var(--green); }
+.rd-embedded .calendar-choice-options > button:disabled { opacity:.55; cursor:not-allowed; }
+.rd-embedded .calendar-choice-options span { color:var(--muted); font-size:12px; line-height:1.45; }
+.rd-embedded .calendar-google-form fieldset { display:grid; gap:.75rem; padding:1rem; }
+.rd-embedded .calendar-google-form label { display:grid; gap:.25rem; }
+.rd-embedded .link-button { padding:0; border:0; background:none; color:var(--green); text-decoration:underline; cursor:pointer; font:inherit; }
+.rd-embedded .calendar-alt { margin:8px 0 0; }
+/* A checkbox sits beside its label text. The workspace rule stacks every label, which put the box alone on its own line. */
+.rd-embedded label:has(> input[type="checkbox"]) { display:flex; align-items:center; gap:8px; }
+.rd-embedded label > input[type="checkbox"] { flex:none; width:16px; height:16px; margin:0; padding:0; accent-color:var(--green); }
+.rd-embedded .calendar-zone { margin:0; color:var(--muted); font-size:12px; }
+/* Start and end time share a row; they stack when the dialog is too narrow for both. */
+.rd-embedded .calendar-times { display:grid; grid-template-columns:repeat(auto-fit,minmax(9rem,1fr)); gap:.75rem; }
+.rd-embedded .calendar-times input { width:100%; min-width:0; box-sizing:border-box; }
+/* Event card in the style of Google's quick-create: date, start and end share a row and stack when narrow. */
+.rd-embedded .calendar-google-form fieldset.calendar-card { gap:.6rem; padding:.9rem 1rem; border:1px solid var(--soft-line); border-radius:10px; }
+.rd-embedded .calendar-legend { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.rd-embedded .calendar-when { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr)); gap:.6rem; }
+.rd-embedded .calendar-when input, .rd-embedded .calendar-end-date input, .rd-embedded .calendar-title input { width:100%; min-width:0; box-sizing:border-box; }
+.rd-embedded .calendar-end-date { max-width:12rem; }
+/* A blank required field is outlined, not left to browser validation alone. */
+.rd-embedded .calendar-google-form input.is-missing { border-color:var(--amber); box-shadow:0 0 0 1px var(--amber); }
+.rd-embedded .calendar-destination { display:flex; flex-wrap:wrap; gap:4px 10px; margin:0; padding-top:.5rem; border-top:1px solid var(--soft-line); color:var(--muted); font-size:12px; }
+.rd-embedded .calendar-destination span + span { overflow-wrap:anywhere; }
+.rd-embedded .calendar-note { margin:0 0 10px; padding:8px 12px; border-left:3px solid var(--amber); border-radius:6px; background:color-mix(in srgb, var(--amber) 8%, transparent); font-size:13px; }
+.rd-embedded .calendar-note p { margin:0 0 6px; }
+.rd-embedded .calendar-note p:last-child { margin:0; }
+.rd-embedded .calendar-open { align-self:center; color:var(--green); font-weight:600; }

@@ -21,6 +21,7 @@ import {
 } from "./scanConsent"
 import { Brand } from "./AppChrome"
 import RulesEditor from "./RulesEditor"
+import { calendarEventsEnabled } from "./TaskCalendarControl"
 import { ContextLimitInputs, SaveFailure, useGmailState, useSettingsSave } from "./settingsForm"
 
 export type SettingsSection = "sources" | "processing" | "connections" | "retention"
@@ -283,16 +284,21 @@ export default function RealSettingsScreen({
                   </span>
                   <div>
                     <strong>Google Calendar</strong>
-                    <span>Not connected · planned for a later release</span>
+                    <span>{calendarEventsEnabled
+                      ? "Optional · authorize from Add to calendar on a task; manage it in the Google connection above"
+                      : "Not connected · planned for a later release"}</span>
                   </div>
                 </div>
-                <button className="secondary-button" disabled>
-                  Unavailable
-                </button>
+                {!calendarEventsEnabled && (
+                  <button className="secondary-button" disabled>
+                    Unavailable
+                  </button>
+                )}
               </div>
               <p className="settings-footnote">
-                Accepted tasks can be exported as calendar files from the
-                dashboard. Nothing is written to Google Calendar.
+                {calendarEventsEnabled
+                  ? "Add to calendar creates a Google Calendar event only after you review and confirm it. You can always download a calendar file instead."
+                  : "Accepted tasks can be exported as calendar files from the dashboard. Nothing is written to Google Calendar."}
               </p>
               <div className="settings-card split-card">
                 <div>

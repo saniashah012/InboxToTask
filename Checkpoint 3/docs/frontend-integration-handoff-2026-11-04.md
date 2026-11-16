@@ -211,6 +211,11 @@ clear backend contract the Gmail adapter can consume without duplicate logic.
 
 ## Optional Calendar integration
 
+*Note, November 16, 2026:* this section is the November 5 plan. The CP4 Calendar work on the
+unmerged branch `claude/calendar-designed-ui` follows [Calendar behavior](calendar-behavior.md)
+(for example, an unticked onboarding checkbox instead of a Skip step); what is built and verified
+is in [current state](../CURRENT_STATE.md).
+
 Design its optional onboarding step alongside the product UI, but enable Connect
 only when the real authorization backend exists. Include Skip for now and later
 connection, actual granted capability/status, and clear denied/revoked states.

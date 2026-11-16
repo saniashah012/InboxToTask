@@ -15,8 +15,15 @@ See [current implementation state](../../CURRENT_STATE.md) before interpreting d
 Preserve real, preview and development routes unless the task explicitly changes them. Do not silently wire simulated connection/calendar controls to real services. The storage route currently supports fixture trials, not Gmail retrieval or Calendar execution.
 
 Product onboarding must use Google sign-in without a separate password account,
-saved scanning consent/source rules, and optional Calendar connection with Skip
-for now. Add production callback/return routes before enabling hosted OAuth.
+saved scanning consent/source rules, and optional Calendar permission (an unticked
+checkbox on the Connect step; there is no separate Calendar step). Add production
+callback/return routes before enabling hosted OAuth. Google Calendar events are behind
+`VITE_CALENDAR_EVENTS_ENABLED` (off: tasks offer only the calendar-file download):
+[src/TaskCalendarControl.tsx](src/TaskCalendarControl.tsx) (Add to calendar and Manage event),
+[src/calendarForm.ts](src/calendarForm.ts) (fill-in and follow-up rules),
+[src/calendarApi.ts](src/calendarApi.ts) (calls to `calendar_event` and the status read), and
+the cards and follow-ups in `RealDashboard.tsx`. Follow
+[Calendar behavior](../../docs/calendar-behavior.md) for intended behavior.
 Preserve the [custom sender/domain/subject filter plan](../../IMPLEMENTATION_PLAN.md#custom-sender-domain-and-subject-filters-implementation-plan),
 using exact sender/domain access rules, optional literal subject exclusions, and separate topics. A sender or domain is required unless a category to check is chosen (`hasScanSource`); then any sender that is not blocked is checked for the categories' words. Topics of interest are word lists too (`semantic_preferences.includeWords`): with any saved, a permitted email must contain one of their words before it reaches Gemini, and copy must say email using none of them is skipped. Skipped topics are word lists (`semantic_preferences.blockedWords`) checked in backend code before anything reaches Gemini. Selecting a skipped category in `RulesEditor` opens its editable list; starter lists in [src/filterPresets.ts](src/filterPresets.ts) must match the pipeline's (an onboarding-settings test compares them). Copy must say email without those words can still be sent and that a sender/domain block is the complete protection. Preserve custom inputs and accessible help. Previous phrase rules require explicit review; never infer categories from expanded terms.
 
@@ -31,7 +38,7 @@ corepack pnpm exec tsc --noEmit
 corepack pnpm build
 ```
 
-Do not run npm install here or create a second lockfile. There is no frontend test/lint script at present; do not invent a passing check. Use a browser check for changed interactions and describe the real coverage.
+Do not run npm install here or create a second lockfile. There is no frontend test or lint script in this directory. Rules kept as pure functions do have offline tests, run from `Checkpoint 3/app`: for example `npm.cmd run test:calendar` covers [src/calendarForm.ts](src/calendarForm.ts), and `npm.cmd test` covers the dashboard model and onboarding settings. Run the one that covers what you changed. For everything else, check the changed interaction in a browser and report exactly what you saw working, so a reader can tell tested behavior from untested.
 
 ## Auth and UI behavior
 

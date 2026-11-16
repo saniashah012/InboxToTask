@@ -22,6 +22,7 @@ import {
 } from "./scanConsent"
 import { Brand } from "./AppChrome"
 import RulesEditor from "./RulesEditor"
+import { calendarEventsEnabled } from "./TaskCalendarControl"
 import { ContextLimitInputs, SaveFailure, useGmailState, useSettingsSave } from "./settingsForm"
 
 // Signed-in onboarding reads and writes saved scan settings.
@@ -126,11 +127,11 @@ export default function Onboarding({
                 email to a model.
               </p>
               <div className="storage-page onboarding-google">
-                <GoogleConnectionPanel />
+                <GoogleConnectionPanel calendarOption />
               </div>
               <p className="setup-helper">
                 You can save your sources and consent before or after
-                connecting. Google Calendar is not connected in this release.
+                connecting. {calendarEventsEnabled ? "Google Calendar is optional: tick the box above to allow it now, or add it later from a task." : "Google Calendar is not connected in this release."}
               </p>
               <FooterActions back={real.onLeave} backLabel={real.leaveLabel} next={() => setStep(2)} />
             </>
@@ -298,7 +299,7 @@ export default function Onboarding({
                 entries require separate approval.
               </p>
               <p className="setup-helper">
-                Google sign-in and Gmail connection do not grant scanning consent. Google Calendar is not connected.
+                Google sign-in and Gmail connection do not grant scanning consent. {calendarEventsEnabled ? "Google Calendar is optional, and nothing is added to it until you confirm an event." : "Google Calendar is not connected."}
               </p>
               {real.refreshing && <p className="save-confirmation" role="status">Reloading saved settings…</p>}
               {saving && <p className="save-confirmation" role="status">Saving settings…</p>}

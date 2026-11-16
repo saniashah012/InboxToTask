@@ -1,6 +1,6 @@
 // Sania's designed dashboard, fed by saved records for a signed-in account.
 // Backend calls are the ones ManualWorkspace already uses; nothing here is simulated.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react"
 import inboxToTaskLogo from "./assets/inbox-to-task-logo.png"
 import { Icon, Modal } from "./designedUi"
 import { supabase } from "./supabase"
@@ -13,6 +13,9 @@ import { changeKey, countAdded, NOTHING_ADDED, scanSummary, suggestionKey } from
 import { useNewItems } from "./useNewItems"
 import ExtractionReview from "./ExtractionReview"
 import CalendarExport from "./CalendarExportPanel"
+import TaskCalendarControl, { calendarEventsEnabled, clearCalendarDraft, pendingCalendarTask } from "./TaskCalendarControl"
+import { calendarEventAction, calendarMessage, CalendarError, loadCalendarStatuses, needsCalendarAuthorization, type CalendarEventStatus, type CalendarResult } from "./calendarApi"
+import { deadlineLabel, deadlineMoved, draftFrom as calendarDraftFrom, eventSummary, initialDraft, oneClickMove, payloadOf, timeRange, type Draft as CalendarDraft } from "./calendarForm"
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
   autoNextCheck, quietStop, skippedByCategories, TRANSIENT_STOPS, TROUBLE_AFTER, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
@@ -22,6 +25,7 @@ import {
 import "./storage.css"
 import "./manual-workspace.css"
 import "./real-dashboard.css"
+import "./calendar-cards.css"
 
 type View = "suggestions" | "active" | "completed" | "dismissed"
 type SettingsTarget = "sources" | "processing" | "connections" | "retention"
@@ -29,6 +33,32 @@ type Failure = { message: string }
 type SourceView = { title: string; sender?: string | null; subject?: string | null; sentAt?: string | null; quote: string | null; messageId: string | null; taskId?: string; extraction?: StoredRow; summary?: string }
 type Editing = { kind: "suggestion" | "task"; row: StoredRow; fields: TaskFields }
 type Category = "suggestions" | "active" | "completed" | "dismissed"
+// A question shown after a task change when the task has a Google Calendar event.
+type CalendarFollowUp =
+  | { kind: "deadline"; task: TaskItem; deadline: Deadline; draft: CalendarEventStatus["draft"] }
+  | { kind: "cancelled"; task: TaskItem }
+  | { kind: "delete"; task: TaskItem; from: Category; to: Category; suggestionId: string }
+// Stored states in which the task has an event the user can manage.
+const hasCalendarEvent = (status?: CalendarEventStatus) => Boolean(status && ["succeeded", "updating", "removing"].includes(status.state))
+// With Calendar events on, the follow-ups say what happens to the event; without, the old ending stays.
+const noCalendarWrite = calendarEventsEnabled ? "" : " No Calendar write was authorized."
+// A stored event link is used only when it points to Google Calendar.
+const googleCalendarUrl = (url?: string | null) => (url && /^https:\/\/(www\.)?google\.com\/calendar\//.test(url) ? url : null)
+type NoticeLink = { label: string; url: string; taskId: string }
+const eventLink = (url: string | null | undefined, taskId: string): NoticeLink | null => {
+  const valid = googleCalendarUrl(url)
+  return valid ? { label: "View in Google Calendar", url: valid, taskId } : null
+}
+// Reads the event from Google; an event that was never added or is already gone counts as removed.
+const readEvent = (taskId: string): Promise<CalendarResult> => calendarEventAction({ action: "read", taskId }).then(
+  (result) => result,
+  (err) => { if (err instanceof CalendarError && err.code === "CALENDAR_NOT_ADDED") return { state: "removed" }; throw err })
+// Opens a link in a new tab through a temporary anchor (used when a blank tab could not be opened).
+const openInNewTab = (url: string) => {
+  const anchor = document.createElement("a")
+  anchor.href = url; anchor.target = "_blank"; anchor.rel = "noopener noreferrer"
+  document.body.appendChild(anchor); anchor.click(); anchor.remove()
+}
 const categoryLabel: Record<Category, string> = { suggestions: "Suggestions", active: "Active", completed: "Completed", dismissed: "Dismissed" }
 
 // Moves an item between any two categories using the backend's own steps, so an
@@ -52,6 +82,8 @@ async function runMove(from: Category, row: StoredRow, to: Category) {
   return reviewStoredRecord("task", row.id, to === "suggestions" ? "return_to_suggestions" : "return_to_dismissed", rev)
 }
 
+// Times end in "p.m.", so a sentence built from one must not gain a second period.
+const endSentence = (text: string) => (text.endsWith(".") ? text : `${text}.`)
 const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 const formatWhen = (value?: string | null) => {
   const parsed = value ? Date.parse(value) : NaN
@@ -116,7 +148,13 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   // Automatic checks in a row that stopped on a passing Gmail or AI-service problem.
   const [quietRetries, setQuietRetries] = useState(0)
   const [failure, setFailure] = useState<Failure | null>(null)
-  const [notice, setNotice] = useState(initialNotice)
+  const [notice, setNoticeText] = useState(initialNotice)
+  // An optional link beside the notice; only Calendar confirmations set one.
+  const [noticeLink, setNoticeLink] = useState<NoticeLink | null>(null)
+  // Counts notices, so a link found after a reload attaches only to the notice it was found for.
+  const noticeCount = useRef(0)
+  // Replacing or clearing a notice always drops the previous notice's link.
+  const setNotice = useCallback((message: string) => { noticeCount.current += 1; setNoticeLink(null); setNoticeText(message) }, [])
   const [activeTab, setActiveTab] = useState<"tasks" | "passive">("tasks")
   const [view, setView] = useState<View>("suggestions")
   const [menuId, setMenuId] = useState<string | null>(null)
@@ -125,8 +163,23 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [editing, setEditing] = useState<Editing | null>(null)
   const [changeId, setChangeId] = useState<string | null>(null)
   const [exportTask, setExportTask] = useState<TaskItem | null>(null)
+  // Set when the event dialog opens from "Review calendar event" after a deadline change.
+  const [exportReview, setExportReview] = useState<Deadline | null>(null)
+  // Google Calendar events by task ID. A failed load leaves this empty, so cards show Add to calendar.
+  const [calendarStatuses, setCalendarStatuses] = useState<Record<string, CalendarEventStatus>>({})
+  const [calendarFollowUp, setCalendarFollowUp] = useState<CalendarFollowUp | null>(null)
+  // The task whose Manage event dialog is open; that dialog does its own reads.
+  const dialogTaskId = useRef<string | null>(null)
+  dialogTaskId.current = exportTask?.row.id ?? null
+  // The task whose event was last opened from a link, checked once when this tab is shown again.
+  const openedEvent = useRef<string | null>(null)
+  // Tasks whose event link is being checked; further clicks on them are ignored until it ends.
+  const checkingRef = useRef(new Set<string>())
+  const [checkingEvents, setCheckingEvents] = useState<ReadonlySet<string>>(() => new Set())
+  // Runs when this tab is shown again (see the visibility and focus handler below).
+  const onReturn = useRef<() => void>(() => {})
   const [reminderFor, setReminderFor] = useState<StoredRow | null>(null)
-  const [toast, setToast] = useState<{ kind: "dismissed" | "completed" | "moved"; id: string; from?: Category; to?: Category } | null>(null)
+  const [toast, setToast] = useState<{ kind: "dismissed" | "completed" | "moved"; id: string; from?: Category; to?: Category; note?: string } | null>(null)
   const [activityOpen, setActivityOpen] = useState(false)
   // With automatic checks on, the status bar starts as one slim line; the choice to
   // expand it is remembered in this browser for this account.
@@ -141,24 +194,100 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const epoch = useRef(0), sequence = useRef(0)
   const latestSnapshot = useRef<Snapshot>(snapshot)
   latestSnapshot.current = snapshot
+  // What the last reload loaded, readable right after `await reload()` before React re-renders.
+  const loadedSnapshot = useRef<Snapshot | null>(null)
+  const loadedCalendar = useRef<Record<string, CalendarEventStatus>>({})
+
+  // Calendar statuses are read separately from Google, with no Calendar permission needed.
+  // A failure shows no error: the cards then offer Add to calendar.
+  const loadCalendar = useCallback(async () => {
+    if (!calendarEventsEnabled) return {}
+    try { return await loadCalendarStatuses() } catch { return {} }
+  }, [])
+  const refreshCalendar = useCallback(async () => {
+    const current = epoch.current
+    const next = await loadCalendar()
+    if (current !== epoch.current) return
+    loadedCalendar.current = next
+    setCalendarStatuses(next)
+  }, [loadCalendar])
+  // After Add or Save changes: shows the notice, reloads the statuses, then adds the
+  // event's link if this notice is still the one shown and the event has a valid link.
+  const noticeWithEventLink = async (message: string, taskId: string) => {
+    setNotice(message)
+    const shown = noticeCount.current, current = epoch.current
+    await refreshCalendar()
+    if (shown !== noticeCount.current || current !== epoch.current) return
+    const status = loadedCalendar.current[taskId]
+    const link = hasCalendarEvent(status) ? eventLink(status?.eventUrl, taskId) : null
+    if (link) setNoticeLink(link)
+  }
+
+  // A click on an event link (card line or toast) checks Google before showing the event,
+  // so an event deleted in Google never lands on Google's error page. Modified and
+  // middle clicks are left to the browser and open the saved link directly.
+  const openEvent = (event: MouseEvent<HTMLAnchorElement>, taskId: string, savedUrl: string) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    if (checkingRef.current.has(taskId)) return
+    openedEvent.current = taskId
+    // The dialog for this task is open and does its own reads: no check.
+    if (dialogTaskId.current === taskId) { openInNewTab(savedUrl); return }
+    // Opened inside the click, before any await, so pop-up blockers allow it.
+    const tab = window.open("", "_blank")
+    if (!tab) { openInNewTab(savedUrl); return }
+    try { tab.opener = null } catch { /* the tab is ours and blank; nothing to detach */ }
+    void checkOpenedEvent(tab, taskId, savedUrl)
+  }
+  async function checkOpenedEvent(tab: Window, taskId: string, savedUrl: string) {
+    const current = epoch.current
+    checkingRef.current.add(taskId); setCheckingEvents(new Set(checkingRef.current))
+    try {
+      const result = await readEvent(taskId).catch(() => null)
+      if (current !== epoch.current) { tab.close(); return }
+      if (result?.state === "removed") {
+        tab.close(); openedEvent.current = null
+        setFailure(null); setNotice("This event was deleted in Google Calendar. You can add it again.")
+      } else if (!tab.closed) {
+        // Anything else (no permission, Google unreachable, another state) opens the saved link as before.
+        tab.location.href = (result?.state === "succeeded" && googleCalendarUrl(result.eventUrl)) || savedUrl
+      }
+      // The read saved Google's current details, so the cards show them.
+      if (result?.state === "succeeded" || result?.state === "removed") void refreshCalendar()
+    } finally {
+      checkingRef.current.delete(taskId); setCheckingEvents(new Set(checkingRef.current))
+    }
+  }
+  // Back on this tab after opening an event: read that one task once, silently, then reload the statuses.
+  onReturn.current = () => {
+    const taskId = openedEvent.current
+    if (!calendarEventsEnabled || !taskId || checkingRef.current.has(taskId)) return
+    openedEvent.current = null
+    if (dialogTaskId.current === taskId) return
+    const current = epoch.current
+    readEvent(taskId).then(() => { if (current === epoch.current) void refreshCalendar() }, () => { /* ignored: the card keeps its saved state */ })
+  }
 
   const reload = useCallback(async () => {
     const current = epoch.current, request = ++sequence.current
     const fresh = () => current === epoch.current && request === sequence.current
-    const [records, progress, connection] = await Promise.allSettled([
-      loadStorageSnapshot(supabase), manualScanStatus(), googleConnectionStatus(),
+    const [records, progress, connection, calendar] = await Promise.allSettled([
+      loadStorageSnapshot(supabase), manualScanStatus(), googleConnectionStatus(), loadCalendar(),
     ])
     // A failed link lookup must not hide saved tasks, so it has its own visible state.
     const nextLinks = records.status === "fulfilled"
       ? await loadTaskSourceLinks(records.value.tasks.map((t) => t.id)).catch(() => null)
       : null
     if (!fresh()) return
-    if (records.status === "fulfilled") { setSnapshot(records.value); setLinks(nextLinks); setLoadFailed(false) }
+    if (records.status === "fulfilled") { loadedSnapshot.current = records.value; setSnapshot(records.value); setLinks(nextLinks); setLoadFailed(false) }
     else setLoadFailed(true)
+    const statuses = calendar.status === "fulfilled" ? calendar.value : {}
+    loadedCalendar.current = statuses
+    setCalendarStatuses(statuses)
     if (progress.status === "fulfilled") { setStatus(progress.value); setStatusFailed(false) } else setStatusFailed(true)
     setGmail({ state: connection.status === "fulfilled" ? connection.value.state : "unknown", checking: false })
     setLoading(false)
-  }, [])
+  }, [loadCalendar])
 
   useEffect(() => {
     void reload()
@@ -177,7 +306,9 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     if (bc) bc.onmessage = (event) => { if (event.data === "changed") void reload() }
     let lastRefresh = Date.now()
     const refresh = () => {
-      if (document.visibilityState !== "visible" || Date.now() - lastRefresh < 5000) return
+      if (document.visibilityState !== "visible") return
+      onReturn.current()
+      if (Date.now() - lastRefresh < 5000) return
       lastRefresh = Date.now(); void reload()
     }
     document.addEventListener("visibilitychange", refresh)
@@ -317,6 +448,16 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   }
 
   const model = useMemo(() => buildDashboardModel(snapshot, links), [snapshot, links])
+  // Returning from Google Calendar authorization reopens that task's event review once.
+  const resumedCalendar = useRef(false)
+  useEffect(() => {
+    if (loading || resumedCalendar.current || !calendarEventsEnabled) return
+    resumedCalendar.current = true
+    const pending = pendingCalendarTask(userId)
+    const task = pending ? model.active.find((t) => t.row.id === pending) : undefined
+    if (task) { setActiveTab("tasks"); setView("active"); setExportTask(task) }
+    else if (pending) clearCalendarDraft(userId)
+  }, [loading, model.active, userId])
   const today = localDate(new Date(now))
   const reviewCount = model.suggestions.length + model.changes.length + model.unresolvedChanges.length
   const counts: Record<View, number> = { suggestions: reviewCount, active: model.active.length, completed: model.closed.length, dismissed: model.dismissed.length }
@@ -374,14 +515,124 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
       return hasQuote || to === "suggestions" || to === "dismissed"
     })
   }
-  const move = (from: Category, row: StoredRow, to: Category, suggestionId: string) =>
-    void perform(() => runMove(from, row, to), `Moved to ${categoryLabel[to]}.`, () => { setNotice(""); setToast({ kind: "moved", id: suggestionId, from, to }) })
+  const runMoveStep = (from: Category, row: StoredRow, to: Category, suggestionId: string, note?: string) =>
+    void perform(() => runMove(from, row, to), `Moved to ${categoryLabel[to]}.`, () => { setNotice(""); setToast({ kind: "moved", id: suggestionId, from, to, note }) })
+  // Moving a task back to Suggestions or Dismissed deletes it, so a task with a Calendar
+  // event first asks what should happen to the event.
+  const move = (from: Category, row: StoredRow, to: Category, suggestionId: string) => {
+    const deletes = (from === "active" || from === "completed") && (to === "suggestions" || to === "dismissed")
+    const task = deletes && calendarEventsEnabled && hasCalendarEvent(calendarStatuses[row.id])
+      ? [...model.active, ...model.closed].find((t) => t.row.id === row.id) : undefined
+    if (task) setCalendarFollowUp({ kind: "delete", task, from, to, suggestionId })
+    else runMoveStep(from, row, to, suggestionId)
+  }
   const moveItems = (from: Category, row: StoredRow, suggestionId: string | null | undefined, hasQuote = true, onAct?: () => void) => {
     if (!suggestionId) return null
     const targets = moveTargets(from, row, hasQuote)
     if (!targets.length) return null
     return <>{targets.map((to) => <button key={to} onClick={() => { setMenuId(null); onAct?.(); move(from, row, to, suggestionId) }}>Move to {categoryLabel[to]}</button>)}</>
   }
+
+  // ---- Google Calendar event dialog and the follow-ups after a task change ----
+  const openCalendar = (task: TaskItem, review?: Deadline) => { setExportReview(review ?? null); setExportTask(task) }
+  const closeCalendar = () => { setExportTask(null); setExportReview(null) }
+  // The task as the last reload loaded it (React state may not have re-rendered yet).
+  const loadedTask = (taskId: string): TaskItem | undefined => {
+    const fresh = buildDashboardModel(loadedSnapshot.current ?? latestSnapshot.current, null)
+    return [...fresh.active, ...fresh.closed].find((t) => t.row.id === taskId)
+  }
+  // Called after a task edit, approved change or resolved change was saved and reloaded.
+  const followUpAfterChange = (taskId: string | null | undefined, before: Deadline | null | undefined, cancelled: boolean) => {
+    if (!calendarEventsEnabled || !taskId) return
+    const status = loadedCalendar.current[taskId], task = loadedTask(taskId)
+    if (!task || !status) return
+    if (cancelled) { if (hasCalendarEvent(status)) setCalendarFollowUp({ kind: "cancelled", task }); return }
+    const after = task.fields.deadline
+    if (after && status.state === "succeeded" && deadlineMoved(before, after)) setCalendarFollowUp({ kind: "deadline", task, deadline: after, draft: status.draft })
+  }
+  // Runs one Calendar call from a follow-up, which stays open (busy) until the call ends.
+  // A failure shows the fixed message; a missing permission opens the event dialog,
+  // which has the authorize button.
+  async function runCalendar<T>(task: TaskItem, step: () => Promise<T>, review?: Deadline): Promise<T | null> {
+    const current = epoch.current
+    setBusy(true); setFailure(null); setNotice(""); setMenuId(null)
+    try {
+      return await step()
+    } catch (err) {
+      if (current !== epoch.current) return null
+      const code = err instanceof CalendarError ? err.code : ""
+      setCalendarFollowUp(null)
+      if (needsCalendarAuthorization(code)) { setFailure({ message: "Authorize Google Calendar to change this event." }); openCalendar(task, review) }
+      else setFailure({ message: calendarMessage(code) })
+      return null
+    } finally {
+      setBusy(false)
+      if (current === epoch.current) { setCalendarFollowUp(null); void refreshCalendar() }
+    }
+  }
+  // An event that is already gone counts as removed.
+  const removeEvent = (taskId: string) => calendarEventAction({ action: "remove", taskId }).then(
+    (result) => result.state === "removed",
+    (err) => { if (err instanceof CalendarError && err.code === "CALENDAR_NOT_ADDED") return true; throw err })
+  const fallbackDraft = (task: TaskItem): CalendarDraft => initialDraft(task.fields, viewerZone)
+
+  async function moveCalendarEvent(followUp: Extract<CalendarFollowUp, { kind: "deadline" }>) {
+    const { task, deadline } = followUp, taskId = task.row.id
+    type Outcome = { kind: "moved"; summary: string; was: string; url?: string } | { kind: "gone" } | { kind: "review"; message?: string }
+    const outcome = await runCalendar<Outcome>(task, async () => {
+      // Read first, so a change made in Google is never overwritten.
+      const read: CalendarResult = await calendarEventAction({ action: "read", taskId })
+      if (read.state === "removed") return { kind: "gone" }
+      if (read.state !== "succeeded" || !read.version) return { kind: "review" }
+      const current = calendarDraftFrom(read.draft, fallbackDraft(task))
+      const moved = oneClickMove(current, deadline)
+      if (!moved) return { kind: "review" }
+      try {
+        const saved = await calendarEventAction({ action: "update", taskId, version: read.version, draft: payloadOf(moved) })
+        if (saved.state === "removed") return { kind: "gone" }
+        const was = current.date === moved.date ? timeRange(current.startTime, current.endTime) || eventSummary(current) : eventSummary(current)
+        return { kind: "moved", summary: eventSummary(saved.draft ?? moved), was, url: saved.eventUrl }
+      } catch (err) {
+        // No retry: the dialog shows Google's details (or the authorize button).
+        const code = err instanceof CalendarError ? err.code : ""
+        return { kind: "review", message: needsCalendarAuthorization(code) ? "Authorize Google Calendar to change this event." : calendarMessage(code) }
+      }
+    }, deadline)
+    if (!outcome) return
+    if (outcome.kind === "moved") { setNotice(`Event moved to ${outcome.summary} (was ${outcome.was}).`); setNoticeLink(eventLink(outcome.url, taskId)) }
+    else if (outcome.kind === "gone") setNotice("This event was deleted in Google Calendar.")
+    else { if (outcome.message) setFailure({ message: outcome.message }); openCalendar(task, deadline) }
+  }
+  async function removeAfterCancel(task: TaskItem) {
+    const removed = await runCalendar(task, () => removeEvent(task.row.id))
+    if (removed) setNotice("Event removed from your Google Calendar.")
+    else if (removed === false) setFailure({ message: calendarMessage("") })
+  }
+  async function deleteWithEvent(followUp: Extract<CalendarFollowUp, { kind: "delete" }>, removeIt: boolean) {
+    const { task, from, to, suggestionId } = followUp
+    if (!removeIt) { setCalendarFollowUp(null); return runMoveStep(from, task.row, to, suggestionId, "The event stays in Google Calendar. InboxToTask will no longer manage it.") }
+    // The task is deleted only once the event's removal is confirmed.
+    const removed = await runCalendar(task, () => removeEvent(task.row.id))
+    if (removed) runMoveStep(from, task.row, to, suggestionId, "Its calendar event was removed.")
+    else if (removed === false) setFailure({ message: `${calendarMessage("")} The task was not moved.` })
+    else setFailure((f) => f && { message: `${f.message} The task was not moved.` })
+  }
+
+  // The card's Calendar line; nothing at all when the task has no event (never a permission status).
+  const calendarLine = (taskId: string) => {
+    const status = calendarStatuses[taskId]
+    if (!calendarEventsEnabled || !status || !hasCalendarEvent(status)) return undefined
+    const when = eventSummary(status.draft)
+    const text = <><Icon name="calendar" size={13} />Added to Google Calendar{when && <> · {when}</>}</>
+    const url = googleCalendarUrl(status.eventUrl)
+    if (!url) return <span className="rd-cal-line">{text}</span>
+    return (
+      <a className="rd-cal-line rd-cal-link" href={url} target="_blank" rel="noopener noreferrer"
+        onClick={(e) => openEvent(e, taskId, url)} aria-disabled={checkingEvents.has(taskId) || undefined}
+        aria-label={`Open this event in Google Calendar${when ? `: ${when}` : ""}`}>{text}<Icon name="external" size={11} /></a>
+    )
+  }
+  const managesEvent = (taskId: string) => calendarEventsEnabled && hasCalendarEvent(calendarStatuses[taskId])
 
   const blockers = {
     sources: !settingsHaveScanSource(settings),
@@ -520,7 +771,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                             onMenu={() => setMenuId((c) => (c === s.row.id ? null : s.row.id))}
                             onSource={() => { seen(); setSource(sourceForSuggestion(s, s.fields.action)) }}
                             primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
-                              onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added. No Calendar event was created.") }}>Add task</button>}
+                              onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added.") }}>Add task</button>}
                             menu={<><button onClick={() => { setMenuId(null); seen(); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
                               {moveItems("suggestions", s.row, s.row.id, Boolean(s.quote), seen)}
                               <button className="danger-action" onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) }) }}>Dismiss suggestion</button></>}
@@ -553,7 +804,11 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                       <h3 className="rd-subhead">Changes that need you to choose the task</h3>
                       <Embedded>{model.unresolvedChanges.map((c) => (
                         <ManualChangeResolver key={`${c.row.id}-${c.row.revision}`} change={c.row} source={c.source} quote={c.quote} tasks={openTasks.map((t) => t.row)} email={email} busy={busy}
-                          onResolve={(taskId, taskRevision, fields) => void perform(() => resolveTaskChange(c.row.id, c.row.revision, taskId, taskRevision, fields), fields ? "Your values were saved to the task. No Calendar write was authorized." : "The task was marked cancelled. No Calendar write was authorized.")}
+                          onResolve={(taskId, taskRevision, fields) => {
+                            const before = model.active.find((t) => t.row.id === taskId)?.fields.deadline
+                            void perform(() => resolveTaskChange(c.row.id, c.row.revision, taskId, taskRevision, fields), fields ? `Your values were saved to the task.${noCalendarWrite}` : `The task was marked cancelled.${noCalendarWrite}`)
+                              .then((saved) => { if (saved) followUpAfterChange(taskId, before, !fields) })
+                          }}
                           onDismiss={() => void perform(() => reviewTaskChange(c.row.id, c.row.revision, "dismiss"), "Item dismissed.")} />))}</Embedded>
                     </>}
                     {!reviewCount && <EmptyState title="Nothing waiting for review" detail={status?.lastSuccessful ? "New suggestions from a manual check appear here." : "Run a manual check once Gmail is connected and sources are permitted."} />}
@@ -562,12 +817,12 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                   {view === "active" && <>
                     {model.active.length > 0 && <div className="task-list">{model.active.map((t) => (
                       <RealTaskRow key={t.row.id} kind="active" fields={t.fields} today={today} busy={busy}
-                        context={t.primary?.sender ?? ""} menuOpen={menuId === t.row.id}
+                        context={t.primary?.sender ?? ""} menuOpen={menuId === t.row.id} calendarLine={calendarLine(t.row.id)}
                         badges={t.pendingChanges > 0 ? <><span className="updated-badge">Change proposed</span><button className="review-change-link" onClick={() => setChangeId(model.changes.find((c) => c.row.target_task_id === t.row.id)?.row.id ?? null)}>Review change</button></> : null}
                         onComplete={() => void perform(() => reviewStoredRecord("task", t.row.id, "complete", t.row.revision), "Task completed.", () => { setNotice(""); setToast({ kind: "completed", id: t.row.id }) })}
                         onMenu={() => setMenuId((c) => (c === t.row.id ? null : t.row.id))}
                         onSource={() => setSource(sourceForTask(t))}
-                        primary={<button className="calendar-button" disabled={busy} onClick={() => setExportTask(t)}><Icon name="calendar" size={16} />Export calendar file</button>}
+                        primary={<button className="calendar-button" disabled={busy} onClick={() => openCalendar(t)}><Icon name="calendar" size={16} />{!calendarEventsEnabled ? "Export calendar file" : managesEvent(t.row.id) ? "Manage event" : "Add to calendar"}</button>}
                         menu={<><button onClick={() => { setMenuId(null); setEditing({ kind: "task", row: t.row, fields: t.fields }) }}>Edit task</button>
                           {moveItems("active", t.row, t.row.origin_suggestion_id)}</>}
                       />))}</div>}
@@ -581,12 +836,17 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                   {view === "completed" && <>
                     {model.closed.length > 0 && <div className="task-list">{model.closed.map((t) => (
                       <RealTaskRow key={t.row.id} kind={t.cancelled ? "cancelled" : "completed"} fields={t.fields} today={today} busy={busy}
-                        context={t.primary?.sender ?? ""} menuOpen={menuId === t.row.id}
+                        context={t.primary?.sender ?? ""} menuOpen={menuId === t.row.id} calendarLine={calendarLine(t.row.id)}
                         onMenu={t.cancelled ? undefined : () => setMenuId((c) => (c === t.row.id ? null : t.row.id))}
                         menu={t.cancelled ? undefined : moveItems("completed", t.row, t.row.origin_suggestion_id) ?? undefined}
                         onComplete={t.cancelled ? undefined : () => void perform(() => reviewStoredRecord("task", t.row.id, "undo", t.row.revision), "Completion undone. The task is open again.")}
                         onSource={() => setSource(sourceForTask(t))}
-                        primary={<span className="deletion-date">{t.cancelled ? "Cancelled" : t.row.delete_after ? `Removed after ${formatWhen(t.row.delete_after)}` : "Completed"}</span>}
+                        primary={(() => {
+                          const state = <span className="deletion-date">{t.cancelled ? "Cancelled" : t.row.delete_after ? `Removed after ${formatWhen(t.row.delete_after)}` : "Completed"}</span>
+                          return managesEvent(t.row.id)
+                            ? <div className="rd-cal-closed">{state}<button className="calendar-button rd-cal-manage" disabled={busy} onClick={() => openCalendar(t)}><Icon name="calendar" size={14} />Manage event</button></div>
+                            : state
+                        })()}
                       />))}</div>}
                     {!model.closed.length && <EmptyState title="No completed tasks" detail="Completed tasks are kept for 30 days, then removed." />}
                   </>}
@@ -616,19 +876,42 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
 
       {source && <SourceModal source={source} email={email} links={links} onClose={() => setSource(null)} />}
       {editing && <EditFieldsModal editing={editing} busy={busy} onCancel={() => setEditing(null)}
-        onSave={(fields) => void perform(() => reviewStoredRecord(editing.kind, editing.row.id, "edit", editing.row.revision, fields),
-          editing.kind === "suggestion" ? "Your edits were saved. The suggestion still needs you to add it." : "Task updated. No Calendar write was authorized.", () => setEditing(null))} />}
+        onSave={(fields) => {
+          const { kind, row } = editing, before = editing.fields.deadline
+          void perform(() => reviewStoredRecord(kind, row.id, "edit", row.revision, fields),
+            kind === "suggestion" ? "Your edits were saved. The suggestion still needs you to add it." : `Task updated.${noCalendarWrite}`, () => setEditing(null))
+            .then((saved) => { if (saved && kind === "task") followUpAfterChange(row.id, before, false) })
+        }} />}
       {change && <ChangeModal item={change} email={email} busy={busy} onClose={() => setChangeId(null)}
-        onApprove={() => void perform(() => reviewTaskChange(change.row.id, change.row.revision, "approve"), "Task change approved. No Calendar write was authorized.", () => setChangeId(null))}
+        onApprove={() => {
+          const taskId = change.target?.id ?? change.row.target_task_id, before = change.target?.accepted_fields?.deadline, cancelled = change.row.kind === "cancel"
+          void perform(() => reviewTaskChange(change.row.id, change.row.revision, "approve"), `Task change approved.${noCalendarWrite}`, () => setChangeId(null))
+            .then((saved) => { if (saved) followUpAfterChange(taskId, before, cancelled) })
+        }}
         onDismiss={() => void perform(() => reviewTaskChange(change.row.id, change.row.revision, "dismiss"), "Proposal dismissed. The task is unchanged.", () => setChangeId(null))}
         onRebase={() => change.target && void perform(() => reviewTaskChange(change.row.id, change.row.revision, "rebase", change.target!.revision), "Proposal refreshed against the current task. Review the new comparison before approving.")} />}
       {exportTask && (
-        <Modal onClose={() => setExportTask(null)} title="Export calendar file" wide>
-          <p className="calendar-separation-note">Google Calendar is not connected (planned for a later release). This downloads a file you import yourself; nothing is written to any calendar.</p>
-          <Embedded><CalendarExport key={`${exportTask.row.id}-${exportTask.row.revision}`} task={exportTask.row} fields={exportTask.fields} close={() => setExportTask(null)}
-            onDownloaded={() => { setExportTask(null); setNotice("Calendar file download started. Import it into your chosen calendar.") }} /></Embedded>
+        <Modal onClose={() => { clearCalendarDraft(userId); closeCalendar() }} title={!calendarEventsEnabled ? "Export calendar file" : managesEvent(exportTask.row.id) ? "Manage event" : "Add to calendar"} wide>
+          <Embedded><TaskCalendarControl key={`${userId}-${exportTask.row.id}`} task={exportTask.row} userId={userId}
+            review={exportReview ? { deadline: exportReview } : undefined}
+            onCancel={closeCalendar}
+            onAdded={() => { closeCalendar(); setFailure(null); void noticeWithEventLink("Event added to your Google Calendar.", exportTask.row.id) }}
+            onSaved={(summary: string) => { closeCalendar(); setFailure(null); void noticeWithEventLink(endSentence(`Event updated: ${summary}`), exportTask.row.id) }}
+            onRemoved={() => { closeCalendar(); setFailure(null); setNotice("Event removed from your Google Calendar."); void refreshCalendar() }}
+            onStatusChange={() => void refreshCalendar()}
+            fileExport={<CalendarExport key={`${exportTask.row.id}-${exportTask.row.revision}`} task={exportTask.row} fields={exportTask.fields} close={() => { clearCalendarDraft(userId); closeCalendar() }}
+              onDownloaded={() => { closeCalendar(); setNotice("Calendar file download started. Import it into your chosen calendar.") }} />} /></Embedded>
         </Modal>
       )}
+      {calendarFollowUp && <CalendarFollowUpModal followUp={calendarFollowUp} busy={busy} fallback={fallbackDraft(calendarFollowUp.task)}
+        onClose={() => { if (!busy) setCalendarFollowUp(null) }}
+        onMove={() => { if (calendarFollowUp.kind === "deadline") void moveCalendarEvent(calendarFollowUp) }}
+        onReview={() => { if (calendarFollowUp.kind === "deadline") { const { task, deadline } = calendarFollowUp; setCalendarFollowUp(null); openCalendar(task, deadline) } }}
+        onRemove={() => {
+          if (calendarFollowUp.kind === "cancelled") void removeAfterCancel(calendarFollowUp.task)
+          else if (calendarFollowUp.kind === "delete") void deleteWithEvent(calendarFollowUp, true)
+        }}
+        onKeep={() => { if (calendarFollowUp.kind === "delete") void deleteWithEvent(calendarFollowUp, false); else setCalendarFollowUp(null) }} />}
       {reminderFor && <ReminderModal followup={reminderFor} busy={busy} onCancel={() => setReminderFor(null)}
         onSave={(iso) => void perform(() => reviewStoredRecord("followup", reminderFor.id, "remind", reminderFor.revision, { reminderAt: iso }), "Dashboard reminder saved. No email or notification is sent.", () => setReminderFor(null))} />}
 
@@ -636,6 +919,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
       {notice && !toast && !failure && (
         <FadeAway key={notice} aria-live="polite" className="undo-toast rd-toast-message" onDone={() => setNotice("")}>
           <span>{notice}</span>
+          {noticeLink && <a className="rd-toast-link" href={noticeLink.url} target="_blank" rel="noopener noreferrer"
+            onClick={(e) => openEvent(e, noticeLink.taskId, noticeLink.url)} aria-disabled={checkingEvents.has(noticeLink.taskId) || undefined}>{noticeLink.label}<Icon name="external" size={12} /></a>}
           <button aria-label="Dismiss message" className="toast-close" onClick={() => setNotice("")}><Icon name="close" size={16} /></button>
         </FadeAway>
       )}
@@ -645,7 +930,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         const row = dismissedRow ?? completedRow
         return (
           <FadeAway aria-live="polite" className="undo-toast" key={`${toast.kind}-${toast.id}`} onDone={() => setToast(null)}>
-            <span>{toast.kind === "moved" ? `Moved to ${categoryLabel[toast.to ?? "suggestions"]}` : toast.kind === "dismissed" ? "Suggestion dismissed" : "Task completed"}</span>
+            <span>{toast.kind === "moved" ? `Moved to ${categoryLabel[toast.to ?? "suggestions"]}` : toast.kind === "dismissed" ? "Suggestion dismissed" : "Task completed"}{toast.note && `. ${toast.note}`}</span>
             {toast.kind === "moved" && toast.from && (() => {
               const here = locate(toast.id)
               const back = toast.from
@@ -672,7 +957,7 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
   return <div className="empty-state"><div className="empty-state-mark"><Icon name="check" /></div><h3>{title}</h3><p>{detail}</p></div>
 }
 
-function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onMenu, onSource, onComplete, primary, menu, isNew, unread }: {
+function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onMenu, onSource, onComplete, primary, menu, isNew, unread, calendarLine }: {
   kind: "suggestion" | "active" | "completed" | "cancelled" | "dismissed"
   isNew?: boolean
   unread?: boolean
@@ -687,6 +972,7 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
   onComplete?: () => void
   primary: ReactNode
   menu?: ReactNode
+  calendarLine?: ReactNode
 }) {
   const due = deadlineDisplay(fields.deadline, today, viewerZone)
   const done = kind === "completed" || kind === "cancelled"
@@ -710,6 +996,7 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
           <span className="date">{due.dateLabel}{due.timeLabel && <> · {due.timeLabel}</>}</span>
           {!done && <span className={`deadline ${due.tone}`}><span />{due.status}</span>}
           {fields.deadline?.wording && <span className="rd-wording" title="Timing as stated in the email">“{fields.deadline.wording}”</span>}
+          {calendarLine}
         </div>
       </div>
       <button className="email-link" onClick={onSource}>View details</button>
@@ -1119,6 +1406,59 @@ function ChangeModal({ item, email, busy, onClose, onApprove, onDismiss, onRebas
       <div className="modal-actions">
         <button className="secondary-button" disabled={busy} onClick={onDismiss}>Dismiss proposal</button>
         <button className="primary-button" disabled={busy || !item.open || item.stale || !item.quote} onClick={onApprove}>{c.kind === "cancel" ? "Approve cancellation" : "Approve edit"}</button>
+      </div>
+    </Modal>
+  )
+}
+
+// The question after a task change on a task with a Google Calendar event. It writes
+// nothing itself; each button calls back to the dashboard.
+function CalendarFollowUpModal({ followUp, busy, fallback, onClose, onMove, onReview, onRemove, onKeep }: {
+  followUp: CalendarFollowUp; busy: boolean; fallback: CalendarDraft
+  onClose: () => void; onMove: () => void; onReview: () => void; onRemove: () => void; onKeep: () => void
+}) {
+  const title = followUp.task.fields.action
+  if (followUp.kind === "deadline") {
+    const current = eventSummary(followUp.draft)
+    const moved = followUp.draft ? oneClickMove(calendarDraftFrom(followUp.draft, fallback), followUp.deadline) : null
+    return (
+      <Modal onClose={onClose} title="Move your calendar event?">
+        <div className="rd-followup-body">
+          <p><strong>{endSentence(`Deadline updated to ${deadlineLabel(followUp.deadline)}`)}</strong> Move your calendar event?</p>
+          <p className="rd-followup-task">{title}</p>
+          {current && <p className="rd-cal-line"><Icon name="calendar" size={13} />Event now: {current}</p>}
+        </div>
+        <div className="modal-actions rd-followup-actions">
+          <button className="secondary-button" disabled={busy} onClick={onKeep}>Keep current time</button>
+          <button className="secondary-button" disabled={busy} onClick={onReview}>Review calendar event</button>
+          {moved && <button className="primary-button" disabled={busy} onClick={onMove}>{busy ? "Moving…" : `Move to ${eventSummary(moved)}`}</button>}
+        </div>
+      </Modal>
+    )
+  }
+  if (followUp.kind === "cancelled") return (
+    <Modal onClose={onClose} title="Remove calendar event?">
+      <div className="rd-followup-body">
+        <p><strong>Task cancelled.</strong> Remove its calendar event too?</p>
+        <p className="rd-followup-task">{title}</p>
+      </div>
+      <div className="modal-actions rd-followup-actions">
+        <button className="secondary-button" disabled={busy} onClick={onKeep}>Keep</button>
+        <button className="primary-button" disabled={busy} onClick={onRemove}>{busy ? "Removing…" : "Remove"}</button>
+      </div>
+    </Modal>
+  )
+  return (
+    <Modal onClose={onClose} title="Remove calendar event?">
+      <div className="rd-followup-body">
+        <p>This task has an event in your Google Calendar. <strong>Also remove its calendar event?</strong></p>
+        <p className="rd-followup-task">{title}</p>
+        <p className="form-hint">If you keep it, the event stays in Google Calendar and InboxToTask will no longer manage it.</p>
+      </div>
+      <div className="modal-actions rd-followup-actions">
+        <button className="secondary-button" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="secondary-button" disabled={busy} onClick={onKeep}>Keep event and continue</button>
+        <button className="primary-button" disabled={busy} onClick={onRemove}>{busy ? "Removing…" : "Remove event and continue"}</button>
       </div>
     </Modal>
   )

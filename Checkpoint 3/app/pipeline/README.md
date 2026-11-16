@@ -5,7 +5,8 @@ integration, and Gmail retrieval/task-context/persistence coordinators. The fixt
 CLI can run fictional email independently of Supabase; persistent Gmail processing
 requires backend Auth, configured Google/model services and saved scanning permission.
 See [current state](../../CURRENT_STATE.md) for implemented versus verified behavior.
-No automatic inbox polling or Calendar writes are implemented.
+No automatic inbox polling or Calendar writes are implemented in the pipeline. Calendar events
+are a separate, user-confirmed backend function; see [Calendar behavior](../../docs/calendar-behavior.md).
 
 The original fixture schema remains the default; `gmailSchema` adds per-item semantic
 relevance and reviewable edit/cancel proposals. [gmail-processor.mjs](gmail-processor.mjs)

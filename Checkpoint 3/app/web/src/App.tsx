@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react"
 import { supabase } from "./supabase"
 import type { Session } from "@supabase/supabase-js"
 import RealDashboard from "./RealDashboard"
+import { calendarReviewPending } from "./TaskCalendarControl"
 import type { ScanSettings } from "./storageAdapter"
 import { useSavedScanSettings } from "./useSavedScanSettings"
 import { scanBlockers, signedInRoute } from "./scanSetup"
@@ -159,7 +160,8 @@ function App() {
     const settings = saved.settings
     const route = signedInRoute(settings)
     let kind = view.kind
-    if (kind === "google-return") kind = route === "onboarding" ? "setup" : "settings"
+    // A Calendar authorization started from a task returns to that task's review.
+    if (kind === "google-return") kind = route === "onboarding" ? "setup" : calendarReviewPending(owner) ? "workspace" : "settings"
     if (kind === "auto") kind = route === "onboarding" ? "setup" : "workspace"
     // Only the workspace form can confirm review of previous phrase rules.
     if (route === "review-legacy") kind = "legacy-review"

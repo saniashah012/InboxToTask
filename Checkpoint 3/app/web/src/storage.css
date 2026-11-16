@@ -22,3 +22,7 @@
 .storage-error { color: #9c2323; background: #fff1f1; padding: 14px; border-radius: 5px; }
 .storage-review { border-left: 4px solid #946200; background: #fff8e6; padding: 14px; margin: 16px 0; }
 @media (max-width: 520px) { .storage-page { padding: 24px 16px; } .storage-page header { flex-wrap: wrap; } }
+
+/* Onboarding: optional Calendar permission on the same Google consent screen. */
+.google-calendar-option { display:flex; align-items:flex-start; gap:8px; margin:10px 0; font-size:.9rem; line-height:1.45; cursor:pointer; }
+.google-calendar-option input { flex:none; width:auto; margin:3px 0 0; }

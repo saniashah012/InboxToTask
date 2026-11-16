@@ -72,7 +72,7 @@ export async function googleConnectionStatus(): Promise<GoogleStatus> {
   if (error) throw new Error("Could not load Google connection status. Check the backend setup.")
   return data
 }
-export async function googleConnectionAction(action: "connect" | "check" | "disconnect") {
+export async function googleConnectionAction(action: "connect" | "connect_calendar" | "check" | "disconnect" | "disconnect_calendar") {
   if (!supabase) throw new Error("Account connection is not configured.")
   const { data, error } = await supabase.functions.invoke("google_connection", { body: { action } })
   if (error) {
@@ -85,10 +85,11 @@ export async function googleConnectionAction(action: "connect" | "check" | "disc
       GOOGLE_REVOCATION_PENDING: "Access is blocked in this app, but Google revocation is pending. Retry disconnect.",
       GOOGLE_PROVIDER_UNAVAILABLE: "Google could not be reached. Try again shortly.",
       GOOGLE_CONNECTION_STALE: "The connection changed. Reload its status before trying again.",
+      GOOGLE_CREDENTIALS_UNAVAILABLE: "The saved Google access can no longer be used. Reconnect Google.",
     }
     throw new Error(messages[code] ?? "The Google connection could not be updated. Reload its status and try again.")
   }
-  return data as { authorizationUrl?: string; state?: string }
+  return data as { authorizationUrl?: string; state?: string; revoked?: boolean }
 }
 
 const tables = {

@@ -1,0 +1,35 @@
+/* Google Calendar status on task cards and the follow-ups after a task changes. */
+
+/* "Added to Google Calendar · Dec 1 · 3:00–3:30 p.m." sits with the card's meta text. */
+.rd-cal-line { display:inline-flex; align-items:center; gap:4px; color:var(--green); font-weight:600; overflow-wrap:anywhere; }
+.rd-cal-line svg { flex:none; }
+/* With a valid event link the line opens the event in Google Calendar; it looks the same until hovered. */
+a.rd-cal-link { text-decoration:none; text-underline-offset:2px; border-radius:3px; }
+a.rd-cal-link:hover { color:var(--green-dark); text-decoration:underline; }
+a.rd-cal-link:focus-visible { outline:2px solid var(--green); outline-offset:2px; }
+
+/* "View in Google Calendar" beside a Calendar confirmation in the bottom toast. */
+.undo-toast .rd-toast-link { display:inline-flex; align-items:center; gap:4px; flex:none; color:var(--green-soft); font-weight:700; text-decoration:underline; text-underline-offset:2px; border-radius:3px; white-space:nowrap; }
+.undo-toast .rd-toast-link:hover { color:#fff; }
+.undo-toast .rd-toast-link:focus-visible { outline:2px solid var(--green-soft); outline-offset:2px; }
+.undo-toast .rd-toast-link svg { flex:none; }
+/* While a click checks Google for the event, further clicks on its links are ignored. */
+a.rd-cal-link[aria-disabled="true"], .undo-toast .rd-toast-link[aria-disabled="true"] { cursor:progress; }
+
+/* Completed and cancelled cards: the state text and Manage event share one grid cell. */
+.app-shell .task-row > .rd-cal-closed { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; justify-self:end; }
+.app-shell .task-row .rd-cal-manage { height:28px; padding:0 10px; font-size:11px; }
+@media (max-width: 720px) {
+  .app-shell .task-row > .rd-cal-closed { justify-self:start; justify-content:flex-start; }
+}
+
+/* Follow-up dialogs. */
+.rd-followup-body { padding:18px 24px; display:grid; gap:8px; }
+.rd-followup-body p { margin:0; line-height:1.5; }
+.rd-followup-body .rd-followup-task { color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+.rd-followup-body .rd-cal-line { font-size:12px; }
+.rd-followup-body .form-hint { margin:0; font-size:12px; }
+.rd-followup-actions { flex-wrap:wrap; }
+@media (max-width: 480px) {
+  .rd-followup-actions > button { flex:1 1 100%; }
+}

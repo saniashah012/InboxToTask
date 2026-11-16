@@ -47,7 +47,7 @@ Key files in the current implementation:
 - Gmail retrieval and scanning should remain disabled unless explicitly authorized and verified.
 
 ## Remaining verification work
-Live local results, and the cases not run live, are in [UC8](<Checkpoint 3/docs/use-cases.md#uc8-real-gmail-to-review-workflow>). Still open: real data in the designed dashboard and onboarding, automatic scans, a Waiting For view in the workspace, account deletion, and the signed-in hosted checks not yet covered. Calendar events are postponed to CP4 by user decision.
+Live local results, and the cases not run live, are in [UC8](<Checkpoint 3/docs/use-cases.md#uc8-real-gmail-to-review-workflow>). Still open: real data in the designed dashboard and onboarding, automatic scans, a Waiting For view in the workspace, account deletion, and the signed-in hosted checks not yet covered. Calendar events are postponed to CP4 by user decision; they are now built on the unmerged branch `claude/calendar-designed-ui` (PR #116), off by default and not on `main` or hosted (see [current state](<Checkpoint 3/CURRENT_STATE.md>)).
 
 ## Validation status
 - Offline, local database, local API and seeded browser checks pass. See the [review report](<Checkpoint 3/docs/gmail-manual-scan-review-2026-11-05.md>).

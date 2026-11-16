@@ -3,10 +3,11 @@
 Updated the evening of November 12, 2026 (Central), after the CP4 study release: PRs #103–#111
 and #35 merged to `main` (latest `6ae3356`), with hosted migrations and function deploys
 recorded in [November 12](#november-12-2026-cp4-study-release) below. Older sections keep their
-dates and were not re-verified unless marked. Later Google Calendar work on the unmerged branch
-`claude/calendar-designed-ui` (PR #116) is recorded under November 13 and November 15 in
-[local migration and feature state](#local-migration-and-feature-state-last-observed); it is not
-on `main` or hosted. This is the resumption index, not a claim that services are running. Check Git status and local runtime/migration state before new work.
+dates and were not re-verified unless marked. Google Calendar events (PR #116) were merged to
+`main` on November 16, and their migration and functions reached hosted the same day, switched
+off, so the live site does not offer Calendar (see the November 16 entry below); their
+development is recorded under November 13 to 16 in
+[local migration and feature state](#local-migration-and-feature-state-last-observed). This is the resumption index, not a claim that services are running. Check Git status and local runtime/migration state before new work.
 
 ## Read in this order
 
@@ -50,17 +51,41 @@ Hosted now has 30 migration versions, through `20261112010000`. No secrets or fe
 
 **Decisions recorded today:** categories to check are literal word lists that narrow what reaches Gemini, and with no sender they decide which senders are checked (this supersedes the "meaningful topics, not literal terms" line in the [plan](IMPLEMENTATION_PLAN.md)); participants will not connect their own email (#94); scored study tasks use one standard setup with automatic scanning off, and an optional, logged exploration follows (#58, #59, #60, #101).
 
-**Still open:** PRs #36 and #37 are replaced by #108, and both were closed on November 12. Calendar's latest work is on branch `claude/calendar-designed-ui` (PR #116, not merged), rebased onto `main` on November 13, with remove, read, update and an all-tasks status read added on November 15 and the Calendar screens built the same day; offline checks pass, and create, update, remove and the screens were partly checked in a local browser against Google, with the cases listed under November 15 still not run live (see #44, #45, #46). Its migration is applied locally only; nothing Calendar is on `main` or hosted; the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
+**Still open:** PRs #36 and #37 are replaced by #108, and both were closed on November 12. Calendar (PR #116) is on `main` since November 16, off by default; offline checks pass, and create, update, remove and the screens were partly checked in a local browser against Google, with the cases listed under November 15 still not run live (#46). Its migration and functions are on hosted since November 16, with the backend switch `ENABLE_CALENDAR_EVENTS` set the same day; the production web build still has `VITE_CALENDAR_EVENTS_ENABLED` unset and the Google Cloud Calendar setup is not done, so the live site does not offer Calendar; the rest is left in #53; the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
 
 **Docs record (November 12, evening):** branch `mzheng/docs-nov12` (unpushed when written) brought the living docs up to date with this release and added [Checkpoint 4](<../Checkpoint 4/README.md>). A second review on branch `claude/docs-review-fable-65324d`, on top of it, then removed four statements from the CP4 plan that a public repository shouldn't carry and corrected stale lines in this file, the handoff, the implementation plan, `INSTALL.md`, the local setup guide, safety and privacy, the root README and the CP4 plan. Docs only; no code, hosted or board changes. Verified: PR merge times, issue numbers and the board against GitHub; migration names, limits and line counts against the code; relative links and anchors; `git diff --check`. Not run: the test suites (no `node_modules` in the review worktree). A later one-line correction on branch `mzheng/current-state-pr37` (unpushed when written) records that PR #37 was closed on November 12 (5:25 PM Central), where this file had said it should be closed; verified against GitHub and with `git diff --check`.
 
-**#51 browser-check fixes (November 12, late evening):** branch `mzheng/narrow-details-onboarding-summary` (unpushed when written; not merged or deployed). A local browser check of `main` for #51 found two bugs, fixed here. (1) "View details" was hidden on suggestion, task and proposed-change cards at window widths of 1050px or less (a rule from the designed CSS), with no menu equivalent, so a card's sender and evidence couldn't be opened; it now shows at every width, and at phone width it sits under the card text with the ⋮ menu kept at the top right (`real-dashboard.css`). (2) With only a category to check, onboarding's review step said "Included senders and domains: None, so nothing will be processed", contradicting #104; it now says any sender you haven't excluded is checked for your categories' words (`noSendersLabel` in `scanSetup.ts`). Verified: offline suites 214/214 and 56/56 (a new assertion for the label), type-check and build; in the browser, locally with fictional users and seeded data, "View details" visible and opening the source email at 1024, 900, 760 and 390px, Passive cards unchanged, and the new onboarding label. Not checked: the live site. A card's text can still overflow at phone width (a proposed-change link; existing, for #100).
+**#51 browser-check fixes (November 12, late evening):** branch `mzheng/narrow-details-onboarding-summary` (unpushed when written; merged to `main` on November 13 as #115). A local browser check of `main` for #51 found two bugs, fixed here. (1) "View details" was hidden on suggestion, task and proposed-change cards at window widths of 1050px or less (a rule from the designed CSS), with no menu equivalent, so a card's sender and evidence couldn't be opened; it now shows at every width, and at phone width it sits under the card text with the ⋮ menu kept at the top right (`real-dashboard.css`). (2) With only a category to check, onboarding's review step said "Included senders and domains: None, so nothing will be processed", contradicting #104; it now says any sender you haven't excluded is checked for your categories' words (`noSendersLabel` in `scanSetup.ts`). Verified: offline suites 214/214 and 56/56 (a new assertion for the label), type-check and build; in the browser, locally with fictional users and seeded data, "View details" visible and opening the source email at 1024, 900, 760 and 390px, Passive cards unchanged, and the new onboarding label. Not checked: the live site. A card's text can still overflow at phone width (a proposed-change link; existing, for #100).
 
 **November 15 (docs only), branch `mzheng/claude-md-prompting`:** [CLAUDE.md](../CLAUDE.md) was
 rewritten for clarity: a numbered reading order, a reason given with each rule, "ask first"
 and "report offline and live results separately" stated as instructions, and plainer terms. The
 rules themselves are unchanged and still live in [AGENTS.md](../AGENTS.md). Verified: every link
 in the file resolves and `git diff --check` is clean. No code changed and nothing was run.
+
+**November 16: Google Calendar merged to `main`, off by default.** PR #116
+(`claude/calendar-designed-ui`, which also carried the `CLAUDE.md` rewrite above) was merged at
+12:22 AM Central as merge commit `44ad77f`, a production deployment. Before merging, on the
+branch: `npm test` (222 + 56 pass), `npm run test:calendar` (45 pass), `supabase:prepare`,
+`deno check` of all six functions, `tsc --noEmit` and the web build; all four PR checks passed.
+On the merge commit both CI jobs passed and Vercel reported the deployment complete. The live
+site was not opened in a browser afterwards. With Calendar off, the live site changes in two
+ways: every dialog scrolls when it is taller than the window, and adding a suggestion says
+"Task added." The live site's bundle was later downloaded and contains the #116 code ("Manage
+event", "Remove from calendar", "View in Google Calendar", "Task added.", and no longer "No
+Calendar event was created"). What was and was not verified live against Google is unchanged
+(see November 15 below; #46 is still open), and the end time in extraction and the #101 reset
+script are not started.
+
+**Hosted changes on November 16** (project `IS492_c3`), each approved by Matthew in chat and run by a Claude Code session:
+
+- About 11:58 AM: read-only preflight. The hosted ledger had every migration through `20261112010000`, with `20261113000000` pending; a dry run showed exactly that one migration. A schema-only snapshot of the hosted `public` and `private` schemas (no data, no credentials) was saved privately, outside Git.
+- About 11:59 AM: migration `20261113000000_calendar_events` applied with `supabase db push` (one migration); the ledger shows it applied. Checked afterwards without a session: `calendar_event_statuses`, `calendar_event_status`, `calendar_event_service`, `google_connection_service`, `google_connection_service_base` and `google_connection_status` all refuse anonymous calls (401, `42501`), and `private.calendar_events` is not exposed through REST.
+- About 12:01 PM: `google_connection` (now version 3), `google_callback` (version 3) and `calendar_event` (version 1, new) deployed from `main` at `44ad77f`. `gmail_scan` (version 5) and `analysis_email` (version 10) were not redeployed. Checked afterwards without a session: `calendar_event` answers 401 `AUTH_REQUIRED` with no or a bad token, 403 `ORIGIN_NOT_ALLOWED` for another origin, 405 for GET and 204 to the live site's preflight; `google_connection` answers 401 and 403 the same way; `google_callback` with a bad state redirects (303) to the live site with `google=failed`.
+- Early afternoon: Matthew signed in on the live site and reported Gmail still connected and no Calendar option, as expected with the web flag off. This is the only signed-in check of the new `google_connection` and `google_callback` versions; a fresh connect or reconnect was not run.
+- About 12:19 PM: `ENABLE_CALENDAR_EVENTS=true` set on hosted (`supabase secrets set`), after that report. No other secret or flag was changed. Checked afterwards without a session: `calendar_event` and `google_connection` still answer 401 `AUTH_REQUIRED`.
+
+Hosted now has 31 migration versions, through `20261113000000`. `VITE_CALENDAR_EVENTS_ENABLED` is not set for the production web build, and the Google Calendar API and the `calendar.events.owned` scope are not added to the production Google Cloud project, so the live site does not offer Calendar. **Not verified:** no signed-in request has reached `calendar_event` on hosted, and connecting or reconnecting Google through the new function versions has not been run on the live site. **Remaining before Calendar is usable on the live site (#53):** set `VITE_CALENDAR_EVENTS_ENABLED` for the production web build and redeploy it; enable the Calendar API and add the scope in Google Cloud; then check connect, add and remove with a study account. The reconnect cases (#46) are still not run against Google.
 
 ## Gmail phases
 
@@ -124,6 +149,7 @@ The app does not fetch or display email bodies on demand.
   | `20261112001000_scan_cooldown_and_batch_stops` | 30-second scan cooldown; a planned per-batch stop counts as successful (F6); PR #36 renumbered | Applied (rebuilt November 12) | Applied November 12 (#108) |
   | `20261112002000_auto_scan_preference` | Saved opt-in for automatic scanning while the app is open; PR #37 renumbered | Applied (rebuilt November 12) | Applied November 12 (#108) |
   | `20261112010000_incremental_scan_window` | New checks cover email since the last complete check (5-minute overlap); status reports the window | Applied (rebuilt November 12) | Applied November 12 (#108) |
+  | `20261113000000_calendar_events` | Google Calendar event records, status reads and the `google_connection_service` wrapper (#116) | Applied November 15 | Applied November 16 (Calendar switched off) |
 
   The two #29 migrations are dated earlier than one already applied locally, so the local
   database needs `migration up --include-all`. Before the hosted push, read-only aggregate
@@ -146,6 +172,8 @@ The app does not fetch or display email bodies on demand.
   `20261109200000_private_topic_words`. `20261109220000_source_delete_quotes_and_boundary` was
   also applied later on November 9, so hosted has 25 versions. On November 12 five more were
   applied (see [November 12](#november-12-2026-cp4-study-release)), so hosted has 30 versions.
+  On November 16 `20261113000000_calendar_events` was applied (see the November 16 hosted
+  changes above), so hosted has 31 versions.
 - **Hosted Gmail connection and scanning are live (checked November 9, about 6:30 PM Central).**
   `google_connection`, `google_callback` and `gmail_scan` were deployed at 00:20 UTC on November 10
   (6:20 PM Central November 9), alongside `analysis_email`. Read from secret digests, not values:
@@ -153,7 +181,9 @@ The app does not fetch or display email bodies on demand.
   `ENABLE_FIXTURE_EXTRACTION` and `ENABLE_STORAGE_CLEANUP` are false; a Gemini key and Google
   OAuth/token secrets are set. Matthew approved the deployment in chat; a Claude Code session ran it, applying `20261109220000`, setting the function secrets and deploying the three functions (corrected November 9: an earlier version of this note said it was unrecorded). On the live site, anyone who
   signs in can connect Gmail and, after saving consent, send permitted email to Gemini.
-  Signed-in hosted scanning has no recorded verification.
+  Signed-in hosted scanning has no recorded verification. On November 16 `google_connection` and
+  `google_callback` were redeployed from `main` (version 3 each) and `calendar_event` was deployed
+  (version 1), switched off; see the November 16 hosted changes above.
 - **Unused Groq secret removed from hosted (November 9, 10:16 PM Central).** `GROP_API_KEY` was
   deleted with `supabase secrets unset`, approved by Matthew in chat; 20 secrets remain. No code on
   `main` reads it. Only the legacy Groq `analysis_email` deployment (version 7, October 30) did,
@@ -174,8 +204,9 @@ The app does not fetch or display email bodies on demand.
   `prompt=select_account` to product sign-in was merged on November 12 (#35); it is not yet
   browser-checked on the live site. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Details are in the
   [rollout record](docs/hosted-backup-verification-2026-11-06.md#signed-in-checks-reported-by-sania).
-- **Google Calendar moved to CP4 by user decision.** It is not in CP3, on `main` or on hosted. The
-  latest work is on branch `claude/calendar-designed-ui` (pushed November 13 as PR #116, not merged): event creation, the
+- **Google Calendar moved to CP4 by user decision.** It is not in CP3 or on hosted. The
+  work was done on branch `claude/calendar-designed-ui` (pushed November 13 as PR #116, merged to
+  `main` on November 16, off by default; see the November 16 entry above): event creation, the
   reconnect fixes with a Calendar-only disconnect, and the dashboard choice.
   **November 13 (#44):** the branch was rebased onto `main` at `455cba4` (three commits, plus one
   for the items here). The dashboard, onboarding and settings edits were reapplied to the files
@@ -403,13 +434,13 @@ PR #22 was merged to `main` at `59461b6` on November 5 at about 11:01 PM Central
 
 Sania reports that Vercel's production branch is `main` (Settings > Git), and that rollback to `e2b0009` is available after the PR #22 merge. Treat every merge as a production deployment. A rollback does not undo migrations.
 
-Next (as of November 12):
+Next (as of November 12; the Calendar item as of November 16):
 
 1. Check the live site signed in: account picker, Settings save and exits, a categories-only scan, New/Unread labels, quiet automatic checks (#54, #51).
-2. Calendar (branch `claude/calendar-designed-ui`, PR #116, not merged): the rebase (#44) and the screens (#45) are built; finish and verify the event links, commit, run the remaining live cases and the three reconnect cases locally (#46), then the noon November 17 decision (#53). Applying the migration on hosted and turning the flags on there need separate approval.
+2. Calendar (on `main` since November 16, #116; its migration and functions on hosted since November 16 with the backend switch set, the web flag still off): the remaining live checks, including the three reconnect cases (#46); then the remaining steps (the production web flag and redeploy, the Calendar API and scope in Google Cloud, then connect, add and remove with a study account), and the noon November 17 decision (#53).
 3. Study materials (#58–#64, #101) to match the release; hosted items left in #52 (security review, OAuth test users for the study inboxes, a model spending limit).
 4. Close PR #37 (#36 is closed). Background scanning with the app closed (#49) stays after the study.
 
 CP4 deliverables and the evaluation design are in [Checkpoint 4](<../Checkpoint 4/README.md>); the [CP4 plan](<../Checkpoint 4/CP4_PLAN.md>) was updated November 12 to the decisions above.
 
-**Known CP3 gap:** the assignment's "all proposed core features" is not met. Not built: automatic scans, real data in the designed dashboard, a Waiting For view in the workspace and account deletion. Calendar events moved to CP4. **CP4 update (November 12):** real data is in the designed dashboard and onboarding (#51), and automatic checks run while the app is open (#108, #110); scanning with the app closed and account deletion are still not built. Calendar events are built only on the unmerged branch `claude/calendar-designed-ui` (see November 15 above), off by default, and are not on `main` or hosted.
+**Known CP3 gap:** the assignment's "all proposed core features" is not met. Not built: automatic scans, real data in the designed dashboard, a Waiting For view in the workspace and account deletion. Calendar events moved to CP4. **CP4 update (November 12):** real data is in the designed dashboard and onboarding (#51), and automatic checks run while the app is open (#108, #110); scanning with the app closed and account deletion are still not built. Calendar events are on `main` since November 16 (#116), off by default; their migration and functions are on hosted, switched off, so the live site does not offer Calendar.

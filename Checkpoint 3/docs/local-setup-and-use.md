@@ -124,7 +124,7 @@ Use only the dedicated test account.
 ## 7. What does not work
 
 - **Automatic scans with the app closed:** not built. Since November 12, opt-in automatic checks run every minute while the designed dashboard is open.
-- **Google Calendar:** events are built for CP4 on the unmerged branch `claude/calendar-designed-ui` (PR #116), off by default (`VITE_CALENDAR_EVENTS_ENABLED`, `ENABLE_CALENDAR_EVENTS`) and needing migration `20261113000000_calendar_events`; see [Calendar behavior](calendar-behavior.md) and [current state](../CURRENT_STATE.md). On `main`, ICS export is the only calendar path.
+- **Google Calendar:** events are on `main` since November 16 (#116), off by default (`VITE_CALENDAR_EVENTS_ENABLED`, `ENABLE_CALENDAR_EVENTS`) and needing migration `20261113000000_calendar_events`. The migration and functions are on hosted since November 16, switched off, so the live site does not offer Calendar. See [Calendar behavior](calendar-behavior.md) and [current state](../CURRENT_STATE.md). With the flags off, ICS export is the only calendar path.
 - **Real data in the designed dashboard:** connected since November 9 (#51). The workspace page above remains as the developer workspace.
 - **Waiting For view in the developer workspace:** not built. The designed dashboard's Active view shows those records.
 - **Account deletion:** not built.

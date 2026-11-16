@@ -148,8 +148,22 @@ re-running the file); `npm test` 237/237 and 56/56; `git diff --check`. **Not ve
 nothing has run on hosted Postgres, so table ownership, access to `auth.users` and the role
 lockout there are untested, and the two rehearsals #101 requires have not happened. A reset
 refuses if a Google connect or permission prompt was started on the account after the freeze,
-so permissions must be granted before it. `task_script.md` still needs a line keeping
-participants out of Settings, Connections. Nothing hosted changed.
+so permissions must be granted before it. Nothing hosted changed.
+
+**November 16, study documents aligned with the day's decisions (#57, #58, #62–#64, #101), same
+branch:** docs only. A copy-ready
+[inbox_template](<../Checkpoint 4/docs/study_materials/inbox_template/README.md>) gives the
+writers the email file format, four example emails, notes on writing each type of email and a
+proposed answer key layout; the send script's dry run accepts its examples.
+`loading_inboxes.md` now says the answer key numbers the test sender like the other senders,
+and reserves ids `01`–`29` for the main inbox and `30` onward for the edge cases. Section 7 of
+`task_script.md` (the optional exploration) keeps participants free to change any filter, word
+list or scanning setting and to send a made-up email, keeps them out of Settings, Connections,
+says the provided sender is the test sender through a new-message window the facilitator opens,
+and warns that the first scan after a settings change takes longer. Matthew confirmed on
+November 16 that the provided study sender account is the test sender. The answer key layout is
+a proposal for the owners of #62 and #63. Verified: the dry run against the template, relative
+links, and `git diff --check`. No code changed and no test was rerun.
 
 ## Gmail phases
 

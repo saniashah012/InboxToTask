@@ -23,8 +23,10 @@ sender to allow:
 
 The test sender is the team's existing development test account. For the study it sends
 fictional email to study inboxes A and B, and the team also uses it to try the app during
-development. It is never a study account, holds only test mail, and is never given to
-participants. There is no spare study inbox.
+development. It is never a study account and holds only test mail. Participants never get
+its sign-in details. In the optional exploration (task script, Section 7) a participant who
+does not want to use their own account may type a made-up email in a new-message window the
+facilitator opens in the test sender. There is no spare study inbox.
 
 Every email is really sent through Gmail. Nobody inserts messages directly into an inbox or
 changes a sender address, so what participants see is ordinary delivered mail.
@@ -75,7 +77,15 @@ Each inbox has a folder of email files, one Markdown file per email:
 - `inbox_a/emails/*.md` for inbox A (#62)
 - `inbox_b/emails/*.md` for inbox B (#63)
 
-The answer key sits in the same inbox folder and names senders by role, never by address.
+The answer key sits in the same inbox folder, outside `emails/`, and names senders by role,
+never by address. In the key the test sender gets a number like the other senders (for
+example Sender 3); only the email files use the label `test-sender`, which is how the script
+knows what to send.
+
+[inbox_template/](inbox_template/) has a copy-ready folder with example emails, a proposed
+answer key layout and notes on writing each type of email. Two people write into each
+`emails/` folder, so keep the ids apart: `01` to `29` for the main inbox (#62, #63) and `30`
+onward for the edge cases (#64).
 
 A file starts with front matter between two `---` lines, followed by the plain-text body:
 

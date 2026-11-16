@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.study.example
 
 # Installed dependencies and local Supabase state.
 node_modules/

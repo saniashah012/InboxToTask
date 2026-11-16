@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test ../tests/pipeline.test.mjs ../tests/supabase-endpoint.test.mjs ../tests/storage-database.test.mjs ../tests/storage.test.mjs ../tests/google-connection.test.mjs ../tests/google-database.test.mjs ../tests/scan-settings.test.mjs ../tests/gmail-retrieval.test.mjs ../tests/gmail-extraction.test.mjs ../tests/gmail-persistence.test.mjs ../tests/gmail-source-links.test.mjs ../tests/private-topics.test.mjs ../tests/http-gates.test.mjs && node --experimental-strip-types --test ../tests/onboarding-settings.test.mjs ../tests/dashboard-model.test.mjs ../tests/calendar-export.test.mjs ../tests/new-items.test.mjs",
+    "test": "node --test ../tests/pipeline.test.mjs ../tests/supabase-endpoint.test.mjs ../tests/storage-database.test.mjs ../tests/storage.test.mjs ../tests/google-connection.test.mjs ../tests/google-database.test.mjs ../tests/scan-settings.test.mjs ../tests/gmail-retrieval.test.mjs ../tests/gmail-extraction.test.mjs ../tests/gmail-persistence.test.mjs ../tests/gmail-source-links.test.mjs ../tests/private-topics.test.mjs ../tests/http-gates.test.mjs ../tests/study-send.test.mjs && node --experimental-strip-types --test ../tests/onboarding-settings.test.mjs ../tests/dashboard-model.test.mjs ../tests/calendar-export.test.mjs ../tests/new-items.test.mjs",
     "test:dashboard": "node --experimental-strip-types --test ../tests/dashboard-model.test.mjs",
     "test:google": "node --test ../tests/google-connection.test.mjs ../tests/google-database.test.mjs",
     "test:google:local": "node ../tests/google-local.mjs",
@@ -14,6 +14,8 @@
     "test:local": "node ../tests/storage-local.mjs",
     "test:onboarding": "node --experimental-strip-types --test ../tests/onboarding-settings.test.mjs",
     "test:calendar": "node --experimental-strip-types --test ../tests/calendar-form.test.mjs ../tests/calendar-export.test.mjs ../tests/calendar-event.test.mjs ../tests/calendar-database.test.mjs",
+    "test:study": "node --test ../tests/study-send.test.mjs",
+    "study:send": "node study/send.mjs",
     "supabase:prepare": "node pipeline/prepare-edge.mjs",
     "fixtures:cp2": "node pipeline/import-cp2.mjs",
     "extract:plan": "node pipeline/cli.mjs --all",

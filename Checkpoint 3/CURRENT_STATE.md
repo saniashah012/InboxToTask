@@ -62,6 +62,22 @@ and "report offline and live results separately" stated as instructions, and pla
 rules themselves are unchanged and still live in [AGENTS.md](../AGENTS.md). Verified: every link
 in the file resolves and `git diff --check` is clean. No code changed and nothing was run.
 
+**November 16, study test sender (#57), branch `mzheng/study-sender-and-reset` (unpushed when
+written; not merged or deployed):** a send script for the fictional study inboxes,
+`npm run study:send -- --inbox A [--send]` in [app/study](app/study/), and the runner's page
+[loading_inboxes.md](<../Checkpoint 4/docs/study_materials/loading_inboxes.md>). The script
+reads one Markdown file per email from `inbox_a/emails/` or `inbox_b/emails/`, sends only the
+files marked `sender: test-sender` over Gmail SMTP as the signed-in test sender, lists the rest
+as "send by hand", is a dry run unless `--send` is given, and takes addresses and the app
+password only from the environment or a Git-ignored `.env.study`. Decisions by Matthew on
+November 16: the test sender is the team's existing development test account, and the study
+uses inboxes A and B only, with no spare inbox. **Verified offline only:** `npm run test:study`
+15/15 (fake transport and a loopback fake SMTP server), and a dry run that stops with "the
+inbox email folder does not exist yet" because #62 and #63 have not added their files.
+**Not verified:** no email has been sent with the script, so the Gmail sign-in, delivery,
+threading and inbox order are untested; the email file format is not yet agreed with the
+owners of #62–#64. Nothing hosted changed.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

@@ -15,6 +15,7 @@ public repository.** Use participant codes, and keep identifying records private
 | `questionnaires.md` | UMUX-Lite, satisfaction and trust Likert items, privacy-understanding check |
 | `interview_guide.md` | Post-session interview questions |
 | `codebook.md` | Thematic analysis codes and how disagreements were resolved |
-| `inboxes/` | Fictional inboxes A and B, with the gold labels for each |
+| `inbox_a/`, `inbox_b/` | Fictional inboxes A (#62) and B (#63): one file per email in `emails/`, plus the answer key (gold labels) |
+| [`loading_inboxes.md`](loading_inboxes.md) | How to load, check and reload a study inbox with the test sender (#57) |
 | `benchmark/` | Labeled development and held-out sets, and the list of ablation variants |
 | `results/` | De-identified session scores and benchmark output |

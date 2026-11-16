@@ -299,6 +299,72 @@ The app does not fetch or display email bodies on demand.
       account hides the earlier account's events.
   - The form's draft holds one day for an all-day event, so an event the user stretched over
     several days in Google reads back as its first day.
+  - **Calendar screens, November 15 (#45), same branch:** the screens described in
+    [Calendar behavior](docs/calendar-behavior.md) are built on the backend actions above.
+    - *New files:* `calendarForm.ts` (the form's fill-in rules and the follow-up rules, pure
+      functions), `calendarApi.ts` (calls to `calendar_event` and the all-tasks status read),
+      `calendar-cards.css`, and `tests/calendar-form.test.mjs` (in `npm run test:calendar`).
+    - *Event dialog* (`TaskCalendarControl.tsx`): the Add form opens with All day unticked,
+      the task's date, a start only when the task has a time and an end only when there is a
+      start; blank required fields are outlined and the button stays disabled until they are
+      filled; a read-only "Calendar · Primary only" row shows the connected account. For a task
+      with an event it becomes Manage event: Google's current details, Save changes (same
+      event), Open in Google Calendar, and Remove from calendar with a confirmation. It handles
+      an event changed or deleted in Google, a lost update or removal with Retry, and missing
+      Calendar permission. A lost update can be retried only from the browser that sent it,
+      because the status reads do not return the pending values.
+    - *Dashboard* (`RealDashboard.tsx`): cards show "Added to Google Calendar" with the saved
+      date and time and a Manage event button, in Active and Completed; completed and cancelled
+      tasks get Open and Remove only. After a task's deadline changes, a follow-up offers to
+      move the event (one click only for an "on" deadline with a time), review it, or keep it.
+      After an approved cancellation it asks whether to remove the event. Moving a task with
+      an event to Suggestions or Dismissed asks about the event first. The three notices that
+      ended "No Calendar write was authorized." drop that ending when Calendar is enabled.
+    - *Onboarding* (`GoogleConnectionPanel.tsx`, `Onboarding.tsx`): the Connect step has an
+      unticked checkbox that asks Google for Calendar on the same consent screen.
+    - *Verified offline:* `npm test` (222 + 56 pass), `npm run test:calendar` (45 pass, 14 of
+      them the new form tests), `tsc --noEmit` and the web build.
+    - *Verified in the browser on the local stack, against Google, with events titled
+      `[TEST]` that were removed afterwards:* the Add form for a date-only task (All day
+      unticked, times blank and outlined, button disabled, nothing filled after typing a
+      start); creating a timed event; the card line and Manage event; Save changes with the end
+      following a moved start; the deadline follow-up with a one-click move for an "on"
+      deadline, and without one for a "by" deadline; Review calendar event opening on the new
+      date; Remove from calendar with its confirmation; a completed task keeping its line with
+      Open and Remove only; and the question before moving a task with an event back to
+      Suggestions (cancelled, so the task stayed). No console errors. Two defects found and
+      fixed during this: the review dialog lost its new schedule when the dialog read Google a
+      second time, and two notices ended with a doubled period.
+    - *Backend actions run live through the page before the screens existed:* read, update
+      both ways between all-day and timed (so the explicit-null patch works), a stale version
+      refused with `CALENDAR_EVENT_CHANGED`, a second create returning the same event, a wrong
+      task revision refused, remove, `CALENDAR_NOT_ADDED` after removal, and adding again as a
+      new event.
+    - *Not checked live:* the cancellation follow-up (it needs a cancellation approved on a
+      task with an event), "Remove event and continue" and "Keep event and continue", the
+      onboarding checkbox (the test account already has Calendar, so it is hidden), an event
+      changed or deleted in Google while Manage event is open, a lost result and Retry,
+      missing Calendar permission, and the three reconnect cases (#46).
+    - *Side effect of the test:* the local task "Review the advisor notes…" was edited and
+      edited back, so its deadline wording now reads "Entered by you after reading the source
+      email." and its revision is 4. Its date, time and timing are as before.
+    - *Event links, November 16, same branch* (`RealDashboard.tsx`,
+      `calendar-cards.css`): the card's calendar line and a "View in Google Calendar" link on
+      the notice after adding, saving or moving an event open the event in a new tab. A plain
+      click first asks Google whether the event still exists, and returning to the tab
+      re-reads that one event; see
+      [Calendar behavior](docs/calendar-behavior.md#what-the-task-card-shows). Nothing opens by
+      itself. Onboarding's review step now says Calendar is optional when Calendar is enabled.
+      - *Verified:* `tsc --noEmit`, the web build and `npm run test:calendar` (45 pass). In the
+        browser on the local stack with a `[TEST]` event, removed afterwards: both links appear
+        with the event's address; a click opens a tab, reads the event and sends the tab to it;
+        returning to the tab reads that event once and not again; no console errors.
+      - *Checked with a simulated backend answer, not a real one:* an event deleted in Google
+        (the tab closes and the notice says it was deleted) and Google unreachable (the saved
+        link opens and no error shows).
+      - *Not verified:* the event page opening in Google Calendar itself (the test browser
+        blocks tabs opened by automated clicks), the card returning to Add to calendar after a
+        real deletion in Google, and a browser that blocks the new tab.
 - **The two defects to fix before hosted scanning now have a fix in
   `20261109220000_source_delete_quotes_and_boundary`**, applied on hosted November 9 and locally on November 12: deleting a Gmail
   source now also clears quotes of that message in other sources' evidence, and

@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 import { googleConnectionAction, googleConnectionStatus, type GoogleStatus } from "./storageAdapter"
+import { calendarEventsEnabled } from "./TaskCalendarControl"
 
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events.owned"
 
-export default function GoogleConnectionPanel() {
+// calendarOption: onboarding's Connect step offers Calendar on the same Google consent
+// screen, through a checkbox that starts unticked. Elsewhere Calendar is added from a task.
+export default function GoogleConnectionPanel({ calendarOption = false }: { calendarOption?: boolean } = {}) {
+  const [alsoCalendar, setAlsoCalendar] = useState(false)
   const [status, setStatus] = useState<GoogleStatus | null>(null)
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState("")
@@ -30,7 +34,7 @@ export default function GoogleConnectionPanel() {
     setBusy(true); setError(""); setNotice("")
     try {
       if (action !== "reload") {
-        const result = await googleConnectionAction(action)
+        const result = await googleConnectionAction(action === "connect" && offerCalendar && alsoCalendar ? "connect_calendar" : action)
         if (!live.current) return
         if (action === "connect" || action === "disconnect_calendar") {
           const destination = new URL(result.authorizationUrl ?? "")
@@ -55,6 +59,7 @@ export default function GoogleConnectionPanel() {
   }
   const hadCalendar = !!status?.scopes?.includes(CALENDAR_SCOPE)
   const calendarConnected = status?.state === "connected" && hadCalendar
+  const offerCalendar = calendarOption && calendarEventsEnabled && !!status && status.state !== "disconnecting" && !calendarConnected
   return <section className="storage-panel" aria-labelledby="google-connection-title">
     <h2 id="google-connection-title">Google connection</h2>
     <p>Connect the Google account with the same email as your app account. Gmail read access supports permitted manual scans. Connecting does not enable scanning or send email to a model.</p>
@@ -68,6 +73,10 @@ export default function GoogleConnectionPanel() {
       <span>{busy ? "Checking Google connection…" : status ? `Status: ${status.state.replace(/_/g, " ")}${status.email ? ` · ${status.email}` : ""}${status.state === "connected" ? (hadCalendar ? " · Gmail and Calendar" : " · Gmail only") : ""}` : "Connection status unavailable."}</span>
     </p>
     {notice && <p role="status">{notice}</p>}{error && <p className="storage-error" role="alert">{error}</p>}
+    {offerCalendar && <label className="google-calendar-option">
+      <input type="checkbox" checked={alsoCalendar} disabled={busy} onChange={(e) => setAlsoCalendar(e.target.checked)} />
+      <span>Also let InboxToTask add events you approve to Google Calendar. Optional: nothing is added until you confirm each event, and you can allow this later from a task.</span>
+    </label>}
     <div className="storage-actions">
       <button disabled={busy || !status || status.state === "disconnecting"} onClick={() => void run("connect")}>{status?.state === "connected" || status?.state === "reconnect_required" ? "Reconnect Google" : "Connect Google"}</button>
       <button disabled={busy || status?.state !== "connected"} onClick={() => void run("check")}>Check token availability</button>

@@ -905,14 +905,27 @@ button:disabled {
   position: fixed;
   z-index: 50;
   inset: 0;
-  padding: 24px;
+  padding: 24px 24px 0;
   display: grid;
-  place-items: center;
+  /* A dialog taller than the window scrolls inside the backdrop. Centering it
+     with place-items cut off its top and bottom with no way to reach them, so
+     the dialog centers itself with auto margins, which collapse when it is tall.
+     The second row is the gap under the dialog: bottom padding is not counted
+     when a grid's content overflows. */
+  grid-template-rows: minmax(min-content, 1fr) 24px;
+  place-items: start center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: rgba(20, 31, 27, 0.38);
   backdrop-filter: blur(4px);
 }
 
+.overlay::after {
+  content: "";
+}
+
 .modal {
+  margin-block: auto;
   width: min(100%, 500px);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.6);

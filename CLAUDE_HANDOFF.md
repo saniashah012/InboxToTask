@@ -13,10 +13,10 @@ Offline tests pass; create, update, remove and several screens were checked in a
 browser against Google; event links that check Google on a click were added on November 16. The
 migration was applied locally on November 15. PR #116 was merged to `main` on November 16
 (`44ad77f`), so Calendar is on `main`, off by default. Later on November 16 its migration and
-the `google_connection`, `google_callback` and `calendar_event` functions reached hosted, switched
-off (`ENABLE_CALENDAR_EVENTS` and `VITE_CALENDAR_EVENTS_ENABLED` are not set), so the live site
-does not offer Calendar. The production web flag, the Calendar API and scope in Google Cloud and
-the backend flag remain under #53, each needing approval. See
+the `google_connection`, `google_callback` and `calendar_event` functions reached hosted, and
+the backend switch `ENABLE_CALENDAR_EVENTS` was set there. The production web build still has
+`VITE_CALENDAR_EVENTS_ENABLED` unset, so the live site does not offer Calendar. The production
+web flag and the Calendar API and scope in Google Cloud remain under #53. See
 [current state](<Checkpoint 3/CURRENT_STATE.md>), [Calendar behavior](<Checkpoint 3/docs/calendar-behavior.md>) and #44–#46.
 
 **Repository:** `C:/Users/mzhen/Desktop/School/IS492/IS-492-Project`

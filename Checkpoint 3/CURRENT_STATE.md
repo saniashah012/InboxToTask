@@ -110,6 +110,30 @@ dismissing). Not checked: the Dismissed tab (empty), the edit-proposal popup and
 states (no such proposals existed), a task with several linked emails, phone width, and the
 live site. Escape does not close these popups (existing behavior, not changed here).
 
+**November 16: daily request default raised from 20 to 50.** Branch `mzheng/daily-requests-50`,
+requested by Matthew in chat so study and test accounts can explore without reaching the limit.
+Migration `20261116180000_daily_requests_default_50` sets the `storage_preferences.daily_requests`
+default to 50 and moves rows still at 20 to 50; a limit set by hand is kept. The 1–100 range, the
+200,000 daily tokens and the 3-per-minute provider limit are unchanged, so the token limit may now
+be reached before 50 requests on long emails (not measured). Docs that stated 20 were updated.
+Verified: `npm test` 222 + 56 pass, with a new assertion on the default that fails without the
+migration (the move of existing rows has no test); a separate review approved the change. Not run:
+pgTAP and `test:local`. Part of #48's discussion; #48's items are not changed by this.
+
+**Hosted change on November 16** (project `IS492_c3`), approved by Matthew in chat on the
+condition that tests passed and the review approved, and run by a Claude Code session:
+
+- About 3:13 PM Central: a dry run showed exactly `20261116180000` pending; it was applied with
+  `supabase db push` from this branch, before the branch was merged. The ledger shows it applied.
+  A read-only count afterwards: the column default is 50 and the one existing preference row is
+  at 50. Accounts without a row (it is created on an account's first model call) start at 50.
+
+Hosted now has 32 migration versions, through `20261116180000`. No function was redeployed and no
+secret or flag was changed. A read-only check the same afternoon matched the hosted flags against
+`true`/`false` without printing values: fixture extraction is off and Gmail scanning is on.
+If the study reset (PR #122) snapshots `storage_preferences`, take that snapshot after this
+change, or it restores the old limit.
+
 **November 17: turn a Passive email into a task.** Branch `mzheng/passive-to-task` (off `main`;
 pushed on November 17, no pull request yet, not merged). The study freeze was moved at the November 16 team meeting to start
 Thursday November 19 (night), so whether this merges before it is Matthew's decision. No hosted change: the
@@ -756,7 +780,7 @@ The app does not fetch or display email bodies on demand.
   Stored local Gmail connections were cleared, so local accounts must reconnect. The hosted key's
   status is not recorded here, because this repository is public.
 - `GOOGLE_RETURN_URL` in the private local file points at the product root.
-- The demo's raised daily request limit (50) was lost when the local database was rebuilt on November 12; local accounts are back to the default 20. Hosted defaults are unchanged.
+- The demo's raised daily request limit (50) was lost when the local database was rebuilt on November 12; local accounts were back to the default 20. Since migration `20261116180000` (November 16) the default is 50.
 
 ## Latest evidence and next action
 

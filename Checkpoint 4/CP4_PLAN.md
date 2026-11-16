@@ -244,7 +244,7 @@ Keep the current shape: Edge Functions, canonical pipeline and SQL.
 
 Hosted Gmail went live on November 9 and was updated November 12, each with Matthew's approval. The controls below are tracked in #48 and #52. The [abuse-control design](<../Checkpoint 3/IMPLEMENTATION_PLAN.md#class-project-api-abuse-controls-proposed-implementation>) describes them.
 
-**Existing per-user limits stay:** 20 requests and 200,000 tokens a day, 3 model calls per batch, a 30-second cooldown (both changed November 12) and token reservations. The items below are tracked in #48 and #52.
+**Existing per-user limits stay:** 50 requests (raised from 20 on November 16) and 200,000 tokens a day, 3 model calls per batch, a 30-second cooldown (both changed November 12) and token reservations. The items below are tracked in #48 and #52.
 
 - [ ] Set a Gemini quota or spending limit in Google's console (#52). Record the setting, without any secrets.
 - [ ] Add a private approved-tester table, checked when a scan or extraction is claimed. Browser roles can't edit it.

@@ -121,7 +121,7 @@ it is unnecessary for this contract and must not be applied.
 
 ## Trial limits and lifecycle
 
-- Per-user defaults: 20 requests and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.
+- Per-user defaults: 50 requests (20 before migration `20261116180000`, which moved rows still at 20 to 50) and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.
 - At most one live job per user, 90-second leases, three attempts per extraction identity, and a 60-second failure retry delay. There is no automatic retry dispatcher.
 - Token reservation estimates are conservative byte-based estimates, not exact provider tokenization. Unknown usage keeps the reservation. Reservations are reconciled when usage is reported.
 - Evidence, digest summaries, unapproved suggestions, and waiting items default to 30 days. Completed tasks become eligible for deletion after 30 days; undo cancels eligibility. A task created from a suggestion can return to Suggestions or Dismissed (task actions `return_to_suggestions` and `return_to_dismissed`, migration `20261109120000`) while that suggestion is unexpired; the suggestion keeps the task's current values, including any accepted incoming update, and the task row, its source links and its pending change proposals are removed. Incoming-update suggestions for that task, pending or already accepted, become `deleted` with their task references cleared, as the 30-day task cleanup does; nothing records that an update was once accepted. Attempt diagnostics expire after 14 days.

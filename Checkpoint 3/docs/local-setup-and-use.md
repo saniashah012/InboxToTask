@@ -108,7 +108,7 @@ Use only the dedicated test account.
 | Connect does nothing the second time | Connection attempts have a 30-second cooldown. Wait |
 | Scan buttons disabled with a countdown | 30-second scan cooldown. Wait for it to end |
 | Only some mail was processed | Each batch makes at most three model calls. The status bar shows "More email to check". Click **Scan now** again |
-| "Your daily processing allowance is used up" | Daily budget per UTC day (default 20 requests per account). Wait for the reset |
+| "Your daily processing allowance is used up" | Daily budget per UTC day (default 50 requests per account). Wait for the reset |
 | Gmail access is no longer valid | Reconnect required. Click **Reconnect Google**. Test-mode grants expire after seven days |
 | "Manual Gmail scanning is disabled" | `ENABLE_GMAIL_SCAN`, `ENABLE_GOOGLE_CONNECTION` and `GEMINI_API_KEY` must all be set, then restart `functions serve` |
 | Scan refused | Consent saved, **Pause scanning** off, at least one sender, domain or category to check, Gmail connected with the same address |

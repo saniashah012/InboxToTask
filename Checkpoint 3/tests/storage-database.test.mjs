@@ -161,6 +161,7 @@ test('PostgreSQL storage migrations, transactions, privileges and lifecycle', as
       assert.equal(await scalar('select confirmed_reminder_at is null from public.storage_followups where id=$1',[followup.id]),true);
     });
     await t.test('budgets are reserved atomically and do not silently consume deferred work',async()=>{
+      assert.equal(await scalar('select daily_requests from public.storage_preferences where user_id=$1',[A]),50);
       await query('update public.storage_preferences set daily_requests=1 where user_id=$1',[A]);
       const before=await scalar('select requests from private.storage_usage where user_id=$1',[A]);
       assert.equal((await claim(A,6,'E06')).state,'budget_deferred');

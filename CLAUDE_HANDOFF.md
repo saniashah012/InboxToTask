@@ -132,7 +132,7 @@ None blocked PR #22. Only the first two need SQL.
 - Clearer task labels in the resolver (due date and source email).
 - The prompt says edits carry complete values while validation allows empty ones when untargeted.
   The prompt is in the cache key, so editing it invalidates saved results.
-- 20 requests per day is too low for real use. The per-batch cap was raised from two to three model calls (matching the 3-per-minute limit).
+- 20 requests per day was too low for real use. The per-batch cap was raised from two to three model calls (matching the 3-per-minute limit), and the daily default to 50 on November 16 (migration `20261116180000`).
 
 ## Next work, in order
 1. Collect Sania's pending results for workspace tabs, settings and stale saves on the newest code. Vercel production is `main` per Sania, so every merge deploys.

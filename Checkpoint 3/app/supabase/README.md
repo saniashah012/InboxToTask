@@ -24,7 +24,7 @@ fictional mail for separately controlled live acceptance. Keep credentials priva
 
 The CP4 `calendar_event` endpoint (create, read, update, remove) is off unless
 `ENABLE_CALENDAR_EVENTS=true` and needs migration `20261113000000_calendar_events`. It is on
-the unmerged branch `claude/calendar-designed-ui`, not on hosted; see
+`main` since November 16 but not deployed to hosted; see
 [Calendar behavior](../../docs/calendar-behavior.md) and [the storage contract](STORAGE.md).
 
 The product uses shared Google-only sign-in and a normal signed-in root workspace;

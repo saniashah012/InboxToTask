@@ -45,6 +45,7 @@ type Database = {
     Views: Record<string, never>
     Functions: {
       calendar_event_status: { Args: { p_task: string }; Returns: any }
+      calendar_event_statuses: { Args: Record<string, never>; Returns: any }
       gmail_scan_status: { Args: Record<string, never>; Returns: any }
       gmail_change_review: { Args: Record<string, any>; Returns: any }
       gmail_change_resolve: { Args: Record<string, any>; Returns: any }

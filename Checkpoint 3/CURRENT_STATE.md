@@ -3,8 +3,10 @@
 Updated the evening of November 12, 2026 (Central), after the CP4 study release: PRs #103–#111
 and #35 merged to `main` (latest `6ae3356`), with hosted migrations and function deploys
 recorded in [November 12](#november-12-2026-cp4-study-release) below. Older sections keep their
-dates and were not re-verified unless marked. This is the resumption index, not a claim that
-services are running. Check Git status and local runtime/migration state before new work.
+dates and were not re-verified unless marked. Later Google Calendar work on the unmerged branch
+`claude/calendar-designed-ui` (PR #116) is recorded under November 13 and November 15 in
+[local migration and feature state](#local-migration-and-feature-state-last-observed); it is not
+on `main` or hosted. This is the resumption index, not a claim that services are running. Check Git status and local runtime/migration state before new work.
 
 ## Read in this order
 
@@ -48,7 +50,7 @@ Hosted now has 30 migration versions, through `20261112010000`. No secrets or fe
 
 **Decisions recorded today:** categories to check are literal word lists that narrow what reaches Gemini, and with no sender they decide which senders are checked (this supersedes the "meaningful topics, not literal terms" line in the [plan](IMPLEMENTATION_PLAN.md)); participants will not connect their own email (#94); scored study tasks use one standard setup with automatic scanning off, and an optional, logged exploration follows (#58, #59, #60, #101).
 
-**Still open:** PRs #36 and #37 are replaced by #108, and both were closed on November 12. Calendar's latest work is on the local, unpushed branch `claude/calendar-designed-ui`, rebased onto `main` on November 13 with offline checks passing and no live test (see #44, #45, #46); the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
+**Still open:** PRs #36 and #37 are replaced by #108, and both were closed on November 12. Calendar's latest work is on branch `claude/calendar-designed-ui` (PR #116, not merged), rebased onto `main` on November 13, with remove, read, update and an all-tasks status read added on November 15 and the Calendar screens built the same day; offline checks pass, and create, update, remove and the screens were partly checked in a local browser against Google, with the cases listed under November 15 still not run live (see #44, #45, #46). Its migration is applied locally only; nothing Calendar is on `main` or hosted; the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
 
 **Docs record (November 12, evening):** branch `mzheng/docs-nov12` (unpushed when written) brought the living docs up to date with this release and added [Checkpoint 4](<../Checkpoint 4/README.md>). A second review on branch `claude/docs-review-fable-65324d`, on top of it, then removed four statements from the CP4 plan that a public repository shouldn't carry and corrected stale lines in this file, the handoff, the implementation plan, `INSTALL.md`, the local setup guide, safety and privacy, the root README and the CP4 plan. Docs only; no code, hosted or board changes. Verified: PR merge times, issue numbers and the board against GitHub; migration names, limits and line counts against the code; relative links and anchors; `git diff --check`. Not run: the test suites (no `node_modules` in the review worktree). A later one-line correction on branch `mzheng/current-state-pr37` (unpushed when written) records that PR #37 was closed on November 12 (5:25 PM Central), where this file had said it should be closed; verified against GitHub and with `git diff --check`.
 
@@ -167,7 +169,7 @@ The app does not fetch or display email bodies on demand.
   browser-checked on the live site. After the PR #22 merge, Sania reports production sign-in passed and accounts A and B went straight to the workspace without saving. Workspace tabs, settings and stale-save behavior on the newest code remain unconfirmed. Details are in the
   [rollout record](docs/hosted-backup-verification-2026-11-06.md#signed-in-checks-reported-by-sania).
 - **Google Calendar moved to CP4 by user decision.** It is not in CP3, on `main` or on hosted. The
-  latest work is on the local, unpushed branch `claude/calendar-designed-ui`: event creation, the
+  latest work is on branch `claude/calendar-designed-ui` (pushed November 13 as PR #116, not merged): event creation, the
   reconnect fixes with a Calendar-only disconnect, and the dashboard choice.
   **November 13 (#44):** the branch was rebased onto `main` at `455cba4` (three commits, plus one
   for the items here). The dashboard, onboarding and settings edits were reapplied to the files
@@ -186,6 +188,117 @@ The app does not fetch or display email bodies on demand.
   The older rebase is on the unmerged GitHub branch `mzheng/calendar-rebase` at `da4417d`, with
   migration `20261106050000`; it still has the reconnect failures found in review and is
   superseded. ICS export is the CP3 calendar path and writes nothing to Google.
+  **November 15 (#45, backend only), same branch, after merging `main` at `909a951`:** the
+  intended behavior and the backend contract are now in [Calendar behavior](docs/calendar-behavior.md).
+  The `calendar_event` function now takes an `action`: `create` (the default, unchanged), `read`,
+  `update` and `remove`.
+  - **Remove** deletes the app's event from the primary calendar without guest notifications. An
+    event already gone in Google counts as removed. A confirmed removal deletes the record, so
+    adding the task again makes a new event with a new ID. A lost answer leaves the state
+    `removing`, and removing again is safe.
+  - **Read** fetches the event from Google and returns its current details and version, saving
+    them for the task card. An event deleted in Google is reported as removed and its record
+    dropped.
+  - **Update** changes the same event in place, sending the version that was read, so Google
+    refuses the write if the event changed meanwhile (`CALENDAR_EVENT_CHANGED`). A lost update
+    stays `updating` and is settled by retrying the same values; a marker on the event shows
+    whether the earlier attempt landed, so it is never written twice.
+  - **Rules:** create and update need an open task; read and remove also work on completed,
+    cancelled and deleted tasks. While a create, update or removal is unsettled, the others are
+    refused with `CALENDAR_BUSY`.
+  - **Status for the cards:** `calendar_event_statuses()` returns the signed-in user's events for
+    all tasks in one read, from stored records only.
+  - **Migration:** `20261113000000_calendar_events` was changed in place (states `updating` and
+    `removing`, two columns, the new actions and the new function). It is not applied on hosted.
+  - **Local stack, November 15 (approved in chat):** the local database was dumped and the dump
+    restored into a scratch database with matching row counts, then `20261113000000` was applied
+    locally with `supabase migration up`. The local stack was restarted from this branch's
+    worktree, so its functions are this branch's, with `ENABLE_CALENDAR_EVENTS=true` and
+    `VITE_CALENDAR_EVENTS_ENABLED=true` in the untracked local env files. Checked: the sign-in
+    page loads with no console errors and `calendar_event` answers 401 without a session. No
+    Calendar action has been run against Google yet. Later changes to this migration need the
+    local copy replaced, not patched.
+  - **Verified offline November 15:** `npm test` (222 + 56 pass, with a new assertion that
+    approving a task creates no Calendar record), `npm run test:calendar` (31 pass, 12 of them
+    new handler and database tests), `tsc --noEmit`, the web build and `deno check` of every
+    function. Checked against Google's Calendar API reference: the delete, patch and get
+    endpoints, `sendUpdates=none`, that the requested permission covers all three, and that a
+    stale `If-Match` returns 412.
+  - **Two dialog fixes, November 15, found in a local browser review of Add to calendar:**
+    - A dialog taller than the window was cut off at the top and bottom and could not be
+      scrolled, which hid its title, Close and buttons (the cut-off reported on #45 for the
+      calendar-file form). The backdrop (`.overlay` in `index.css`) now scrolls, and the dialog
+      centers itself only when it fits. This applies to every dialog.
+    - The "All-day event" checkbox sat alone on its own line above its label. In the
+      dashboard's embedded forms it now sits beside the label (`real-dashboard.css`).
+    - Checked in the browser on the local stack at 1280x800 and 583x566, all-day and timed:
+      24px above the dialog at the top of the scroll and 24px below it at the end, with no
+      console errors. Other dialogs and the remaining review findings (button styles, wording,
+      the time zone box, focus on open) were not changed; they belong to the form redesign in
+      #45.
+  - **No Reload status button, November 15** (`TaskCalendarControl.tsx`): the Add to calendar
+    form now checks status by itself when it opens, after a failed attempt, when the user
+    returns to the tab, and every 4 seconds while a request is in progress. A lost result shows
+    "We couldn't confirm whether the event was added" with the fields locked and a **Retry**
+    button; a request still in progress disables the button and says "Checking…". A request
+    that has not settled after 100 seconds is treated as lost.
+    - Checked in the browser on the local stack, by placing a temporary record for the one
+      local task and removing it afterwards: the idle form has no Reload status button; an
+      `unknown` record showed Retry with locked fields after a return to the tab; an
+      `executing` record disabled the button; and after the record was removed the form went
+      back to normal without a click. No console errors. Retry itself was not pressed, so
+      nothing was sent to Google.
+  - **Time zone is text, not a field, November 15** (`TaskCalendarControl.tsx`): the editable
+    "Time zone (IANA)" box is gone. A timed event shows "Times are in Central Time." under the
+    times; an all-day event shows nothing, because Google stores it as a date. The zone still
+    comes from the task's deadline, or else the browser. A saved draft with an empty or unusable
+    zone falls back to the task's. Checked in the browser on the local stack, all-day and timed,
+    with no console errors.
+  - **Start and end time share a row, November 15** (`TaskCalendarControl.tsx`,
+    `real-dashboard.css`): the two time fields sit side by side, with End date under them; they
+    stack when the dialog is too narrow for both. Checked in the browser on the local stack at
+    the pane's width and at a 360px-wide window, with no console errors.
+  - **Add task notice, November 15** (`RealDashboard.tsx`): adding a suggestion as a task now
+    says "Task added." and no longer adds "No Calendar event was created." Approval still
+    creates no event; the notice just stops mentioning Calendar. Type-checked and built; not
+    clicked in the browser, since that would approve a saved suggestion. The notices after a
+    task edit, an approved change and a cancellation still end with "No Calendar write was
+    authorized."
+  - **The form asks Google when it opens, November 15** (`TaskCalendarControl.tsx`): when the
+    app's record says a task has an event and Calendar is authorized, the form calls the `read`
+    action on open and on each automatic check. An event deleted in Google drops the record,
+    and the form says "This event was deleted in Google Calendar. You can add it again." and
+    offers Add to Google Calendar again. Without Calendar access, or if Google cannot be
+    reached, the saved details are shown as before.
+  - **First live results, November 15, local stack with a real Google account** (done by hand
+    in the browser, not by a script):
+    - *Create:* an event was added from the form and its record saved as `succeeded`.
+    - *Read after a deletion in Google:* the event was then deleted in Google Calendar. Before
+      the change above, the form kept saying the task was already in the calendar. After it,
+      opening the form called `read`, the record was dropped (checked in the local database)
+      and the task could be added again. So a deleted event is detected; whether Google
+      answered 404, 410 or `cancelled` was not recorded.
+    - *Not yet run live:* update, remove, a lost result and its retry, and the three reconnect
+      cases (#46).
+  - **Not verified:** apart from the two live results above, no Calendar action was run
+    against Google (#46). Assumed and not confirmed by Google's reference: that deleting an already-deleted
+    event answers 404 or 410, that a deleted event read by ID comes back as `cancelled`, and that
+    a patch with explicit nulls clears the old date or time when an event changes between
+    all-day and timed.
+  - **Against [Calendar behavior](docs/calendar-behavior.md):**
+    - *Built in the backend:* everything under "Backend contract for the designed screens"
+      except the task deadline's `endTime`: the four actions, their results, the event states,
+      the two status reads, the error codes and who may do what. Connecting, disconnecting and
+      creating an event were already on the branch.
+    - *Frontend built later on November 15 (#45):* see "Calendar screens" below. It replaces
+      the earlier Add to calendar form, which only created.
+    - *Not started:* the end time in extraction (`endTime`, with its schema, prompt and migration
+      changes) and the study reset script (#101).
+    - *Disconnected accounts:* the status reads keep listing a task's event after Google is
+      disconnected, so its "Added to Google Calendar" line stays. Connecting a different Google
+      account hides the earlier account's events.
+  - The form's draft holds one day for an all-day event, so an event the user stretched over
+    several days in Google reads back as its first day.
 - **The two defects to fix before hosted scanning now have a fix in
   `20261109220000_source_delete_quotes_and_boundary`**, applied on hosted November 9 and locally on November 12: deleting a Gmail
   source now also clears quotes of that message in other sources' evidence, and
@@ -208,10 +321,10 @@ Sania reports that Vercel's production branch is `main` (Settings > Git), and th
 Next (as of November 12):
 
 1. Check the live site signed in: account picker, Settings save and exits, a categories-only scan, New/Unread labels, quiet automatic checks (#54, #51).
-2. Calendar: push `claude/calendar-designed-ui` for review (#44), build the onboarding step and Settings status (#45), then the local test (#46), before the noon November 17 decision (#53).
+2. Calendar (branch `claude/calendar-designed-ui`, PR #116, not merged): the rebase (#44) and the screens (#45) are built; finish and verify the event links, commit, run the remaining live cases and the three reconnect cases locally (#46), then the noon November 17 decision (#53). Applying the migration on hosted and turning the flags on there need separate approval.
 3. Study materials (#58–#64, #101) to match the release; hosted items left in #52 (security review, OAuth test users for the study inboxes, a model spending limit).
 4. Close PR #37 (#36 is closed). Background scanning with the app closed (#49) stays after the study.
 
 CP4 deliverables and the evaluation design are in [Checkpoint 4](<../Checkpoint 4/README.md>); the [CP4 plan](<../Checkpoint 4/CP4_PLAN.md>) was updated November 12 to the decisions above.
 
-**Known CP3 gap:** the assignment's "all proposed core features" is not met. Not built: automatic scans, real data in the designed dashboard, a Waiting For view in the workspace and account deletion. Calendar events moved to CP4. **CP4 update (November 12):** real data is in the designed dashboard and onboarding (#51), and automatic checks run while the app is open (#108, #110); scanning with the app closed, account deletion and Calendar are still not built.
+**Known CP3 gap:** the assignment's "all proposed core features" is not met. Not built: automatic scans, real data in the designed dashboard, a Waiting For view in the workspace and account deletion. Calendar events moved to CP4. **CP4 update (November 12):** real data is in the designed dashboard and onboarding (#51), and automatic checks run while the app is open (#108, #110); scanning with the app closed and account deletion are still not built. Calendar events are built only on the unmerged branch `claude/calendar-designed-ui` (see November 15 above), off by default, and are not on `main` or hosted.

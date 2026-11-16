@@ -59,12 +59,19 @@ create table private.calendar_events (
  subject text not null,
  task_revision bigint not null,
  draft jsonb not null,
- state text not null check(state in ('executing','unknown','failed','succeeded')),
+ -- updating: an update of the saved event is in flight or its result was lost.
+ -- removing: a removal is in flight or its result was lost. A confirmed removal
+ -- deletes the row, so a later create gets a new row and a new event ID.
+ state text not null check(state in ('executing','unknown','failed','succeeded','updating','removing')),
  lease uuid,
  lease_until timestamptz,
  generation bigint not null,
  event_id text not null unique,
  event_url text,
+ -- The schedule an in-flight update is writing, and the marker written onto the
+ -- Google event with it so a retry can tell that the earlier attempt landed.
+ pending_draft jsonb,
+ update_token uuid,
  created_at timestamptz not null default now(),
  updated_at timestamptz not null default now(),
  unique(user_id,task_id,subject),
@@ -73,20 +80,40 @@ create table private.calendar_events (
 alter table private.calendar_events enable row level security;
 revoke all on private.calendar_events from public,anon,authenticated,service_role;
 
+-- Status reads use stored records only and never contact Google. An event stays
+-- listed after Google is disconnected, because it still exists in the user's
+-- calendar. While a Google account is connected, only that account's events are
+-- listed, so connecting a different account hides the earlier account's events.
 create function public.calendar_event_status(p_task uuid) returns jsonb
 language sql stable security definer set search_path='' as $$
  select coalesce((select jsonb_build_object('state',e.state,'eventUrl',e.event_url,'draft',e.draft)
-  from private.calendar_events e join private.google_connections c on c.user_id=e.user_id and c.subject=e.subject
-  where e.user_id=auth.uid() and e.task_id=p_task),'{}'::jsonb);
+  from private.calendar_events e left join private.google_connections c on c.user_id=e.user_id
+  where e.user_id=auth.uid() and e.task_id=p_task and (c.subject is null or c.subject=e.subject)
+  order by e.updated_at desc,e.id limit 1),'{}'::jsonb);
 $$;
 revoke all on function public.calendar_event_status(uuid) from public,anon;
 grant execute on function public.calendar_event_status(uuid) to authenticated;
 
+-- One read for every task card: the caller's own events, one per task. Tasks
+-- without an event are absent. It does not need Calendar permission.
+create function public.calendar_event_statuses() returns jsonb
+language sql stable security definer set search_path='' as $$
+ select coalesce(jsonb_agg(jsonb_build_object('taskId',r.task_id,'state',r.state,'eventUrl',r.event_url,'draft',r.draft) order by r.created_at,r.id),'[]'::jsonb)
+  from (select distinct on (e.task_id) e.* from private.calendar_events e left join private.google_connections c on c.user_id=e.user_id
+   where e.user_id=auth.uid() and (c.subject is null or c.subject=e.subject)
+   order by e.task_id,e.updated_at desc,e.id) r;
+$$;
+revoke all on function public.calendar_event_statuses() from public,anon;
+grant execute on function public.calendar_event_statuses() to authenticated;
+
 -- Only the verified Edge handler can claim/finish. No browser-selected owner,
 -- calendar, event ID, provider payload or success receipt is accepted.
+-- Create and update need an open task. Read and remove also work on completed,
+-- cancelled and deleted tasks, so an event can still be removed from Google.
 create function public.calendar_event_service(p_user uuid,p_action text,p_data jsonb) returns jsonb
 language plpgsql security definer set search_path='' as $$
-declare c private.google_connections; t public.tasks; e private.calendar_events; token uuid;
+declare c private.google_connections; t public.tasks; e private.calendar_events; token uuid; marker uuid;
+ open_task boolean; live boolean; held boolean; retried boolean; next_state text;
 begin
  select * into c from private.google_connections where user_id=p_user for update;
  if c.state is distinct from 'connected' or not (c.scopes ? 'https://www.googleapis.com/auth/calendar.events.owned') then
@@ -94,11 +121,16 @@ begin
  select * into t from public.tasks where user_id=p_user and id=(p_data->>'taskId')::uuid for update;
  if t.id is null then raise exception 'TASK_NOT_FOUND' using errcode='42501'; end if;
  select * into e from private.calendar_events where user_id=p_user and task_id=t.id and subject=c.subject for update;
+ open_task:=t.status='approved' and t.accepted_fields is not null and t.cancelled_at is null and t.deleted_at is null;
+ -- live: another request holds this event now. held: the caller's own lease is still valid.
+ live:=coalesce(e.lease is not null and e.lease_until>now(),false);
+ held:=coalesce(e.lease is not null and e.lease=(p_data->>'lease')::uuid and e.generation=c.generation and e.lease_until>now(),false);
  if p_action='claim' then
   if e.state='succeeded' then return jsonb_build_object('state','succeeded','eventUrl',e.event_url); end if;
   if e.state='executing' and e.lease_until>now() then raise exception 'CALENDAR_BUSY' using errcode='PT409'; end if;
-  if t.status<>'approved' or t.accepted_fields is null or t.cancelled_at is not null or t.deleted_at is not null
-   or t.revision is distinct from (p_data->>'taskRevision')::bigint then raise exception 'STALE_CALENDAR_TASK' using errcode='PT409'; end if;
+  -- An update or removal that has not settled owns the event; never overwrite it with a create.
+  if e.state in ('updating','removing') then raise exception 'CALENDAR_BUSY' using errcode='PT409'; end if;
+  if not open_task or t.revision is distinct from (p_data->>'taskRevision')::bigint then raise exception 'STALE_CALENDAR_TASK' using errcode='PT409'; end if;
   if e.id is not null and e.state in ('executing','unknown') and e.draft is distinct from p_data->'draft' then
    raise exception 'CALENDAR_RETRY_ORIGINAL' using errcode='PT409'; end if;
   if jsonb_typeof(p_data->'draft') is distinct from 'object' or octet_length((p_data->'draft')::text)>4000 then
@@ -114,8 +146,8 @@ begin
   end if;
   return jsonb_build_object('state','claimed','lease',token,'eventId',e.event_id,'draft',e.draft,'generation',c.generation);
  elsif p_action in ('assert','finish') then
-  if e.id is null or e.state<>'executing' or e.lease is null or e.lease is distinct from (p_data->>'lease')::uuid
-   or e.generation is distinct from c.generation or e.lease_until<=now() then raise exception 'STALE_CALENDAR_OPERATION' using errcode='PT409'; end if;
+  if e.id is null or not held or e.state not in ('executing','updating') or (p_action='finish' and e.state<>'executing') then
+   raise exception 'STALE_CALENDAR_OPERATION' using errcode='PT409'; end if;
   if p_action='assert' then
    if t.status<>'approved' or t.deleted_at is not null or t.cancelled_at is not null or t.revision<>e.task_revision then
     raise exception 'STALE_CALENDAR_TASK' using errcode='PT409'; end if;
@@ -127,6 +159,81 @@ begin
   update private.calendar_events set state=p_data->>'state',event_url=case when p_data->>'state'='succeeded' then p_data->>'eventUrl' else null end,
    lease=null,lease_until=null,updated_at=now() where id=e.id;
   return jsonb_build_object('state',p_data->>'state','eventUrl',case when p_data->>'state'='succeeded' then p_data->>'eventUrl' else null end);
+ elsif p_action='read' then
+  -- Stored details only, without a lease. The caller reads Google itself.
+  if e.id is null then return jsonb_build_object('state','none'); end if;
+  return jsonb_build_object('state',e.state,'eventId',e.event_id,'eventUrl',e.event_url,'draft',e.draft);
+ elsif p_action='sync' then
+  -- Save what Google shows now, so the task card matches. Skipped while another request holds the event.
+  if e.id is null then return jsonb_build_object('state','none'); end if;
+  if e.state<>'succeeded' or live then return jsonb_build_object('state',e.state); end if;
+  if jsonb_typeof(p_data->'draft') is distinct from 'object' or octet_length((p_data->'draft')::text)>4000 then
+   raise exception 'INVALID_CALENDAR_DRAFT' using errcode='22023'; end if;
+  if p_data->>'eventUrl' is null or p_data->>'eventUrl' !~ '^https://(www\.)?google\.com/calendar/' or length(p_data->>'eventUrl')>2048 then
+   raise exception 'INVALID_CALENDAR_URL'; end if;
+  update private.calendar_events set draft=p_data->'draft',event_url=p_data->>'eventUrl',updated_at=now() where id=e.id;
+  return jsonb_build_object('state','succeeded');
+ elsif p_action='gone' then
+  -- Google reports the event deleted. Forget it, so the task can be added again as a new event.
+  if e.id is null then return jsonb_build_object('state','none'); end if;
+  if e.state<>'succeeded' or live then return jsonb_build_object('state',e.state); end if;
+  delete from private.calendar_events where id=e.id;
+  return jsonb_build_object('state','removed');
+ elsif p_action='remove_claim' then
+  if e.id is null then raise exception 'CALENDAR_NOT_ADDED' using errcode='PT409'; end if;
+  if live then raise exception 'CALENDAR_BUSY' using errcode='PT409'; end if;
+  token:=gen_random_uuid();
+  update private.calendar_events set state='removing',lease=token,lease_until=now()+interval '90 seconds',generation=c.generation,
+   pending_draft=null,update_token=null,updated_at=now() where id=e.id returning * into e;
+  return jsonb_build_object('state','claimed','lease',token,'eventId',e.event_id);
+ elsif p_action='remove_finish' then
+  if e.id is null or not held or e.state<>'removing' then raise exception 'STALE_CALENDAR_OPERATION' using errcode='PT409'; end if;
+  if p_data->>'state'='removed' then
+   delete from private.calendar_events where id=e.id;
+   return jsonb_build_object('state','removed');
+  elsif p_data->>'state'='refused' then
+   -- Google definitely kept the event. Go back to what was known before the attempt.
+   next_state:=case when e.event_url is not null then 'succeeded' else 'unknown' end;
+  elsif p_data->>'state'='unknown' then
+   next_state:='removing';
+  else raise exception 'INVALID_CALENDAR_STATE'; end if;
+  update private.calendar_events set state=next_state,lease=null,lease_until=null,updated_at=now() where id=e.id;
+  return jsonb_build_object('state',next_state);
+ elsif p_action='update_claim' then
+  if e.id is null or e.state='failed' then raise exception 'CALENDAR_NOT_ADDED' using errcode='PT409'; end if;
+  if live or e.state not in ('succeeded','updating') then raise exception 'CALENDAR_BUSY' using errcode='PT409'; end if;
+  if not open_task then raise exception 'STALE_CALENDAR_TASK' using errcode='PT409'; end if;
+  if jsonb_typeof(p_data->'draft') is distinct from 'object' or octet_length((p_data->'draft')::text)>4000 then
+   raise exception 'INVALID_CALENDAR_DRAFT' using errcode='22023'; end if;
+  -- A lost update keeps its approved values until a retry settles it.
+  if e.state='updating' and e.pending_draft is distinct from p_data->'draft' then
+   raise exception 'CALENDAR_RETRY_ORIGINAL' using errcode='PT409'; end if;
+  token:=gen_random_uuid();
+  retried:=e.state='updating' and e.update_token is not null;
+  marker:=case when retried then e.update_token else gen_random_uuid() end;
+  update private.calendar_events set state='updating',lease=token,lease_until=now()+interval '90 seconds',generation=c.generation,
+   task_revision=t.revision,pending_draft=p_data->'draft',update_token=marker,updated_at=now() where id=e.id returning * into e;
+  return jsonb_build_object('state','claimed','lease',token,'eventId',e.event_id,'draft',e.pending_draft,'updateToken',marker,'retry',retried);
+ elsif p_action='update_finish' then
+  if e.id is null or not held or e.state<>'updating' then raise exception 'STALE_CALENDAR_OPERATION' using errcode='PT409'; end if;
+  if p_data->>'state'='succeeded' then
+   if p_data->>'eventUrl' is null or p_data->>'eventUrl' !~ '^https://(www\.)?google\.com/calendar/' or length(p_data->>'eventUrl')>2048 then
+    raise exception 'INVALID_CALENDAR_URL'; end if;
+   update private.calendar_events set state='succeeded',draft=e.pending_draft,event_url=p_data->>'eventUrl',pending_draft=null,update_token=null,
+    lease=null,lease_until=null,updated_at=now() where id=e.id returning * into e;
+   return jsonb_build_object('state','succeeded','eventUrl',e.event_url,'draft',e.draft);
+  elsif p_data->>'state' in ('failed','changed') then
+   -- Google definitely did not apply it. The saved event stands as it was.
+   update private.calendar_events set state='succeeded',pending_draft=null,update_token=null,lease=null,lease_until=null,updated_at=now() where id=e.id;
+   return jsonb_build_object('state',p_data->>'state');
+  elsif p_data->>'state'='unknown' then
+   update private.calendar_events set lease=null,lease_until=null,updated_at=now() where id=e.id;
+   return jsonb_build_object('state','updating');
+  elsif p_data->>'state'='removed' then
+   delete from private.calendar_events where id=e.id;
+   return jsonb_build_object('state','removed');
+  end if;
+  raise exception 'INVALID_CALENDAR_STATE';
  end if;
  raise exception 'INVALID_CALENDAR_ACTION' using errcode='22023';
 end; $$;

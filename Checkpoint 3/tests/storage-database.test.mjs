@@ -103,6 +103,8 @@ test('PostgreSQL storage migrations, transactions, privileges and lifecycle', as
       }
       taskId=(await action('suggestion',suggestion.id,'approve')).taskId;
       assert.equal((await action('suggestion',suggestion.id,'approve')).taskId,taskId);
+      // Approving a task never creates a Calendar event record; only the Calendar function does.
+      assert.equal(Number(await scalar('select count(*) from private.calendar_events')),0);
       const task=(await query('select * from public.tasks where id=$1',[taskId]))[0];
       assert.deepEqual(task.accepted_fields.deadline,fields.deadline);
       assert.equal(task.due_at,null);

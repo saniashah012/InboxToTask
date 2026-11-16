@@ -12,6 +12,9 @@ test('Calendar SQL authorization, leases, duplicate protection, revisions and OA
  const rpc=(user,action,data)=>as('service_role',user,()=>call('calendar_event_service',[user,action,data]));
  const draft={title:'Report',date:'2026-11-10',allDay:true,timeZone:'America/Chicago'};
  let id,claim;
+ const link='https://www.google.com/calendar/event?eid=fictional',link2='https://www.google.com/calendar/event?eid=fictional2';
+ const moved={title:'Report',date:'2026-11-12',allDay:false,startTime:'15:00',endDate:'2026-11-12',endTime:'15:30',timeZone:'America/Chicago'};
+ const status=()=>as('authenticated',A,()=>call('calendar_event_status',[id]));
  try {
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to anon,authenticated,service_role;
    create table auth.users(id uuid primary key,email text);create function auth.uid() returns uuid language sql stable as $$select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid$$;`);
@@ -56,6 +59,121 @@ test('Calendar SQL authorization, leases, duplicate protection, revisions and OA
    await rpc(A,'finish',{taskId:id,lease:claim.lease,state:'succeeded',eventUrl:'https://www.google.com/calendar/event?eid=fictional'});
    assert.equal((await rpc(A,'claim',{taskId:id,taskRevision:0,draft})).state,'succeeded');
    assert.equal((await q('select count(*) n from private.calendar_events'))[0].n,1);
+  });
+  await t.test('one status read lists only the caller\'s events, with or without Calendar permission or a connection',async()=>{
+   const mine=await as('authenticated',A,()=>call('calendar_event_statuses',[]));
+   assert.deepEqual(mine,[{taskId:id,state:'succeeded',eventUrl:link,draft}]);
+   assert.deepEqual(await as('authenticated',B,()=>call('calendar_event_statuses',[])),[]);
+   await as('anon',A,()=>assert.rejects(call('calendar_event_statuses',[]),{code:'42501'}));
+   // Stored status stays readable after Calendar permission is lost.
+   await q('update private.google_connections set scopes=$1 where user_id=$2',[JSON.stringify([scopes[0]]),A]);
+   assert.equal((await as('authenticated',A,()=>call('calendar_event_statuses',[]))).length,1);
+   for(const action of ['read','remove_claim','update_claim']) await assert.rejects(rpc(A,action,{taskId:id,draft}),/GOOGLE_CALENDAR_SCOPE_REQUIRED/);
+   await q('update private.google_connections set scopes=$1 where user_id=$2',[JSON.stringify(scopes),A]);
+   // It also stays after Google is disconnected, since the event is still in the calendar.
+   await q("update private.google_connections set state='disconnected',subject=null,scopes='[]' where user_id=$1",[A]);
+   assert.deepEqual(await as('authenticated',A,()=>call('calendar_event_statuses',[])),mine);
+   assert.deepEqual(await status(),{state:'succeeded',eventUrl:link,draft});
+   // Connecting a different Google account hides the earlier account's events.
+   await q("update private.google_connections set state='connected',subject='999',scopes=$2 where user_id=$1",[A,JSON.stringify(scopes)]);
+   assert.deepEqual(await as('authenticated',A,()=>call('calendar_event_statuses',[])),[]);
+   assert.deepEqual(await status(),{});
+   await q("update private.google_connections set subject='123' where user_id=$1",[A]);
+   assert.deepEqual(await as('authenticated',A,()=>call('calendar_event_statuses',[])),mine);
+  });
+  await t.test('update keeps the saved event until Google confirms, and a lost update keeps its values',async()=>{
+   const first=await rpc(A,'update_claim',{taskId:id,draft:moved});
+   assert.equal(first.state,'claimed');assert.equal(first.eventId,claim.eventId);assert.equal(first.retry,false);assert.deepEqual(first.draft,moved);
+   assert.deepEqual(await status(),{state:'updating',eventUrl:link,draft});
+   // Nothing else may touch the event while the update holds it.
+   for(const action of ['update_claim','remove_claim']) await assert.rejects(rpc(A,action,{taskId:id,draft:moved}),/CALENDAR_BUSY/);
+   await assert.rejects(rpc(A,'claim',{taskId:id,taskRevision:0,draft}),/CALENDAR_BUSY/);
+   assert.equal((await rpc(A,'gone',{taskId:id})).state,'updating');assert.equal((await rpc(A,'sync',{taskId:id,draft:moved,eventUrl:link})).state,'updating');
+   assert.equal((await rpc(A,'assert',{taskId:id,lease:first.lease})).state,'ready');
+   await assert.rejects(rpc(A,'finish',{taskId:id,lease:first.lease,state:'succeeded',eventUrl:link}),/STALE_CALENDAR_OPERATION/);
+   await assert.rejects(rpc(A,'update_finish',{taskId:id,lease:null,state:'succeeded',eventUrl:link}),/STALE_CALENDAR_OPERATION/);
+   assert.equal((await rpc(A,'update_finish',{taskId:id,lease:first.lease,state:'unknown'})).state,'updating');
+   // The lost update is retried with the same values and the same marker.
+   await assert.rejects(rpc(A,'update_claim',{taskId:id,draft:{...moved,title:'Changed'}}),/CALENDAR_RETRY_ORIGINAL/);
+   await assert.rejects(rpc(A,'claim',{taskId:id,taskRevision:0,draft}),/CALENDAR_BUSY/);
+   const retry=await rpc(A,'update_claim',{taskId:id,draft:moved});
+   assert.equal(retry.retry,true);assert.equal(retry.updateToken,first.updateToken);assert.notEqual(retry.lease,first.lease);
+   await assert.rejects(rpc(A,'update_finish',{taskId:id,lease:first.lease,state:'succeeded',eventUrl:link}),/STALE_CALENDAR_OPERATION/);
+   await assert.rejects(rpc(A,'update_finish',{taskId:id,lease:retry.lease,state:'succeeded',eventUrl:'https://evil.example/'}),/INVALID_CALENDAR_URL/);
+   assert.deepEqual(await rpc(A,'update_finish',{taskId:id,lease:retry.lease,state:'succeeded',eventUrl:link2}),{state:'succeeded',eventUrl:link2,draft:moved});
+   assert.deepEqual(await status(),{state:'succeeded',eventUrl:link2,draft:moved});
+   // A refused or outdated update leaves the saved event as it was, with a fresh marker next time.
+   for(const outcome of ['changed','failed']){
+    const again=await rpc(A,'update_claim',{taskId:id,draft});
+    assert.equal(again.retry,false);assert.notEqual(again.updateToken,first.updateToken);
+    assert.equal((await rpc(A,'update_finish',{taskId:id,lease:again.lease,state:outcome})).state,outcome);
+    assert.deepEqual(await status(),{state:'succeeded',eventUrl:link2,draft:moved});
+   }
+   assert.deepEqual((await q('select pending_draft,update_token,lease from private.calendar_events where task_id=$1',[id]))[0],{pending_draft:null,update_token:null,lease:null});
+  });
+  await t.test('read and sync follow Google without a lease; remove is retryable and frees the task for a new event',async()=>{
+   assert.deepEqual(await rpc(A,'read',{taskId:id}),{state:'succeeded',eventId:claim.eventId,eventUrl:link2,draft:moved});
+   await assert.rejects(rpc(A,'sync',{taskId:id,draft:moved,eventUrl:'https://evil.example/'}),/INVALID_CALENDAR_URL/);
+   assert.equal((await rpc(A,'sync',{taskId:id,draft,eventUrl:link})).state,'succeeded');
+   assert.deepEqual(await status(),{state:'succeeded',eventUrl:link,draft});
+   const lost=await rpc(A,'remove_claim',{taskId:id});
+   assert.equal(lost.state,'claimed');assert.equal(lost.eventId,claim.eventId);
+   assert.equal((await status()).state,'removing');
+   await assert.rejects(rpc(A,'remove_claim',{taskId:id}),/CALENDAR_BUSY/);
+   await assert.rejects(rpc(A,'remove_finish',{taskId:id,lease:null,state:'removed'}),/STALE_CALENDAR_OPERATION/);
+   assert.equal((await rpc(A,'remove_finish',{taskId:id,lease:lost.lease,state:'unknown'})).state,'removing');
+   // In doubt: no create or update may run, but Remove can be pressed again.
+   await assert.rejects(rpc(A,'claim',{taskId:id,taskRevision:0,draft}),/CALENDAR_BUSY/);
+   await assert.rejects(rpc(A,'update_claim',{taskId:id,draft}),/CALENDAR_BUSY/);
+   const refused=await rpc(A,'remove_claim',{taskId:id});
+   assert.equal((await rpc(A,'remove_finish',{taskId:id,lease:refused.lease,state:'refused'})).state,'succeeded');
+   assert.deepEqual(await status(),{state:'succeeded',eventUrl:link,draft});
+   const done=await rpc(A,'remove_claim',{taskId:id});
+   await assert.rejects(rpc(A,'remove_finish',{taskId:id,lease:lost.lease,state:'removed'}),/STALE_CALENDAR_OPERATION/);
+   assert.deepEqual(await rpc(A,'remove_finish',{taskId:id,lease:done.lease,state:'removed'}),{state:'removed'});
+   assert.deepEqual(await status(),{});assert.deepEqual(await as('authenticated',A,()=>call('calendar_event_statuses',[])),[]);
+   assert.equal((await rpc(A,'read',{taskId:id})).state,'none');
+   for(const action of ['remove_claim','update_claim']) await assert.rejects(rpc(A,action,{taskId:id,draft}),/CALENDAR_NOT_ADDED/);
+   // Adding again makes a new event; the removed event's ID is never reused.
+   const again=await rpc(A,'claim',{taskId:id,taskRevision:0,draft});
+   assert.equal(again.state,'claimed');assert.notEqual(again.eventId,claim.eventId);
+   await rpc(A,'finish',{taskId:id,lease:again.lease,state:'succeeded',eventUrl:link});
+   claim=again;
+   // Deleted in Google: the record is dropped the same way.
+   assert.equal((await rpc(A,'gone',{taskId:id})).state,'removed');assert.equal((await rpc(A,'gone',{taskId:id})).state,'none');
+   const third=await rpc(A,'claim',{taskId:id,taskRevision:0,draft});
+   await rpc(A,'finish',{taskId:id,lease:third.lease,state:'succeeded',eventUrl:link});claim=third;
+  });
+  await t.test('a completed, cancelled or deleted task can still be read and removed, never created or updated',async()=>{
+   const withEvent=async()=>{
+    const task=(await q("insert into public.tasks(user_id,title,status,accepted_fields) values($1,'Closing','approved',$2) returning id",[A,JSON.stringify({action:'Closing',requirements:[],condition:null,deadline:null})]))[0].id;
+    const made=await rpc(A,'claim',{taskId:task,taskRevision:0,draft});
+    await rpc(A,'finish',{taskId:task,lease:made.lease,state:'succeeded',eventUrl:link});
+    return task;
+   };
+   for(const closing of ["cancelled_at=now()","status='completed'","deleted_at=now()"]){
+    const task=await withEvent();
+    await q(`update public.tasks set ${closing} where id=$1`,[task]);
+    await assert.rejects(rpc(A,'update_claim',{taskId:task,draft:moved}),/STALE_CALENDAR_TASK/);
+    assert.equal((await rpc(A,'read',{taskId:task})).state,'succeeded');
+    assert.equal((await as('authenticated',A,()=>call('calendar_event_status',[task]))).state,'succeeded');
+    const refused=await rpc(A,'remove_claim',{taskId:task});
+    assert.equal((await rpc(A,'remove_finish',{taskId:task,lease:refused.lease,state:'refused'})).state,'succeeded');
+    const removing=await rpc(A,'remove_claim',{taskId:task});
+    assert.equal((await rpc(A,'remove_finish',{taskId:task,lease:removing.lease,state:'removed'})).state,'removed');
+    await assert.rejects(rpc(A,'claim',{taskId:task,taskRevision:0,draft}),/STALE_CALENDAR_TASK/);
+   }
+   // An update claimed while the task was open is refused at the last check once the task is cancelled.
+   const task=await withEvent();
+   const late=await rpc(A,'update_claim',{taskId:task,draft:moved});
+   await q('update public.tasks set cancelled_at=now() where id=$1',[task]);
+   await assert.rejects(rpc(A,'assert',{taskId:task,lease:late.lease}),/STALE_CALENDAR_TASK/);
+   assert.equal((await rpc(A,'update_finish',{taskId:task,lease:late.lease,state:'failed'})).state,'failed');
+   const removing=await rpc(A,'remove_claim',{taskId:task});
+   assert.equal((await rpc(A,'remove_finish',{taskId:task,lease:removing.lease,state:'removed'})).state,'removed');
+   assert.equal((await q('select count(*) n from private.calendar_events where task_id<>$1',[id]))[0].n,0);
+   // Another account can never act on this task's event.
+   for(const action of ['read','remove_claim','update_claim','gone']) await assert.rejects(rpc(B,action,{taskId:id,draft}),/TASK_NOT_FOUND/);
   });
   await t.test('OAuth upgrade intent is bound to single-use state and cancellation preserves Gmail credentials',async()=>{
    const start=await as('service_role',A,()=>call('google_connection_service',[A,'start',{hash:'a'.repeat(64),email:'a@example.org',verifier:'encrypted-verifier',calendar:true}]));assert.equal(start.state,'started');

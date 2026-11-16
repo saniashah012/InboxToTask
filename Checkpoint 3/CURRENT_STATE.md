@@ -56,6 +56,12 @@ Hosted now has 30 migration versions, through `20261112010000`. No secrets or fe
 
 **#51 browser-check fixes (November 12, late evening):** branch `mzheng/narrow-details-onboarding-summary` (unpushed when written; not merged or deployed). A local browser check of `main` for #51 found two bugs, fixed here. (1) "View details" was hidden on suggestion, task and proposed-change cards at window widths of 1050px or less (a rule from the designed CSS), with no menu equivalent, so a card's sender and evidence couldn't be opened; it now shows at every width, and at phone width it sits under the card text with the ⋮ menu kept at the top right (`real-dashboard.css`). (2) With only a category to check, onboarding's review step said "Included senders and domains: None, so nothing will be processed", contradicting #104; it now says any sender you haven't excluded is checked for your categories' words (`noSendersLabel` in `scanSetup.ts`). Verified: offline suites 214/214 and 56/56 (a new assertion for the label), type-check and build; in the browser, locally with fictional users and seeded data, "View details" visible and opening the source email at 1024, 900, 760 and 390px, Passive cards unchanged, and the new onboarding label. Not checked: the live site. A card's text can still overflow at phone width (a proposed-change link; existing, for #100).
 
+**November 15 (docs only), branch `mzheng/claude-md-prompting`:** [CLAUDE.md](../CLAUDE.md) was
+rewritten for clarity: a numbered reading order, a reason given with each rule, "ask first"
+and "report offline and live results separately" stated as instructions, and plainer terms. The
+rules themselves are unchanged and still live in [AGENTS.md](../AGENTS.md). Verified: every link
+in the file resolves and `git diff --check` is clean. No code changed and nothing was run.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

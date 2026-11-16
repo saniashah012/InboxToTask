@@ -255,7 +255,7 @@ From `Checkpoint 3/app`. None of these calls Gmail or a model.
 | `npm.cmd test` | Nothing | Pipeline, retrieval, extraction, persistence, Google and settings with PGlite and injected responses |
 | `npm.cmd run test:storage` | Nothing | Storage subset |
 | `npm.cmd run test:google` | Nothing | Google connection subset |
-| `npm.cmd run test:calendar` | Node 22.6+ | ICS export |
+| `npm.cmd run test:calendar` | Node 22.6+ | ICS export, the Calendar event form rules, the `calendar_event` handler and the Calendar database functions |
 | `npx.cmd supabase --agent no test db` | Local stack | pgTAP on the real local database, rolled back |
 | `npm.cmd run test:local` | Local stack, functions served with scanning and fixture extraction off | Real Auth, PostgREST and Edge gates, with temporary users |
 | `npm.cmd run test:google:local` | Local stack, Google functions served disabled | Google endpoints, with temporary users |

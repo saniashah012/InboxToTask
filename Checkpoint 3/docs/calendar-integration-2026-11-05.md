@@ -22,6 +22,13 @@ one and must be rechecked against the current hosted ledger first. After the reb
 `010000` to `040000` in the PGlite schema. Evidence below predates the rebase. No local
 Supabase migration, OAuth round trip or Calendar write has been run.
 
+**Note, November 16, 2026:** this plan records the November 5 design and its rebases. Since
+then the `calendar_event` function gained `read`, `update` and `remove`, the migration was
+changed in place and applied on the local stack only, the designed screens were built, and some
+actions were checked in a local browser against Google. Still not merged, not on hosted and off by
+default. For intended behavior see [Calendar behavior](calendar-behavior.md); for what is built
+and verified see [current state](../CURRENT_STATE.md). Where this plan differs, those win.
+
 ## Behavior and boundaries
 
 - Approved, uncancelled tasks offer Add to calendar in the persistent workspace.

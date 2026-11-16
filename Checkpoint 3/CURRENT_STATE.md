@@ -365,6 +365,13 @@ The app does not fetch or display email bodies on demand.
       - *Not verified:* the event page opening in Google Calendar itself (the test browser
         blocks tabs opened by automated clicks), the card returning to Add to calendar after a
         real deletion in Google, and a browser that blocks the new tab.
+    - *Documentation, November 16:* every tracked document that describes Calendar was brought
+      in line with this branch: the handoffs, the root README, the implementation plan,
+      architecture, use cases, safety and privacy, local setup, the Supabase and web guides, the
+      two environment templates' comments and the CP4 plan. Dated reports keep their history,
+      with a dated note where one would now mislead. They say what is built on the branch and
+      what was verified; none claims Calendar is on `main` or hosted. No requirement was ticked.
+      Checked: every added link resolves and `git diff --check` is clean.
 - **The two defects to fix before hosted scanning now have a fix in
   `20261109220000_source_delete_quotes_and_boundary`**, applied on hosted November 9 and locally on November 12: deleting a Gmail
   source now also clears quotes of that message in other sources' evidence, and

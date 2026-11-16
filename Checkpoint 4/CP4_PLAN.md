@@ -165,7 +165,7 @@ This is the design chosen under D1 (Track A plus an ablation benchmark); the stu
 | Approve, dismiss, complete, undo, edit | `storage_action`, `gmail_change_review` | Replace local React state and timers with saved state. Dismiss undo uses `restore`; completion undo uses `undo` |
 | Passive tab | `storage_extractions` | Reuse the Information tab's logic |
 | Scan status | `manualScanStatus`, `manualScan` | Real status, one scan button and automatic checks while open (#40, #50) |
-| Calendar button | ICS export ("Export calendar file") | Google Calendar events are #44, #45 |
+| Calendar button | ICS export ("Export calendar file") | Google Calendar events are #44, #45: Add to calendar and Manage event are built on branch `claude/calendar-designed-ui` (PR #116, not merged, off by default); `main` still offers only the ICS export |
 
 ### Checklist
 
@@ -190,7 +190,7 @@ These are done first because everything else touches the same files.
 
 - [x] ~~Merge the onboarding branch `claude/onboarding-connect-0e9360`~~ Superseded: onboarding was connected through the designed-frontend merge (#26–#28).
 - [x] Rebase and merge PR 20 (`sania/category-chip-toggle`): merged November 9.
-- [ ] Apply D3: Calendar is kept; rebase `claude/calendar-designed-ui` (which supersedes `mzheng/calendar-rebase`) onto current `main` (#44).
+- [x] Apply D3: Calendar is kept; rebase `claude/calendar-designed-ui` (which supersedes `mzheng/calendar-rebase`) onto current `main` (#44). Rebased November 13 and merged with `main` again November 15; not merged into `main`.
 - [ ] Respect the study freeze (#39): nothing merges to `main` from Tue Nov 17 evening until the last session on Nov 20.
 
 Remember that **every merge to `main` deploys to production.** Check preview builds first.
@@ -209,7 +209,7 @@ web/src/
 │   ├── review/           # Review cards, ManualChangeResolver, ExtractionReview, SourceEmails
 │   ├── information/      # Passive tab
 │   ├── settings/         # SettingsScreen, ScanSettingsPanel, GoogleConnectionPanel
-│   ├── calendar/         # ICS export
+│   ├── calendar/         # ICS export; Calendar event dialog, form rules and API helper (PR #116)
 │   └── devtools/         # StorageDashboard (development only)
 ├── data/                 # Supabase client, adapters, row types, workspace hook, task mapper
 ├── ui/                   # Icon, Modal, shared controls
@@ -228,7 +228,7 @@ web/src/
 
 - [x] Test the frontend logic in CI: the task mapper, deadline display, scan-state logic, settings and New/Unread rules have offline tests in `tests/` that `npm test` runs. (The [web instructions](<../Checkpoint 3/app/web/AGENTS.md>) still say there's no separate frontend script, which is true.)
 - [ ] Add one browser smoke test using seeded fictional data: sign in, review, approve, reload.
-- [x] Make one command run all offline suites (`npm test` now includes the calendar suite).
+- [x] Make one command run all offline suites (`npm test` now includes the ICS export tests; the Calendar event tests on PR #116 run with `npm run test:calendar`).
 
 ### Step 3: backend tidying
 

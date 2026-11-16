@@ -21,6 +21,12 @@ The separate `gmail_scan` endpoint verifies Auth and accepts only initial/more m
 
 Do not enable either mode as a setup side effect. Use a dedicated account with
 fictional mail for separately controlled live acceptance. Keep credentials private.
+
+The CP4 `calendar_event` endpoint (create, read, update, remove) is off unless
+`ENABLE_CALENDAR_EVENTS=true` and needs migration `20261113000000_calendar_events`. It is on
+the unmerged branch `claude/calendar-designed-ui`, not on hosted; see
+[Calendar behavior](../../docs/calendar-behavior.md) and [the storage contract](STORAGE.md).
+
 The product uses shared Google-only sign-in and a normal signed-in root workspace;
 `/storage` is development tooling and remains absent from production builds.
 

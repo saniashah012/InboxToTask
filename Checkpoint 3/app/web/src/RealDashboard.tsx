@@ -7,7 +7,7 @@ import { supabase } from "./supabase"
 import { googleConnectionStatus, loadStorageSnapshot, reviewStoredRecord, type Deadline, type ScanSettings, type Snapshot, type StoredRow, type TaskFields } from "./storageAdapter"
 import { isScanBusy, manualScan, manualScanStatus, ScanRequestError, resolveTaskChange, reviewTaskChange, scanStopMessage, type ScanStatus } from "./manualScanAdapter"
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
-import { loadTaskSourceLinks, OpenInGmail, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
+import { loadTaskSourceLinks, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
 import { loadRead, saveRead } from "./readMarks"
 import { changeKey, countAdded, NOTHING_ADDED, scanSummary, suggestionKey } from "./newItems"
 import { useNewItems } from "./useNewItems"
@@ -1311,7 +1311,9 @@ function WaitingSection({ items, openCount, busy, today, onSource, onToggle, onR
 }
 
 function SourceModal({ source, email, links, onClose }: { source: SourceView; email: string; links: TaskSourceLink[] | null; onClose: () => void }) {
-  const own = source.taskId ? (links ? links.filter((l) => l.taskId === source.taskId) : null) : undefined
+  // Tasks list their linked emails; any other item shows its one email in the same layout.
+  const own = source.taskId ? (links ? links.filter((l) => l.taskId === source.taskId) : null)
+    : [{ taskId: "", role: "source" as const, threadId: "", messageId: source.messageId, earlierMessage: false, sender: source.sender ?? null, subject: source.subject ?? null, sentAt: source.sentAt ?? null, quote: source.quote }]
   return (
     <Modal className="rd-source-modal" onClose={onClose} title="Source email" wide>
       <div className="email-details">
@@ -1329,11 +1331,9 @@ function SourceModal({ source, email, links, onClose }: { source: SourceView; em
           {source.extraction?.topic_relevance === "uncertain" && <p className="rd-detail-meta">May be outside your selected topics.</p>}
         </div>
       )}
-      {own === undefined && <div className="excerpt"><span>Saved excerpt</span><blockquote>{source.quote ? `“${source.quote}”` : "The saved excerpt has expired."}</blockquote></div>}
       <div className="rd-modal-body">
+        <Embedded><TaskSourceEmails email={email} links={own} /></Embedded>
         {source.extraction && <Embedded><ExtractionReview extraction={source.extraction} /></Embedded>}
-        {own !== undefined && <Embedded><TaskSourceEmails email={email} links={own} /></Embedded>}
-        {own === undefined && <div className="rd-gmail-link"><OpenInGmail email={email} messageId={source.messageId} /></div>}
         <p className="form-hint">InboxToTask keeps only a short excerpt. Gmail opens the whole conversation, which can include messages your rules excluded.</p>
       </div>
       <div className="modal-actions"><button className="primary-button" onClick={onClose}>Close</button></div>
@@ -1375,12 +1375,19 @@ function EditFieldsModal({ editing, busy, onSave, onCancel }: { editing: Editing
 function ChangeModal({ item, email, busy, onClose, onApprove, onDismiss, onRebase }: {
   item: ChangeItem; email: string; busy: boolean; onClose: () => void; onApprove: () => void; onDismiss: () => void; onRebase: () => void
 }) {
-  const c = item.row, current = item.target?.accepted_fields
+  const c = item.row, current = item.target?.accepted_fields, cancel = c.kind === "cancel"
+  // The proposing email, shown in the same history layout as the Source email dialog.
+  const entry = [{ taskId: "", role: cancel ? "cancelled" as const : "updated" as const, threadId: "", messageId: item.messageId, earlierMessage: false,
+    sender: item.source?.sender ?? null, subject: item.source?.subject ?? null, sentAt: item.source?.sent_at ?? null, quote: item.quote }]
   return (
-    <Modal onClose={onClose} title={c.kind === "cancel" ? "Review proposed cancellation" : "Review proposed edit"} wide>
-      <div className="deadline-review-task"><span>Task</span><strong>{current?.action ?? c.baseline?.action ?? "Task unavailable"}</strong></div>
-      <p>{c.reason}</p>
-      {c.kind === "edit" && (
+    <Modal className="rd-source-modal" onClose={onClose} title={cancel ? "Review proposed cancellation" : "Review proposed edit"} wide>
+      <div className="email-details">
+        <div><span>Task</span><strong>{current?.action ?? c.baseline?.action ?? "Task unavailable"}</strong></div>
+        <div><span>Change</span><strong>{cancel ? "Cancel this task" : "Edit task"}</strong></div>
+        {c.reason && <div><span>Reason</span><span className="rd-plain">{c.reason}</span></div>}
+      </div>
+      <div className="rd-modal-body">
+      {!cancel && (
         <table className="rd-change-table">
           <thead><tr><th scope="col">Field</th><th scope="col">Accepted when proposed</th><th scope="col">Proposed</th></tr></thead>
           <tbody>{(c.changed_fields ?? []).map((field: string) => (
@@ -1388,7 +1395,7 @@ function ChangeModal({ item, email, busy, onClose, onApprove, onDismiss, onRebas
           ))}</tbody>
         </table>
       )}
-      {c.kind === "cancel" && <p>If you approve, the task keeps its accepted values and is marked cancelled.</p>}
+      {cancel && <p>If you approve, the task keeps its accepted values and is marked cancelled.</p>}
       {!item.open && <div className="deadline-review-warning"><strong>The task is no longer open</strong><span>This proposal cannot be applied. You can dismiss it.</span></div>}
       {item.stale && current && (
         <div className="deadline-review-warning">
@@ -1397,12 +1404,10 @@ function ChangeModal({ item, email, busy, onClose, onApprove, onDismiss, onRebas
           <div><button className="secondary-button" disabled={busy} onClick={onRebase}>Compare with current task</button></div>
         </div>
       )}
-      <div className="excerpt">
-        <span>Source excerpt</span>
-        <blockquote>{item.quote ? `“${item.quote}”` : "The saved excerpt has expired, so this proposal cannot be approved."}</blockquote>
-        <OpenInGmail email={email} messageId={item.messageId} />
+      {!item.quote && <div className="deadline-review-warning"><strong>The saved excerpt has expired</strong><span>This proposal cannot be approved. You can dismiss it.</span></div>}
+      <Embedded><TaskSourceEmails email={email} links={entry} /></Embedded>
+      <p className="form-hint">Approving this change does not create or change any calendar entry. InboxToTask keeps only a short excerpt. Gmail opens the whole conversation, which can include messages your rules excluded.</p>
       </div>
-      <p className="calendar-separation-note">Approving this change does not create or change any calendar entry.</p>
       <div className="modal-actions">
         <button className="secondary-button" disabled={busy} onClick={onDismiss}>Dismiss proposal</button>
         <button className="primary-button" disabled={busy || !item.open || item.stale || !item.quote} onClick={onApprove}>{c.kind === "cancel" ? "Approve cancellation" : "Approve edit"}</button>

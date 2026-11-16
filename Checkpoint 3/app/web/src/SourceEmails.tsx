@@ -2,8 +2,11 @@ import {supabase} from './supabase'
 
 export type TaskSourceLink={taskId:string;role:'created'|'updated'|'cancelled';threadId:string;messageId:string;earlierMessage:boolean;
  sender:string|null;subject:string|null;sentAt:string|null;quote:string|null}
+// What the history list shows. 'source' is never stored: the dashboard uses it to show a
+// suggestion's single email in the same layout as a task's linked emails.
+export type SourceEntry=Omit<TaskSourceLink,'role'|'messageId'>&{role:TaskSourceLink['role']|'source';messageId:string|null}
 
-const roles:Record<TaskSourceLink['role'],string>={created:'Created from',updated:'Updated by',cancelled:'Cancelled by'}
+const roles:Record<SourceEntry['role'],string>={created:'Created from',updated:'Updated by',cancelled:'Cancelled by',source:'Found in'}
 
 // Naive implementation: the full email stays in Gmail and nothing is fetched here. This
 // URL format is not a documented Google contract, and Gmail opens the whole conversation.
@@ -27,11 +30,11 @@ export function OpenInGmail({email,messageId}:{email:string;messageId?:string|nu
  </a></p>
 }
 
-export function TaskSourceEmails({links,email}:{links:TaskSourceLink[]|null;email:string}){
+export function TaskSourceEmails({links,email}:{links:SourceEntry[]|null;email:string}){
  if(!links)return <p>Source emails could not be loaded. Reload to try again.</p>
  if(!links.length)return <p>No linked source email is available.</p>
  // Oldest first, so the list reads as the task's history. Undated links go last.
- const time=(link:TaskSourceLink)=>link.sentAt?Date.parse(link.sentAt):Infinity
+ const time=(link:SourceEntry)=>link.sentAt?Date.parse(link.sentAt):Infinity
  const ordered=[...links].sort((a,b)=>time(a)-time(b))
  return <section aria-label="Source emails" className="manual-timeline">
   <h3>Email history · {ordered.length} {ordered.length===1?'email':'emails'}</h3>
@@ -39,7 +42,7 @@ export function TaskSourceEmails({links,email}:{links:TaskSourceLink[]|null;emai
    <div className="manual-timeline-head"><strong>{roles[link.role]}{link.earlierMessage?' an earlier message in this thread':''}</strong>{link.sentAt&&<time dateTime={link.sentAt}>{new Date(link.sentAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</time>}</div>
    <p className="manual-timeline-subject">{link.subject||'(no subject)'}</p>
    <p className="manual-timeline-sender">From {link.sender??'unknown sender'}</p>
-   <details><summary>Show saved excerpt</summary><blockquote>{link.quote??'The saved excerpt has expired.'}</blockquote></details>
+   <details open><summary>Saved excerpt</summary><blockquote>{link.quote??'The saved excerpt has expired.'}</blockquote></details>
    <OpenInGmail email={email} messageId={link.messageId}/>
   </li>)}</ol>
  </section>

@@ -32,8 +32,20 @@
 .rd-modal-body .storage-review strong { font-size:14px; }
 .rd-modal-body .storage-review ul { margin:6px 0; padding-left:20px; }
 .rd-modal-body .storage-review p { margin:0; }
-.rd-modal-body .rd-gmail-link p { margin:0; font-size:14px; }
+/* The email details above already end in a divider, so the history list adds none. */
+.rd-modal-body .manual-timeline { margin-top:0; padding-top:0; border-top:0; }
 .rd-modal-body .form-hint { margin:-6px 0 0; font-size:12px; }
+/* The Gmail button lines up with the dialog's left edge, not the indented entry text.
+   It sits above the timeline's connecting line when there are several emails. */
+.rd-modal-body .manual-timeline li > p.gmail-open { position:relative; margin-left:-22px; }
+/* Change review dialog: same body as the Source email dialog. */
+.rd-modal-body > p { margin:0; }
+.rd-modal-body .deadline-review-warning { margin:0; }
+.rd-modal-body .deadline-review-warning > strong { font-size:13px; }
+.rd-modal-body .deadline-review-warning > span { font-size:12px; }
+.rd-modal-body .rd-change-table { margin:0; font-size:13px; }
+.rd-change-table tbody th { text-transform:capitalize; font-weight:600; }
+.email-details .rd-plain { color:var(--ink); font-weight:400; }
 /* "Open conversation in Gmail" reads as a button: outlined, padded, with an
    external-link icon. Used in source dialogs, email history and summaries. */
 p.gmail-open { margin:0; }

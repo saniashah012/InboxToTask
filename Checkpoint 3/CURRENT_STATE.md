@@ -87,6 +87,29 @@ script are not started.
 
 Hosted now has 31 migration versions, through `20261113000000`. `VITE_CALENDAR_EVENTS_ENABLED` is not set for the production web build, and the Google Calendar API and the `calendar.events.owned` scope are not added to the production Google Cloud project, so the live site does not offer Calendar. **Not verified:** no signed-in request has reached `calendar_event` on hosted, and connecting or reconnecting Google through the new function versions has not been run on the live site. **Remaining before Calendar is usable on the live site (#53):** set `VITE_CALENDAR_EVENTS_ENABLED` for the production web build and redeploy it; enable the Calendar API and add the scope in Google Cloud; then check connect, add and remove with a study account. The reconnect cases (#46) are still not run against Google.
 
+**November 16: one layout for source email and proposed-change popups.** Branch
+`mzheng/source-popup-layout` (stacked on `mzheng/record-calendar-merge`; unpushed when written).
+Frontend only; no backend, migration or hosted change.
+- "View details" opens the same layout in every tab (Suggestions, Active, Completed, Dismissed,
+  Passive communication, and proposed changes): the "Email history" list from
+  `TaskSourceEmails`, which tasks already used. A suggestion's single email is labelled "Found
+  in"; this `source` role is display-only, and the stored task-link type is unchanged
+  (`SourceEmails.tsx`).
+- Each saved excerpt is shown open; it can still be collapsed.
+- The duplicate divider above "Email history" is removed, and "Open conversation in Gmail" lines
+  up with the popup's left edge (`real-dashboard.css`).
+- The "Review proposed change" popup was rebuilt on the same parts. It shows a Task / Change /
+  Reason summary, the edit table or the cancellation sentence, warnings including a separate one
+  for an expired excerpt, and the proposing email as a "Cancelled by" or "Updated by" history
+  entry. Approve is disabled under the same conditions as before.
+- The local setup guide and demo script now say "Saved excerpt" instead of "Show saved excerpt".
+
+Verified: `tsc --noEmit`. In a local browser against Matthew's own saved records, checked a
+suggestion's and an active task's popups, and the cancellation popup (closed without approving or
+dismissing). Not checked: the Dismissed tab (empty), the edit-proposal popup and its blocked
+states (no such proposals existed), a task with several linked emails, phone width, and the
+live site. Escape does not close these popups (existing behavior, not changed here).
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

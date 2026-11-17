@@ -407,7 +407,8 @@ branch. Matthew decided: every participant enters the same scripted setup values
 changes settings during a session, exploration included ("there should not be any reanalyzing of
 emails"); each participant gets a new Guest or private browser window; the exploration email is a
 new email, not a reply, and participants do not act on proposed changes. `CP4_PLAN.md` and
-`task_script.md` (Sections 4, 7 and 10) now say so; the allowance line now applies only to each
+`task_script.md` (before arrival, Sections 4, 7 and 10, the last now including removing the
+exploration email with Delete from InboxToTask and then in Gmail) now say so; the allowance line now applies only to each
 account's first check after PR #124's function deploy, and the AI-only baseline question is whether
 it scores the shared saved analysis. Read from the code, not run: a saved analysis is reused with no
 model call when the content, analysis settings (topics, context limits, prompt, schema, model

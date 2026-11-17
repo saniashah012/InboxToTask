@@ -316,6 +316,51 @@ and the settings database test were run once when the migration was written. **N
 anything in a browser (the dialog, the move to onboarding, the badge, Restore original); the new
 function through the HTTP API (`test:local`); hosted.
 
+**November 17, study decisions and one open gap (docs only).** Same branch,
+`mzheng/passive-to-task`. No code, database or hosted change.
+- **Decisions by Matthew, November 17** (decided, not done):
+  - PR #124 ships for the study. Applying both migrations to hosted
+    (`20261117000000_passive_to_task`, then `20261117010000_restart_scan_setup`), redeploying
+    `gmail_scan` and `analysis_email`, and the merge must happen before the freeze scan (#67) and
+    the freeze on Thursday November 19 (night). None has happened; each needs his approval.
+  - Automatic checks are on during study sessions (decided with Sania). This replaces the earlier
+    assumption that results are scanned once and frozen with automatic checks off, which #67, #62,
+    #63, #64, #58, #54, #101, #76 and `Checkpoint 4/CP4_PLAN.md` still state; none is reworded yet.
+  - No reset script: the runner puts the account back by hand and each participant goes through
+    setup (previous entry).
+- **What automatic checks during sessions mean, from reading the code (not run on hosted):**
+  - After setup is saved, the first check covers the past 7 days and starts when the dashboard
+    opens. A saved result is reused, with no model call, only when the topics to check, the
+    earlier-email limits and the tasks offered as context match the earlier scan; otherwise the
+    email is analysed again.
+  - The per-account allowance is 20 model requests a day (`storage_preferences.daily_requests`,
+    default 20), a batch makes at most 3 model calls, and the model limit is 3 calls a minute
+    across all accounts. A study inbox is about 24 emails (#62–#64), so one full re-analysis is
+    more than a day's allowance.
+  - Email sent more than 7 days before a session is not read again. Send dates for inboxes A and B
+    are not set.
+  - Still to decide: whether every participant enters the same scripted setup values; whether to
+    raise the daily allowance for the two study accounts; whether the Scan now fix (branch
+    `mzheng/scan-now-after-reconnect`) ships before the freeze; what the AI-only baseline in #76
+    scores.
+- **Open gap: email a participant sends in during exploration.** If exploration has participants
+  send email from their own inbox to the study account, each such email leaves the email in the
+  study account's Gmail; a suggestion or Passive entry with its sender, subject and saved excerpt;
+  and possibly a task and a Calendar event. These must be removed before the next participant, and
+  they would be a real person's email, unlike the fictional inboxes.
+  - Today the designed dashboard and Settings have no permanent delete. A task can be moved back
+    (to Suggestions, Dismissed or Passive, which removes the task); a suggestion can be dismissed
+    (it stays in Dismissed and can be restored); a Passive entry cannot be removed.
+  - The backend already has a delete for a source email (`storage_action`, kind `source`, action
+    `delete`). It clears the sender, subject, summary and excerpt, removes pending, dismissed and
+    rejected suggestions and Waiting For entries, and stops that email being scanned again. It
+    does not remove a task already made from the email, a Calendar event or the Gmail message. No
+    designed screen calls it. Found by reading the code, not in a browser.
+  - Options, not decided: a delete control on a source email using that action (no migration);
+    exploration uses a prepared fictional email the runner sends; or sending email is left out of
+    exploration. The protocol and consent wording (#58) should cover whichever is chosen. Matthew
+    is to look at this on the evening of November 18.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

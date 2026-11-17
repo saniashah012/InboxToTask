@@ -123,7 +123,8 @@ hosted change.
   so manual and automatic checks take the same path). The new check passes every server check
   again; if it is refused too, the existing message is shown, and it never retries more than
   once. A new check after a reconnect covers the full 7 days, as before. After a manual press
-  the notice says a new check ran instead of continuing the earlier one. Scan limits, cooldowns,
+  the code sets a notice saying a new check ran instead of continuing the earlier one (not yet
+  seen in a browser; see below). Scan limits, cooldowns,
   permission checks and what is scanned are unchanged. The status function still reports the
   stale backlog until the next check runs (not changed, to avoid a migration).
 - Tests: `tests/scan-request.test.mjs` (7 tests, added to `npm test`) covers the retry rule; a
@@ -132,8 +133,27 @@ hosted change.
   backlog, an up-to-date backlog still continues, and a paused or reconnect-required account
   still refuses both modes.
 
-Verified offline: `npm test` (223 + 63 pass), `tsc --noEmit` and the web build. Not checked in
-a browser, against a local stack after the change, or against live Gmail.
+Verified offline: `npm test` (223 + 63 pass), `tsc --noEmit` and the web build.
+Local browser, November 17 (Matthew signed in with the dedicated test account; the stuck state
+was made by hand in the local database: a placeholder continuation, then
+`private.google_connections.generation` raised by one). Before the fix (the `mzheng/passive-to-task`
+build): Check now showed "Scanning permission or saved state changed… No new items found." and
+the database did not change. With the fix: three Check now presses and one run with no press at
+all (the dashboard's own automatic check) each got one refused continuation (409) and then a new
+check over the full 7 days that cleared the backlog, with no model calls and no error on the
+page. The automatic run showed only "Checking…" and "Checked just now"; four cooldown replies
+(429) in the console were not shown. The automatic path is the one the study uses (automatic
+checks on, Matthew's decision, November 17). The local database had the `mzheng/passive-to-task`
+migrations applied (`20261117000000` and, for the automatic run, `20261117010000`), which this
+`main`-based build does not need; nothing looked out of place. Not checked against live Gmail
+or hosted.
+**To fix later: the manual notice was never seen.** "The earlier unfinished check could no
+longer continue, so a new check ran instead." did not appear after any of the three presses;
+on the third, a page watcher caught only "A check is already running. New items will appear on
+their own." The likely cause is that an automatic check (automatic checks were on) took the
+retry first, but that is not confirmed. Next step: press Check now on a stuck account with
+automatic checks off, and if the notice still does not show, find why in `scan()` in
+`RealDashboard.tsx`.
 
 ## Gmail phases
 

@@ -386,10 +386,11 @@ entry are not reworded yet; drafts exist and are not posted.
     opens. A saved result is reused, with no model call, only when the topics to check, the
     earlier-email limits and the tasks offered as context match the earlier scan; otherwise the
     email is analysed again.
-  - The per-account allowance is 20 model requests a day (`storage_preferences.daily_requests`,
-    default 20), a batch makes at most 3 model calls, and the model limit is 3 calls a minute
-    across all accounts. A study inbox is about 24 emails (#62–#64), so one full re-analysis is
-    more than a day's allowance.
+  - The per-account allowance is 50 model requests a day (`storage_preferences.daily_requests`,
+    default 50 since migration `20261116180000`, on hosted since November 16; this line said 20
+    until corrected later on November 17), a batch makes at most 3 model calls, and the model
+    limit is 3 calls a minute across all accounts. A study inbox is about 24 emails (#62–#64), so
+    one full re-analysis fits in a day's allowance.
   - Email sent more than 7 days before a session is not read again. Send dates for inboxes A and B
     are not set.
   - Still to decide: whether every participant enters the same scripted setup values; whether to
@@ -433,13 +434,40 @@ emails"); each participant gets a new Guest or private browser window; the explo
 new email, not a reply, and participants do not act on proposed changes. `CP4_PLAN.md` and
 `task_script.md` (before arrival, Sections 4, 7 and 10, the last now including removing the
 exploration email with Delete from InboxToTask and then in Gmail) now say so; the allowance line now applies only to each
-account's first check after PR #124's function deploy, and the AI-only baseline question is whether
+account's first check after PR #124's function deploy (that check fits in the 50-a-day default), and the AI-only baseline question is whether
 it scores the shared saved analysis. Read from the code, not run: a saved analysis is reused with no
 model call when the content, analysis settings (topics, context limits, prompt, schema, model
 settings) and the open tasks sent as thread context all match (`gmail-processor.mjs`,
 `20261106000000_gmail_scan_hardening.sql`); so a different setup value, a task left active at the
 next setup, or a function deploy that changes the prompt makes email be analysed again. Nothing on
 hosted. Docs only; `git diff --check`.
+
+**November 17, 1:37–1:38 PM CST: hosted migration dry run for PR #124 — did not pass.** Approved
+by Matthew ("Yes, run them"; read-only commands only). Branch `mzheng/passive-to-task` at
+`bcf8e0f`. Nothing on hosted was changed.
+- `npx.cmd supabase migration list --linked` (from `Checkpoint 3/app`): hosted has every migration
+  on this branch up to `20261113000000`, the two new ones (`20261117000000`, `20261117010000`)
+  are pending, and hosted also has `20261116180000`, which is not on this branch.
+- `npx.cmd supabase db push --dry-run` targets the local stack in CLI 3.1 unless `--remote` is
+  passed; it failed to connect to the stopped local stack and touched nothing. With `--remote` it
+  stopped with `DbPushMissingLocalError: Remote migration versions not found in local migrations
+  directory` and suggested `migration repair --status reverted 20261116180000`, which was not run
+  (it would rewrite hosted's migration history).
+- `20261116180000_daily_requests_default_50` is commit `a7bad46` ("Raise the default daily model
+  request limit from 20 to 50"), dated November 16, on local branches `mzheng/daily-requests-50`
+  and `mzheng/passive-read-in-db`; neither is on GitHub and it is not on `main`. Its commit says it
+  was applied to hosted on November 16. So the hosted default is 50 requests a day (rows that were
+  at 20 moved to 50), not the 20 stated in the "study decisions" entry above; that line and the
+  drafted PR #124 and #123 text need correcting.
+- Next, Matthew's decision: bring `20261116180000` onto this branch (or onto `main` first) so the
+  local migrations match hosted, then dry-run again. The pass condition stays: exactly
+  `20261117000000` then `20261117010000` pending.
+
+**November 17, after the failed dry run: `20261116180000` brought onto this branch.** Matthew chose
+to cherry-pick `a7bad46` into PR #124 ("Cherry-pick into #124"). The migration and its doc and
+test changes are now on `mzheng/passive-to-task`, so the local migrations match hosted again. The
+allowance lines in this file and `CP4_PLAN.md` now say 50. Hosted is unchanged; the dry run is to be
+run again, with the same pass condition.
 
 ## Gmail phases
 

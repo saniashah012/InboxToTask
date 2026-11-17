@@ -163,9 +163,17 @@ database. All four were Passive with the expected details: a bake sale (title, T
 with 3:30 PM, location, link), a showcase with an RSVP (both dates, labelled), a time with no
 date (time kept, date null), and "details coming soon" (nothing). Four emails do not measure
 accuracy.
-**Not verified:** the same change through a real Gmail scan and into the database: the local
-function runtime is mounted from another worktree, so the one local scan run that day used the
-earlier prompt (6 results reused, no model calls); the Calendar question on Move back (Calendar
+Real Gmail scan, local (November 17, approved by Matthew): the new scan bundle was placed in the
+folder the local function runtime serves (it is mounted from another worktree), the runtime
+container restarted, and one full 7-day check run on the dedicated test mailbox. Three model calls
+(the per-batch cap; the rest stayed as backlog) saved two Passive results with details and one
+Actionable result with none; the dashboard form then opened with the model's title, date and
+time. The earlier bundle was put back and the runtime restarted afterwards. One thing seen: an
+email sent on a Thursday afternoon saying "3:30PM thursday" was dated the following Thursday.
+**Correction to the scan-contract note above:** a routine check only covers mail since the last
+complete check, so already-scanned email is analysed again only on a full 7-day check (after a
+settings change or a Gmail reconnect), not on every next scan.
+**Not verified:** the Calendar question on Move back (Calendar
 is off in the local build); `test:local` (it expects scanning switched off, and it is on
 locally); hosted.
 Second browser pass the same day, with details placed on one local email by hand and removed

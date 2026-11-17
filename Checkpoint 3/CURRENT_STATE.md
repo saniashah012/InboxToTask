@@ -110,6 +110,69 @@ dismissing). Not checked: the Dismissed tab (empty), the edit-proposal popup and
 states (no such proposals existed), a task with several linked emails, phone width, and the
 live site. Escape does not close these popups (existing behavior, not changed here).
 
+**November 17: turn a Passive email into a task.** Branch `mzheng/passive-to-task` (off `main`;
+unpushed and not merged when written; held for after the study freeze). No hosted change: the
+migration is applied to the local database only, and nothing was deployed.
+- **Dashboard:** the Source email popup of a Passive item has **Turn into task**, which opens a
+  **Create task** form (title, due date, time, description, the summary for reference). Saving
+  makes one active task, removes the row from Passive, and shows **Task created** with **View
+  task** and **Undo**. The task's menu has **Move back to Passive**, only for tasks made this way;
+  with a Calendar event it first asks whether to keep or remove the event
+  ([Calendar behavior](docs/calendar-behavior.md)). `CreateTaskFromEmail.tsx`, `passiveTask.ts`,
+  `RealDashboard.tsx`, `dashboardModel.ts`, `readMarks.ts`.
+- **Prefill:** from details the scan now saves for a Passive email, else from a small parser over
+  the summary, excerpt and subject (for email scanned earlier). A time with no date is prefilled
+  but a date is required to save. Several dates are all listed and none is preselected.
+- **Scan contract (`gmail-v1`):** the model output gained `details` (a suggested title, every
+  date or time the email states, a location, links), and the summary instruction now leads with
+  what the email is about, then when and where. A date's wording, the location and each link must
+  appear in the email or the entry is dropped (`groundDetails` in `pipeline/core.mjs`). The prompt
+  and schema are part of the cache key, so already-scanned email is analysed again on its next
+  scan. Passive read marks stay in the browser; the earlier mark is restored by Undo and Move
+  back in the same browser only.
+- **Database, migration `20261117000000_passive_to_task`:** `storage_extractions.details`
+  (cleared whenever the summary is), service-only `gmail_extraction_details`,
+  `tasks.origin_extraction_id`, and two `storage_action` branches: `create_task` on an
+  extraction (one task per email) and `return_to_passive` on a task. Deleting such a task clears
+  that email's summary and suppresses its rescan.
+
+- **A task needs a due date, and "Needs verification" opens the editor** (Matthew's decision,
+  November 17; dashboard only, the database still accepts a task with no deadline). **Add task**
+  on a suggestion that has no deadline or is marked "Needs verification" opens **Review before
+  adding**, which lists what the scan asked the user to check and adds the task on save; a due
+  date is required there, in the Create task form, and when editing an active task. "Move to
+  Active" and "Move to Completed" on such a suggestion open the same editor. Checked in a local
+  browser: the editor opens for a suggestion with no deadline and refuses to add without a date.
+  Later the same day: a task was added through the editor with a date entered and then moved
+  back to Suggestions. Not checked: the Move menu path into the editor, a dismissed suggestion.
+- **Shorter suggested titles:** the scan is asked for an imperative title of two to six words
+  with no date, time, place or sender; one over 60 characters is dropped. For email scanned
+  earlier the form reduces the summary to what it is about ("Exam", "Campus bake sale").
+
+Verified offline, rerun after every change above: `npm test` 236 and 80 pass, `npm run
+test:calendar` 45 pass, `tsc --noEmit`, the web build, `deno check` of all six functions, and
+pgTAP on the local database (93 pass);
+these use fake Gemini and Gmail responses. In a local browser against Matthew's saved records,
+with Calendar off: the button, the form prefilled from an email scanned earlier (Thursday's date
+and 3:30 PM), the two validation messages, saving, the row leaving Passive, the task card and its
+source popup, Move back to Passive and the pop-up's Undo, both restoring the Unread mark.
+Live model check (November 17, approved by Matthew): four fictional emails sent to Gemini through
+the canonical pipeline with the `gmail-v1` contract, in a throwaway script that touches no
+database. All four were Passive with the expected details: a bake sale (title, Thursday's date
+with 3:30 PM, location, link), a showcase with an RSVP (both dates, labelled), a time with no
+date (time kept, date null), and "details coming soon" (nothing). Four emails do not measure
+accuracy.
+**Not verified:** the same change through a real Gmail scan and into the database: the local
+function runtime is mounted from another worktree, so the one local scan run that day used the
+earlier prompt (6 results reused, no model calls); the Calendar question on Move back (Calendar
+is off in the local build); `test:local` (it expects scanning switched off, and it is on
+locally); hosted.
+Second browser pass the same day, with details placed on one local email by hand and removed
+afterwards: the several-dates choice (nothing preselected, choosing fills the fields, editing
+clears the choice), location and link in Description, the required due date, View task (opens
+Active, scrolls to and focuses the card), a save that fails (form and entries kept, row stays
+in Passive), and the Create task form at phone width.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

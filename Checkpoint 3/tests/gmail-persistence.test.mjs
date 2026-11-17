@@ -15,7 +15,7 @@ test('fictional Gmail extraction persists, repeats cache, and changes require re
  const fields={action:'Submit research report',requirements:['Keep the edited analysis section'],condition:null,deadline:null};
  const generate=async({payload})=>{
   modelCalls++;const evidence={messageId:payload.currentMessage.id,quote:payload.currentMessage.body};
-  const result={category:'Actionable',confidence:95,summary:'Research report request.',explanation:'An explicit request.',evidence,tasks:[],waitingFor:[],suggestedFollowUps:[],uncertainties:[],topicRelevance:{decision:'relevant',reason:'All permitted topics.'},taskChanges:[]};
+  const result={category:'Actionable',confidence:95,summary:'Research report request.',explanation:'An explicit request.',evidence,tasks:[],waitingFor:[],suggestedFollowUps:[],uncertainties:[],details:{title:null,dates:[],location:null,links:[]},topicRelevance:{decision:'relevant',reason:'All permitted topics.'},taskChanges:[]};
   if(payload.currentMessage.id==='original')result.tasks=[{...fields,owner:payload.user.email,evidence,topicRelevance:'relevant'}];
   else {
    const target=payload.existingTaskContext[0];assert.ok(target,'Relevant accepted task was loaded');
@@ -86,7 +86,7 @@ test('repeat scans reuse results, re-extraction never duplicates review items, d
  const generate=async({payload})=>{
   modelCalls++;const id=payload.currentMessage.id,evidence={messageId:id,quote:payload.currentMessage.body};
   const extra=script[id]?.(payload,evidence)??{};const tasks=extra.tasks??[],taskChanges=extra.taskChanges??[];
-  return {value:{category:tasks.length||taskChanges.some(c=>c.kind==='edit')?'Actionable':'Passive',confidence:90,summary:'Fictional.',explanation:'Fictional.',evidence,tasks,waitingFor:[],suggestedFollowUps:[],uncertainties:[],topicRelevance:{decision:'relevant',reason:'No topic limits.'},taskChanges},attempts:1,usage:{totalTokens:10},latencyMs:1};
+  return {value:{category:tasks.length||taskChanges.some(c=>c.kind==='edit')?'Actionable':'Passive',confidence:90,summary:'Fictional.',explanation:'Fictional.',evidence,tasks,waitingFor:[],suggestedFollowUps:[],uncertainties:[],details:extra.details??{title:null,dates:[],location:null,links:[]},topicRelevance:{decision:'relevant',reason:'No topic limits.'},taskChanges},attempts:1,usage:{totalTokens:10},latencyMs:1};
  };
  const editChange=(target,evidence,date)=>({topicRelevance:'relevant',kind:'edit',targetTaskId:target.id,expectedRevision:target.revision,changedFields:['deadline'],
   fields:{...target.acceptedFields,deadline:{date,time:null,timeZone:'America/Chicago',wording:'moved',boundary:'on'}},reason:'Explicit revision.',evidence});
@@ -209,6 +209,37 @@ test('repeat scans reuse results, re-extraction never duplicates review items, d
    await proc2(warned);
    const row=(await q("select e.warnings from public.storage_extractions e join public.storage_sources s on s.id=e.source_id where s.message_id='m-warning'"))[0];
    assert.deepEqual(row.warnings,['Some thread history was excluded by current source permissions.','A separate question?']);
+  });
+  // Passive notices use their own thread so they never enter the report's task context.
+  const notice=(id,hours,body)=>({...message(id,hours,body),threadId:'thread-notices'});
+  const detailsOf=id=>scalar("select e.details from public.storage_extractions e join public.storage_sources s on s.id=e.source_id where s.message_id=$1",[id]);
+  const openHouse={title:'Attend the open house',location:'Room 101',links:['https://example.org/rsvp'],
+   dates:[{label:'Open house',date:'2026-11-20',time:'18:00',timeZone:'America/Chicago',wording:'November 20 at 6 pm',boundary:'on'}]};
+  await t.test('a Passive email stores its grounded task details; an Actionable one stores none',async()=>{
+   const P=notice('m-notice',3.2,'Open house on November 20 at 6 pm in Room 101. RSVP at https://example.org/rsvp.');
+   const unstated={label:'Reception',date:'2026-11-21',time:null,timeZone:'America/Chicago',wording:'November 21',boundary:'on'};
+   script['m-notice']=()=>({details:{...openHouse,dates:[...openHouse.dates,unstated]}});
+   assert.equal((await proc()(input(P))).saved,true);
+   assert.deepEqual(await detailsOf('m-notice'),openHouse,'the unstated date is dropped before saving');
+   const X=notice('m-bring-form',3.15,'Please bring the signed form to Room 101 on November 20.');
+   script['m-bring-form']=(p,e)=>({tasks:[task('Bring the signed form',e)],details:{...openHouse,dates:[]}});
+   assert.equal((await proc()(input(X))).saved,true);
+   assert.equal(await detailsOf('m-bring-form'),null);
+  });
+  await t.test('a failed details save leaves the Passive result saved and reported as saved',async()=>{
+   const names=[];
+   const flaky=(name,args)=>{names.push(name);return name==='gmail_extraction_details'?Promise.reject(Object.assign(new Error('Fictional outage.'),{code:'XX000'})):rpc(name,args);};
+   const proc3=createGmailProcessor({rpc:flaky,user:{id:A,email},work,settings:{contextLimits:limits,model:'test-model',version:'test',maxOutputTokens:8192,maxAttempts:1,timeoutMs:60000},systemPrompt:'Fictional injected model.',generate});
+   const F=notice('m-notice-2',3.1,'Open house on November 20 at 6 pm in Room 101. RSVP at https://example.org/rsvp.');
+   script['m-notice-2']=()=>({details:openHouse});
+   assert.deepEqual(await proc3(input(F)),{modelCalls:1,reused:false,saved:true});
+   assert.ok(names.includes('gmail_extraction_details'));assert.ok(!names.includes('storage_fail'));
+   assert.equal(await detailsOf('m-notice-2'),null);
+   assert.equal(await scalar("select e.summary from public.storage_extractions e join public.storage_sources s on s.id=e.source_id where s.message_id='m-notice-2'"),'Fictional.');
+   const before=modelCalls;assert.equal((await proc()(input(F))).reused,true);assert.equal(modelCalls,before);
+   // Empty details skip the call entirely.
+   names.length=0;const E=notice('m-notice-3',3.05,'A fictional note with nothing to schedule.');
+   await proc3(input(E));assert.ok(!names.includes('gmail_extraction_details'));
   });
   await t.test('cancelled tasks only allow deletion, and deleting suppresses the approved change source',async()=>{
    const C=message('m-cancel',3,'The research report is cancelled.');

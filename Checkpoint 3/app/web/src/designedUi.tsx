@@ -1,5 +1,5 @@
 // Shared pieces of the designed product UI, used by onboarding, settings and the dashboard.
-import type { ReactNode } from "react"
+import { useId, type ReactNode } from "react"
 
 export function Icon({
   name,
@@ -65,17 +65,22 @@ export function Modal({
   title,
   wide = false,
   className = "",
+  subtitle,
 }: {
   children: ReactNode
   onClose: () => void
   title: string
   wide?: boolean
   className?: string
+  // Optional line under the title, read with the dialog's name.
+  subtitle?: string
 }) {
+  const subtitleId = useId()
   return (
     <div className="overlay" role="presentation" onMouseDown={onClose}>
       <section
         aria-label={title}
+        aria-describedby={subtitle ? subtitleId : undefined}
         aria-modal="true"
         className={`modal ${wide ? "modal-wide" : ""} ${className}`.trim()}
         role="dialog"
@@ -85,6 +90,7 @@ export function Modal({
           <div>
             <span className="eyebrow">InboxToTask</span>
             <h2>{title}</h2>
+            {subtitle && <p className="modal-subtitle" id={subtitleId}>{subtitle}</p>}
           </div>
           <button aria-label="Close" className="icon-button" onClick={onClose}>
             <Icon name="close" />

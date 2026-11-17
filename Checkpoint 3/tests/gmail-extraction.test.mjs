@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {contentWarnings,extract,prepareInput,validateExtraction} from '../app/pipeline/core.mjs';
+import {contentWarnings,extract,groundDetails,prepareInput,validateExtraction} from '../app/pipeline/core.mjs';
 import {selectTaskContext} from '../app/pipeline/task-context.mjs';
 import {filterRelevantOutput} from '../app/pipeline/gmail-processor.mjs';
 const ID='11111111-1111-4111-8111-111111111111';
@@ -11,7 +11,7 @@ const context=[{id:ID,revision:4,acceptedFields:fields,userEdited:true,sourceMes
 const payload=()=>prepareInput({contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',rules,message,threadContext:[],contextLimits:{maxMessages:5,maxAgeDays:90,maxMessageChars:12000,maxTotalChars:24000},semanticPreferences:{include:[],exclude:[]},existingTaskContext:context},{}).payload;
 const evidence={messageId:'gmail1',quote:'The report is now due November 9.'};
 const output=()=>({category:'Actionable',confidence:95,summary:'The research report deadline changed.',explanation:'The sender revised the report deadline.',evidence,
- tasks:[],waitingFor:[],suggestedFollowUps:[],uncertainties:[],topicRelevance:{decision:'relevant',reason:'No topic restrictions.'},
+ tasks:[],waitingFor:[],suggestedFollowUps:[],uncertainties:[],details:{title:null,dates:[],location:null,links:[]},topicRelevance:{decision:'relevant',reason:'No topic restrictions.'},
  taskChanges:[{topicRelevance:'relevant',kind:'edit',targetTaskId:ID,expectedRevision:4,changedFields:['deadline'],fields:{...fields,deadline:{date:'2026-11-09',time:null,timeZone:'America/Chicago',wording:'now due November 9',boundary:'on'}},reason:'Explicit revised report deadline.',evidence}]});
 test('deadline update targets the specific task and preserves accepted user edits',()=>{
  const value=output();assert.equal(validateExtraction(value,payload()).taskChanges[0].fields.requirements[0],'Keep my edited requirement');
@@ -96,4 +96,50 @@ test('links and credential or payment wording in suggestions add review warnings
  const result=await extract(input,{settings:{contextLimits:{}},systemPrompt:'Unit test prompt',generate:async()=>({value,attempts:1})});
  assert.equal(result.needsReview,true);assert.ok(result.contextWarnings.some(w=>w.includes('web link')));
  assert.equal(result.result.taskChanges[0].fields.action,'Confirm the report at https://portal.example.test');
+});
+
+// "Turn into task" details of a Passive email: ungrounded entries are dropped, never fatal.
+const notice='Open house on November 20 at 6 pm in Room 101,  Main Hall. Doors open at 5:30 pm. RSVP at https://example.org/rsvp or see https://example.org/map; files at ftp://example.org/files.';
+const passivePayload=(body=notice)=>prepareInput({contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',rules,message:{...message,body},threadContext:[],contextLimits:{maxMessages:5,maxAgeDays:90,maxMessageChars:12000,maxTotalChars:24000},semanticPreferences:{include:[],exclude:[]},existingTaskContext:[]},{}).payload;
+const stated={label:'Open house',date:'2026-11-20',time:'18:00',timeZone:'America/Chicago',wording:'November  20 at 6 PM',boundary:'on'};
+const passive=(details={})=>({...output(),category:'Passive',summary:'An open house is planned.',evidence:{messageId:'gmail1',quote:'Open house on November 20 at 6 pm'},taskChanges:[],
+ details:{title:null,dates:[],location:null,links:[],...details}});
+test('Passive details keep grounded dates and drop ungrounded, invalid or empty ones without failing',()=>{
+ const timeOnly={label:'Doors open',date:null,time:'17:30',timeZone:'America/Chicago',wording:'Doors open at 5:30 pm',boundary:'unspecified'};
+ const dates=[stated,timeOnly,{...stated,wording:'November 21 at 6 pm'},{...stated,timeZone:'Mars/Olympus'},{...stated,date:'2026-02-30'},{...stated,date:null,time:null}];
+ const result=validateExtraction(passive({title:'  Attend the   open house ',dates}),passivePayload()).details;
+ assert.deepEqual(result.dates,[stated,timeOnly]);
+ assert.equal(result.title,'Attend the open house');
+ assert.deepEqual(groundDetails(passive({dates:[{...stated,date:'2026-11-31'}]}),passivePayload()).details.dates,[]);
+});
+test('Passive details keep a stated location and http(s) links found in the body, once each',()=>{
+ const result=validateExtraction(passive({location:'room 101, main   hall',links:['https://example.org/rsvp',' https://example.org/rsvp ','ftp://example.org/files','https://example.org/map','https://example.org/elsewhere']}),passivePayload()).details;
+ assert.equal(result.location,'room 101, main hall');
+ assert.deepEqual(result.links,['https://example.org/rsvp','https://example.org/map']);
+ const other=validateExtraction(passive({location:'Room 202',links:['example.org/rsvp']}),passivePayload()).details;
+ assert.equal(other.location,null);assert.deepEqual(other.links,[]);
+});
+test('Actionable results never carry Passive details',()=>{
+ const v=output();v.details={title:'Submit research report',dates:[{...stated,wording:'now due November 9',date:'2026-11-09',time:null}],location:null,links:[]};
+ assert.deepEqual(validateExtraction(v,payload()).details,{title:null,dates:[],location:null,links:[]});
+});
+test('malformed details still fail the output schema',()=>{
+ const link='https://example.org/rsvp';
+ for(const details of [{title:null,dates:[],location:null},{title:null,dates:Array(7).fill(stated),location:null,links:[]},
+  {title:null,dates:[],location:null,links:Array(6).fill(link)},{title:null,dates:[{...stated,time:'6pm'}],location:null,links:[]},
+  {title:null,dates:[{...stated,time:'24:00'}],location:null,links:[]},{title:null,dates:[],location:null,links:[],extra:1}]){
+  const v=passive();v.details=details;assert.throws(()=>validateExtraction(v,passivePayload()),/INVALID_OUTPUT_SCHEMA/,JSON.stringify(details).slice(0,80));
+ }
+ const missing=passive();delete missing.details;assert.throws(()=>validateExtraction(missing,passivePayload()),/INVALID_OUTPUT_SCHEMA/);
+});
+test('topic filtering empties details of an irrelevant email and keeps a relevant one',()=>{
+ const details={title:'Attend the open house',dates:[stated],location:'Room 101',links:['https://example.org/rsvp']};
+ const v=passive(details);v.topicRelevance={decision:'irrelevant',reason:'Outside selected topics.'};
+ assert.deepEqual(filterRelevantOutput({result:v}).result.details,{title:null,dates:[],location:null,links:[]});
+ assert.deepEqual(filterRelevantOutput({result:passive(details)}).result.details,details);
+});
+test('a link is grounded only as a whole link, not as the start of a longer one',()=>{
+ const body='Register at https://example.org/rsvp-form-2026 before Friday.';
+ const v=passive({links:['https://example.org/rsvp']});v.evidence={messageId:'gmail1',quote:'Register at'};
+ assert.deepEqual(validateExtraction(v,passivePayload(body)).details.links,[]);
 });

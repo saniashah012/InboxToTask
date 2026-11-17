@@ -142,6 +142,11 @@ Google on a dashboard load.
 - **Task deleted** while it has an event: the app first asks "Also remove its calendar event?".
   Yes removes the event and then deletes the task. No says the event stays in Google and the app
   will no longer manage it, then deletes the task.
+- **Task moved back to Passive** (a task the user made from a Passive email) while it has an
+  event: the app first asks "Keep the calendar event?". Remove deletes the event through the same
+  removal as Remove from calendar and then moves the task back; if removal fails the task is not
+  moved. Keep says the event stays in Google and the app will no longer manage it, then moves the
+  task back. Undo in the "Task created" pop-up never touches Calendar.
 - **Task changed while the Add to Calendar form is open:** if the task was edited, completed,
   cancelled or deleted before the user confirms, nothing is sent to Google and the user is asked
   to reopen the form on the current task.

@@ -117,7 +117,7 @@ test('the processor makes zero model calls and stores nothing for a blocked emai
     return {};};
   const generate=async({payload})=>{payloads.push(payload);return {value:{category:'Passive',confidence:90,summary:'A report reminder.',explanation:'Informational.',
     evidence:{messageId:'m1',quote:'Please submit the report.'},tasks:[],waitingFor:[],suggestedFollowUps:[],uncertainties:[],
-    topicRelevance:{decision:'relevant',reason:'No topic restrictions.'},taskChanges:[]},usage:{}};};
+    details:{title:null,dates:[],location:null,links:[]},topicRelevance:{decision:'relevant',reason:'No topic restrictions.'},taskChanges:[]},usage:{}};};
   const processor=createGmailProcessor({rpc,user:{id:'u1',email:'student@example.org'},work:{lease:'w',end:'2026-11-05T13:00:00Z',semanticPreferences:topics},
     settings:{contextLimits:limits,model:'test-model',maxOutputTokens:8192,maxAttempts:1,timeoutMs:60000},systemPrompt:'Fictional injected model.',generate});
   const email=body=>({message:{id:'m1',threadId:'thread1',from:'teacher@example.org',subject:'Assignment',labels:[],sentAt:date,body},threadContext:[],rules,contextLimits:limits});

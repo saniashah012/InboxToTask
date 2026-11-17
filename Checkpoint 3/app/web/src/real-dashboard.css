@@ -167,3 +167,28 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 .rd-embedded .calendar-note p { margin:0 0 6px; }
 .rd-embedded .calendar-note p:last-child { margin:0; }
 .rd-embedded .calendar-open { align-self:center; color:var(--green); font-weight:600; }
+/* A line under a dialog's title (Modal subtitle). */
+.modal-subtitle { margin:6px 0 0; color:var(--muted); font-size:12px; }
+/* "Turn into task": a narrow Create task dialog, one column of fields. */
+.modal.rd-create-modal { width:min(100%, 460px); max-height:calc(100vh - 48px); overflow-y:auto; }
+.rd-create-modal .form-stack textarea { width:100%; min-height:72px; border:1px solid #ced8d3; border-radius:9px; padding:9px 11px; background:white; color:var(--ink); font-size:12px; line-height:1.5; resize:vertical; box-sizing:border-box; }
+.rd-create-modal .form-stack textarea:focus { border-color:var(--green); }
+.rd-create-modal .form-stack .modal-actions { padding:4px 0 0; border-top:0; }
+.rd-create-source { display:grid; gap:6px; padding:10px 12px; border-radius:9px; background:var(--canvas); }
+.rd-create-source > span { font-size:11px; font-weight:600; }
+.rd-create-source > p { margin:0; color:var(--muted); font-size:12px; line-height:1.5; }
+.rd-review-reasons { display:grid; gap:6px; padding:10px 12px; border-radius:9px; background:var(--canvas); }
+.rd-review-reasons > span { font-size:11px; font-weight:600; }
+.rd-review-reasons ul { margin:0; padding-left:18px; color:var(--muted); font-size:12px; line-height:1.5; }
+/* Several dates in the email: one radio option each, with the email's own wording. */
+.rd-date-choices { display:grid; gap:6px; margin:0; padding:0; border:0; min-width:0; }
+.rd-date-choices > legend { margin-bottom:6px; padding:0; font-size:11px; font-weight:600; }
+.form-stack .rd-date-choice { display:flex; align-items:flex-start; gap:8px; padding:8px 10px; border:1px solid var(--soft-line); border-radius:9px; cursor:pointer; }
+.form-stack .rd-date-choice:has(input:checked) { border-color:var(--green); background:var(--green-soft); }
+.form-stack .rd-date-choice > input { flex:none; width:16px; height:16px; margin:2px 0 0; padding:0; accent-color:var(--green); }
+.form-stack .rd-date-choice > span { display:grid; gap:2px; font-size:12px; font-weight:400; }
+.rd-date-choice strong { font-size:12px; }
+.rd-date-when { color:var(--ink); }
+.rd-date-wording { color:var(--muted); font-style:italic; overflow-wrap:anywhere; }
+/* "View task" after creating a task: the card it jumps to is outlined for a moment. */
+.app-shell .task-row.rd-jump-target { outline:3px solid var(--green); outline-offset:2px; box-shadow:0 0 0 6px var(--green-soft); }

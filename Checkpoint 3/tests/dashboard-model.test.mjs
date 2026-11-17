@@ -122,6 +122,57 @@ test('passive communication shows only informational emails, newest analysis onc
   assert.deepEqual(m.information.map(e => e.summary), ['Newer summary']);
 });
 
+// "Turn into task": a Passive email with a live task created from it.
+function withPassiveTask(task) {
+  const s = snapshot();
+  s.evidence.push({ id: 'ev-info', extraction_id: 'ex-info-b', quote: 'The library closes early on Friday.', message_id: 'm3' });
+  s.tasks.push({ id: 't-passive', status: 'approved', revision: 0, accepted_fields: fields('Return books', due('2026-11-14')), origin_extraction_id: 'ex-info-b', created_at: '2026-11-09T12:00:00Z', ...task });
+  return s;
+}
+
+test('a Passive email with a live task created from it leaves Passive communication', () => {
+  assert.deepEqual(buildDashboardModel(withPassiveTask(), links, NOW).information, []);
+  assert.deepEqual(buildDashboardModel(withPassiveTask({ status: 'completed', completed_at: '2026-11-09T13:00:00Z' }), links, NOW).information, [], 'completed tasks keep it out too');
+});
+
+test('the task hides the email even when it points at an older analysis of the same email', () => {
+  // A rescan made ex-info-b after the task was created from ex-info.
+  assert.deepEqual(buildDashboardModel(withPassiveTask({ origin_extraction_id: 'ex-info' }), links, NOW).information, []);
+});
+
+test('the email comes back to Passive when its task is deleted or gone', () => {
+  assert.deepEqual(buildDashboardModel(withPassiveTask({ deleted_at: '2026-11-09T14:00:00Z' }), links, NOW).information.map(e => e.summary), ['Newer summary']);
+  const gone = withPassiveTask();
+  gone.tasks = gone.tasks.filter(t => t.id !== 't-passive');
+  assert.deepEqual(buildDashboardModel(gone, links, NOW).information.map(e => e.summary), ['Newer summary']);
+});
+
+test('only tasks created from a Passive email carry fromPassive, with their source view', () => {
+  const m = buildDashboardModel(withPassiveTask(), links, NOW);
+  const task = m.active.find(t => t.row.id === 't-passive');
+  assert.equal(task.primary, undefined, 'no suggestion-based source link');
+  assert.equal(task.fromPassive.extraction.id, 'ex-info-b');
+  assert.equal(task.fromPassive.source.subject, 'Library hours');
+  assert.equal(task.fromPassive.quote, 'The library closes early on Friday.');
+  assert.equal(task.fromPassive.messageId, 'm3');
+  assert.equal(task.fromPassive.summary, 'Newer summary');
+  assert.equal(task.fromPassive.canReturn, true);
+  // Ordinary tasks are unchanged.
+  for (const t of [...m.active, ...m.closed].filter(t => t.row.id !== 't-passive')) assert.equal('fromPassive' in t, false, t.row.id);
+  assert.deepEqual(m.active.map(t => t.row.id), ['t-open', 't-passive', 't-nodate']);
+});
+
+test('a task whose Passive summary is gone or expired cannot move back', () => {
+  const cleared = withPassiveTask();
+  cleared.extractions.find(e => e.id === 'ex-info-b').summary = null;
+  assert.equal(buildDashboardModel(cleared, links, NOW).active.find(t => t.row.id === 't-passive').fromPassive.canReturn, false);
+  const expired = withPassiveTask();
+  expired.extractions.find(e => e.id === 'ex-info-b').digest_expires_at = past;
+  assert.equal(buildDashboardModel(expired, links, NOW).active.find(t => t.row.id === 't-passive').fromPassive.canReturn, false);
+  const missing = withPassiveTask({ origin_extraction_id: 'ex-gone' });
+  assert.equal(buildDashboardModel(missing, links, NOW).active.find(t => t.row.id === 't-passive').fromPassive, undefined);
+});
+
 test('a failed source-link lookup still shows tasks', () => {
   const m = buildDashboardModel(snapshot(), null, NOW);
   assert.equal(m.active.length, 2);

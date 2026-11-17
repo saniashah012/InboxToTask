@@ -38,12 +38,25 @@ export type ChangeItem = {
   messageId: string | null
 }
 
+// A task the user created from a Passive email ("Turn into task"). Such tasks have no
+// suggestion-based source link, so their source view comes from the origin analysis.
+// canReturn: the summary can still be shown, so the task can move back to Passive.
+export type PassiveOrigin = {
+  extraction: StoredRow
+  source?: StoredRow
+  quote: string | null
+  messageId: string | null
+  summary: string | null
+  canReturn: boolean
+}
+
 export type TaskItem = {
   row: StoredRow
   fields: TaskFields
   cancelled: boolean
   primary?: SourceLink
   pendingChanges: number
+  fromPassive?: PassiveOrigin
 }
 
 export type WaitingItem = {
@@ -132,10 +145,25 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
     const own = (links ?? []).filter(l => l.taskId === taskId)
     return own.find(l => l.role === "created") ?? own[0]
   }
-  const taskItem = (row: StoredRow): TaskItem => ({
-    row, fields: row.accepted_fields, cancelled: Boolean(row.cancelled_at),
-    primary: primary(row.id), pendingChanges: pendingByTask.get(row.id) ?? 0,
-  })
+  const passiveOrigin = (row: StoredRow): PassiveOrigin | undefined => {
+    const extraction = row.origin_extraction_id ? extractions.get(row.origin_extraction_id) : undefined
+    if (!extraction) return undefined
+    const source = sources.get(extraction.source_id)
+    const quote = rows("evidence").find(q => q.extraction_id === extraction.id && typeof q.quote === "string" && q.quote)
+    const summary = typeof extraction.summary === "string" && extraction.summary ? extraction.summary : null
+    return {
+      extraction, source, quote: quote?.quote ?? null, messageId: quote?.message_id ?? source?.message_id ?? null,
+      summary, canReturn: Boolean(summary) && time(extraction.digest_expires_at) > nowMs,
+    }
+  }
+  const taskItem = (row: StoredRow): TaskItem => {
+    const fromPassive = passiveOrigin(row)
+    return {
+      row, fields: row.accepted_fields, cancelled: Boolean(row.cancelled_at),
+      primary: primary(row.id), pendingChanges: pendingByTask.get(row.id) ?? 0,
+      ...(fromPassive ? { fromPassive } : {}),
+    }
+  }
   const active = tasks.filter(t => t.status === "approved" && !t.cancelled_at).map(taskItem).sort(byDeadline)
   const closed = tasks.filter(t => t.status === "completed" || t.cancelled_at).map(taskItem)
     .sort((a, b) => time(b.row.completed_at ?? b.row.updated_at ?? b.row.created_at) - time(a.row.completed_at ?? a.row.updated_at ?? a.row.created_at))
@@ -154,7 +182,11 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
   }
   // Passive communication is informational email only: the newest analysis must be
   // Passive (no owner obligation). Actionable emails' tasks appear under Tasks instead.
-  const information = [...latest.values()].filter(e => e.category === "Passive" && e.summary && e.topic_relevance !== "irrelevant" && time(e.digest_expires_at) > nowMs)
+  // An email the user turned into a task stays out while that task exists. Matched on the
+  // source, because a rescan of the same email creates a newer analysis.
+  const becameTask = new Set(tasks.map(t => t.origin_extraction_id && extractions.get(t.origin_extraction_id)?.source_id).filter(Boolean))
+  const information = [...latest.values()].filter(e => e.category === "Passive" && e.summary && e.topic_relevance !== "irrelevant" && time(e.digest_expires_at) > nowMs
+    && !becameTask.has(e.source_id))
 
   return {
     suggestions: pending.map(suggestion).sort(byDeadline),

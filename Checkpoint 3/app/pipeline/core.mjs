@@ -217,9 +217,38 @@ function pastDeadline(d, analysisTime) {
   const date = `${parts.year}-${parts.month}-${parts.day}`;
   return date > d.date || (date === d.date && d.time !== null && `${parts.hour}:${parts.minute}` > d.time);
 }
+// Details offered for a task the user may create from a Passive email. Whatever the
+// current message does not state word for word is dropped, not repaired: a date's
+// wording, the location and each link must appear in its body. A dropped entry only
+// leaves a field empty for the user to fill, so it never fails the whole extraction.
+export function groundDetails(value, payload) {
+  const empty = { title: null, dates: [], location: null, links: [] };
+  if (value.category !== 'Passive') { value.details = empty; return value; }
+  const body = norm(payload.currentMessage.body).toLowerCase();
+  const stated = (text) => body.includes(norm(text).toLowerCase());
+  const realDate = (date) => {
+    const parsed = new Date(`${date}T00:00:00Z`);
+    return Number.isFinite(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === date;
+  };
+  // A link must be a whole link in the body, in the same letter case: the start of a
+  // longer address, or one with a path in different case, is a different address.
+  const bodyLinks = new Set(payload.currentMessage.body.split(/\s+/)
+    .map((word) => word.replace(/^[(<\["']+/, '').replace(/[)>\].,;:!?"']+$/, '')));
+  const d = value.details;
+  value.details = {
+    // A title is a short phrase. A longer one is dropped, and the form suggests its own.
+    title: d.title === null || norm(d.title).length > 60 ? null : norm(d.title),
+    dates: d.dates.filter((x) => (x.date !== null || x.time !== null) && validTimeZone(x.timeZone)
+      && (x.date === null || realDate(x.date)) && stated(x.wording)),
+    location: d.location !== null && stated(d.location) ? norm(d.location) : null,
+    links: [...new Set(d.links.map((link) => link.trim()))].filter((link) => /^https?:\/\/\S+$/i.test(link) && bodyLinks.has(link)),
+  };
+  return value;
+}
 export function validateExtraction(value, payload) {
   const gmail=payload.contract==='gmail-v1';
   validateSchema(value,gmail?gmailSchema:schema);
+  if (gmail) groundDetails(value, payload);
   const sources = new Map([payload.currentMessage, ...payload.threadContext].map((m) => [m.id, m]));
   const verifyEvidence = (e) => {
     if (!sources.has(e.messageId) || !norm(sources.get(e.messageId).body).includes(norm(e.quote))) fail('UNGROUNDED_EVIDENCE');

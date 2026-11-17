@@ -16,7 +16,7 @@ export function filterRelevantOutput(output) {
  result.tasks=result.tasks.filter(t=>t.topicRelevance!=='irrelevant').map(({topicRelevance,...task})=>task);
  result.suggestedFollowUps=result.suggestedFollowUps.filter(f=>f.topicRelevance!=='irrelevant'&&kept.has(f.waitingForIndex)).map(f=>({...f,waitingForIndex:kept.get(f.waitingForIndex)}));
  result.taskChanges=result.taskChanges.filter(c=>c.topicRelevance!=='irrelevant');
- if(result.topicRelevance.decision==='irrelevant') result.summary='Outside selected topics.';
+ if(result.topicRelevance.decision==='irrelevant') {result.summary='Outside selected topics.';result.details={title:null,dates:[],location:null,links:[]};}
  return copy;
 }
 export function createGmailProcessor({rpc,user,work,settings,systemPrompt,generate,timeZone='America/Chicago'}) {
@@ -63,7 +63,15 @@ export function createGmailProcessor({rpc,user,work,settings,systemPrompt,genera
    if(context.omitted) {output.contextWarnings.push('Relevant task context was bounded; verify update targets.');output.needsReview=true;}
    // The prompt has the model repeat backend warnings as uncertainties. Store each once.
    output.result.uncertainties=output.result.uncertainties.filter(item=>!output.contextWarnings.includes(item));
-   await rpc('gmail_process_finish',{p_user:user.id,p_job:claim.jobId,p_lease:claim.leaseToken,p_output:filterRelevantOutput(output),p_meta:meta});
+   const filtered=filterRelevantOutput(output);
+   const receipt=await rpc('gmail_process_finish',{p_user:user.id,p_job:claim.jobId,p_lease:claim.leaseToken,p_output:filtered,p_meta:meta});
+   // Task details of a Passive email are saved after the result. Losing them only
+   // leaves the "Turn into task" form to fill in from the summary, so a failure here
+   // must not fail a result that is already saved.
+   const details=filtered.result.details;
+   if(filtered.result.category==='Passive'&&receipt?.extractionId&&details&&(details.title||details.dates.length||details.location||details.links.length)) {
+    try {await rpc('gmail_extraction_details',{p_user:user.id,p_extraction:receipt.extractionId,p_details:details});} catch {}
+   }
    return {modelCalls:output.modelCalls,reused:false,saved:true};
   } catch(error) {
    try {await rpc('storage_fail',{p_user_id:user.id,p_job_id:claim.jobId,p_lease:claim.leaseToken,p_code:error.code==='PROVIDER_HTTP_429'?'rate_limited':'unavailable'});} catch {}

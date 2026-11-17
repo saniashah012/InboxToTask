@@ -989,6 +989,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
       {source && <SourceModal source={source} email={email} links={links} onClose={() => setSource(null)}
         onTurnIntoTask={source.passive && source.extraction ? () => { setCreating(source); setSource(null) } : undefined} />}
       {creating?.extraction && <CreateTaskFromEmail key={creating.extraction.id} timeZone={viewerZone} busy={busy}
+        gmailUrl={creating.messageId ? gmailConversationUrl(email, creating.messageId) : undefined}
         email={{ subject: creating.subject ?? null, sentAt: creating.sentAt ?? null, summary: creating.summary ?? null, quote: creating.quote, extraction: creating.extraction }}
         onCancel={() => setCreating(null)}
         onSave={(fields) => saveCreatedTask(creating, fields)} />}

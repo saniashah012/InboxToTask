@@ -33,9 +33,11 @@ export function statedWhen(d: StatedDate, viewerZone: string): string {
   return `${clockLabel(d.time ?? "")}${zone} (no date)`
 }
 
-export default function CreateTaskFromEmail({ email, timeZone, busy, onCancel, onSave }: {
+export default function CreateTaskFromEmail({ email, timeZone, gmailUrl, busy, onCancel, onSave }: {
   email: PassiveEmail
   timeZone: string
+  // The whole conversation in Gmail, for when the saved excerpt is not enough.
+  gmailUrl?: string
   busy: boolean
   onCancel: () => void
   // Resolves to a fixed error message when the save failed, or null when it succeeded.
@@ -105,6 +107,8 @@ export default function CreateTaskFromEmail({ email, timeZone, busy, onCancel, o
           <p>{email.summary || "Summary unavailable."}</p>
           <p>Sent {sentLabel(email.sentAt, timeZone) ?? "date unavailable"}</p>
           {email.quote ? <blockquote aria-label="Saved excerpt">{email.quote}</blockquote> : <p>The saved excerpt has expired.</p>}
+          {gmailUrl && <a className="rd-quiet-link" href={gmailUrl} target="_blank" rel="noopener noreferrer">
+            Open in Gmail<span className="visually-hidden"> (opens in a new tab)</span></a>}
         </div>
         {error && <p className="inline-validation" role="alert">{error}</p>}
         <div className="modal-actions">

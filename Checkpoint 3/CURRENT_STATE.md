@@ -255,7 +255,16 @@ browser with a sample note placed on one suggestion and removed afterwards: Tab 
 Review before adding, a date button chosen with Space, focus returning on close. At phone width
 the dialog's rows stack and it scrolls inside itself, but the Suggestions page is already wider
 than the screen (#100), which pushes the dialog partly off it. Not checked: a screen reader,
-the Calendar question on Move back, hosted.
+hosted.
+- **Calendar question on Move back, checked locally with Calendar on** (Matthew signed in to the
+  dedicated test account; the web flag was set in an ignored `.env.local`): a task made from a
+  Passive email was added to Google Calendar, then Move back to Passive asked "Keep the calendar
+  event?". Cancel left the task and event in place. Remove deleted the app's record of the event
+  and moved the task back. Keep moved the task back and left the event in Google Calendar, no
+  longer shown in the app. The Passive row returned with its earlier Read mark each time. Not
+  checked: a removal that fails.
+- **Create task form:** it now has an "Open in Gmail" link under the saved excerpt, as the
+  review dialog does.
 **Correction to the scan-contract note above:** a routine check only covers mail since the last
 complete check, so already-scanned email is analysed again only on a full 7-day check (after a
 settings change or a Gmail reconnect), not on every next scan.

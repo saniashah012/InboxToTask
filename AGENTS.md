@@ -48,7 +48,7 @@ CP4 work is tracked in GitHub issues and the team's project board, [InboxToTask 
 - Proof of work outside the repo (accounts, recruiting, sessions, forms, slides) is a comment on the issue: a link, a screenshot or the completed checklist. Never include participant names, account addresses or credentials.
 - Due dates are targets to keep the team on track, not strict requirements. When a date will slip, say so early and suggest a comment with the new expected date. Never skip a "Done when" item or a check to make a date.
 - Fall break (Nov 21–29) has nothing scheduled. Work then is optional and only on tasks nothing else is waiting on. A task listed in another issue's "Depends on", or one with a "Used by" list, keeps its date and can't be moved into the break.
-- The study freeze runs from Tue Nov 17 (evening) until the last study session on Fri Nov 20. Don't merge to `main` or deploy during it, because `main` deploys to production. Improvements that touch the dashboard or onboarding merge after Nov 20.
+- The study freeze runs from Thu Nov 19 (night) until the last study session on Fri Nov 20 (moved from Tue Nov 17 evening on Nov 17). Don't merge to `main` or deploy during it, because `main` deploys to production. Improvements that touch the dashboard or onboarding merge after Nov 20.
 
 ## Validation
 

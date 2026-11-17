@@ -191,7 +191,7 @@ These are done first because everything else touches the same files.
 - [x] ~~Merge the onboarding branch `claude/onboarding-connect-0e9360`~~ Superseded: onboarding was connected through the designed-frontend merge (#26–#28).
 - [x] Rebase and merge PR 20 (`sania/category-chip-toggle`): merged November 9.
 - [x] Apply D3: Calendar is kept; rebase `claude/calendar-designed-ui` (which supersedes `mzheng/calendar-rebase`) onto current `main` (#44). Rebased November 13, merged with `main` again November 15, and merged into `main` November 16 (#116).
-- [ ] Respect the study freeze (#39): nothing merges to `main` from Tue Nov 17 evening until the last session on Nov 20.
+- [ ] Respect the study freeze (#39): nothing merges to `main` from Thu Nov 19 night until the last session on Nov 20 (moved from Tue Nov 17 evening on Nov 17).
 
 Remember that **every merge to `main` deploys to production.** Check preview builds first.
 

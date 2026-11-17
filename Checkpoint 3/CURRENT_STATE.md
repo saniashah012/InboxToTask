@@ -402,6 +402,20 @@ settings removes consent. The scan panel's Stop link pauses them for that page o
 settings the account opens at setup, which also offers "Skip setup for now". Nothing on hosted;
 the four new controls are still not browser-checked. Docs only; `git diff --check`.
 
+**November 17, afternoon: study setup and reset decisions in the CP4 plan and task script.** Same
+branch. Matthew decided: every participant enters the same scripted setup values (#59) and no one
+changes settings during a session, exploration included ("there should not be any reanalyzing of
+emails"); each participant gets a new Guest or private browser window; the exploration email is a
+new email, not a reply, and participants do not act on proposed changes. `CP4_PLAN.md` and
+`task_script.md` (Sections 4, 7 and 10) now say so; the allowance line now applies only to each
+account's first check after PR #124's function deploy, and the AI-only baseline question is whether
+it scores the shared saved analysis. Read from the code, not run: a saved analysis is reused with no
+model call when the content, analysis settings (topics, context limits, prompt, schema, model
+settings) and the open tasks sent as thread context all match (`gmail-processor.mjs`,
+`20261106000000_gmail_scan_hardening.sql`); so a different setup value, a task left active at the
+next setup, or a function deploy that changes the prompt makes email be analysed again. Nothing on
+hosted. Docs only; `git diff --check`.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

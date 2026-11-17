@@ -62,7 +62,7 @@
 
 “Please work through the activity using the study account and the instructions on screen. You will have **[INBOXTOTASK LIMIT]** for the scored email task. Please continue thinking aloud.”
 
-**Facilitator action:** Open the live site and assigned study inbox. The participant runs setup on the study account **[To be decided: whether the participant enters the same scripted setup values or chooses their own]**. Automatic checks are on for the session; after setup is saved, the first check covers the past 7 days. Read the finalized InboxToTask task prompt from `task_prompts.md` verbatim. Start the timer; record time, task outcomes against the answer key, corrections and source-email checks. At the limit, say: “The time for this part is over. Thank you.”
+**Facilitator action:** Open the live site and assigned study inbox. Use a new Guest or private browser window for each participant. The participant runs setup on the study account and enters the same scripted setup values as every other participant (decided Nov 17; the values are listed in #59). Check every field against the script before the participant saves, because a different value makes the app analyse existing email again. Participants do not change settings at any point in the session. Automatic checks are on for the session; after setup is saved, the first check covers the past 7 days, reuses the saved analysis of every existing email, and analyses only new email. Read the finalized InboxToTask task prompt from `task_prompts.md` verbatim. Start the timer; record time, task outcomes against the answer key, corrections and source-email checks. At the limit, say: “The time for this part is over. Thank you.”
 
 ## 5. Second condition
 
@@ -86,7 +86,7 @@
 
 ## 7. Optional exploration — after all scored tasks
 
-**Facilitator action:** Offer this only after both scored email conditions and the Calendar task are finished, and before the questionnaire. Allow approximately 5–8 minutes. Participation is optional and unscored. Ensure the approved consent covers this activity. Do not ask the participant to connect their personal inbox. If a participant chooses to send a fictional email from their own sending account, follow the approved consent and privacy procedure; never publish their address. **[To be decided: whether participants may send from their own account, and how the records that email creates are removed before the next participant.]**
+**Facilitator action:** Offer this only after both scored email conditions and the Calendar task are finished, and before the questionnaire. Allow approximately 5–8 minutes. Participation is optional and unscored. Ensure the approved consent covers this activity. Do not ask the participant to connect their personal inbox. If a participant chooses to send a fictional email from their own sending account, follow the approved consent and privacy procedure; never publish their address. The exploration email is always a new email, never a reply to an email in the study inbox, and the participant does not approve or dismiss proposed changes to tasks; either can leave records the runner cannot remove in the app (decided Nov 17). Settings stay as set up. **[To be decided: whether participants may send from their own account; a sender the scripted setup does not allow is not analysed.]**
 
 **Read aloud:**
 
@@ -94,7 +94,7 @@
 
 “The app has been checking for new email automatically, when you open it and every minute while it’s open. You can see this setting in Settings.”
 
-“You can change the settings, including senders, categories, and word lists. If you would like, you can also send a short made-up email containing a task to the study inbox. You may use your own sending account or a provided study sender account. We will give you the study inbox address privately. Before sending it, please tell us whether you expect it to become a task suggestion.”
+“Please leave the settings as they are. If you would like, you can send a short made-up email containing a task to the study inbox, as a new email rather than a reply. You may use your own sending account or a provided study sender account. We will give you the study inbox address privately. Before sending it, please tell us whether you expect it to become a task suggestion.”
 
 “You can then explore the results, including new or unread suggestions, the source email, and editing or dismissing a suggestion.”
 
@@ -105,7 +105,7 @@
 - If the email does not appear: “Why do you think it didn't show up?”
 - “Would you trust this with your own inbox? What would you change?”
 
-**Facilitator action:** Automatic checks are on, so allow the documented scanning interval. After the participant's prediction and observation, explain any relevant filter reason if needed. Under the participant code, record sender **type** (not address), fictional email subject/body, current settings, prediction, processed/skipped outcome and reason, suggestion fields or no suggestion, brief reaction and result screenshot. Keep exploration outcomes separate from scored-task results. Finish logging before the account is put back for the next participant.
+**Facilitator action:** Automatic checks are on, so allow the documented scanning interval. After the participant's prediction and observation, explain any relevant filter reason if needed. Under the participant code, record sender **type** (not address), fictional email subject/body, prediction, processed/skipped outcome and reason, suggestion fields or no suggestion, brief reaction and result screenshot. Keep exploration outcomes separate from scored-task results. Finish logging before the account is put back for the next participant.
 
 ## 8. Questionnaire hand-off
 
@@ -140,4 +140,4 @@
 
 “Do you have any final questions about the study?”
 
-**Facilitator action:** Follow the approved debrief and any withdrawal/contact instructions from the consent form. Confirm that the study data is recorded under the participant code. Do not put identifying information or signed consent in the public repository. Put the account back by hand according to Issue #101: move tasks back with Move back, not Delete (deleting a task permanently blocks that email from being checked again), delete Calendar events the participant created, then use Settings › Connections › **Clear settings and run setup again** so the next participant starts at setup. Saved records are kept. "New" and "Unread" marks live in the browser.
+**Facilitator action:** Follow the approved debrief and any withdrawal/contact instructions from the consent form. Confirm that the study data is recorded under the participant code. Do not put identifying information or signed consent in the public repository. Put the account back by hand according to Issue #101: move tasks back with Move back, not Delete (deleting a task permanently blocks that email from being checked again), delete Calendar events the participant created, then use Settings › Connections › **Clear settings and run setup again** so the next participant starts at setup. Every task must be moved back before that: a task left active makes its thread be analysed again at the next setup. Saved records are kept. "New" and "Unread" marks live in the browser, so close the Guest or private window; the next participant gets a new one.

@@ -89,7 +89,7 @@ This is the design chosen under D1 (Track A plus an ablation benchmark); the stu
 | --- | --- |
 | Human-only | Participant works through the fictional inbox in Gmail and writes a task list |
 | Combined | Participant reviews InboxToTask suggestions for the other inbox |
-| AI-only | No participant: the model's unreviewed output is scored against the same gold labels. To be decided: which output the AI-only baseline scores, now that results are not frozen (#76) |
+| AI-only | No participant: the model's unreviewed output is scored against the same gold labels. Every participant sees the same saved analysis (same setup values, no re-analysis). To be decided: whether the AI-only baseline scores that saved analysis (#76) |
 
 **Materials**
 
@@ -100,9 +100,9 @@ This is the design chosen under D1 (Track A plus an ablation benchmark); the stu
 **Keeping it stable and private**
 
 - **Fictional mail only.** Participants never connect their own Gmail (decided in #94). An optional, unscored exploration after the scored tasks lets them *send* a made-up email to the study inbox; it is logged and graded separately (#58, #60, #101). To be decided: whether participants may send from their own inbox, and how the records that email creates are removed.
-- **Each participant runs setup** on the study account. Between sessions the runner, not the participant, uses Settings › Connections › **Clear settings and run setup again**, which clears the saved scan settings and sends the account to setup; saved records are kept. It comes with PR #124 (#123), which ships before the study, so its hosted steps come before any study scan. To be decided: whether every participant enters the same scripted setup values from the task script or chooses their own (#59). Participants may change settings during exploration.
+- **Each participant runs setup** on the study account. Between sessions the runner, not the participant, uses Settings › Connections › **Clear settings and run setup again**, which clears the saved scan settings and sends the account to setup; saved records are kept. It comes with PR #124 (#123), which ships before the study, so its hosted steps come before any study scan. Every participant enters the same scripted setup values from the task script (#59), and nobody changes settings during the session, exploration included (decided Nov 17). With the same values and no task left from the last session, every saved analysis is reused and only new email is analysed. Each participant uses a new Guest or private browser window. The exploration email is a new email, not a reply, and participants do not act on proposed changes.
 - **Automatic checks are on during sessions** (decided November 17), and results are not frozen. After setup is saved, the first check covers the past 7 days. A saved result is reused with no model call only when the topics, earlier-email limits and the account's accepted tasks in that thread match the earlier scan; otherwise the email is analysed again, so suggestions can differ between participants. Email older than 7 days is not read again. Report this clearly. Measure live scan latency separately.
-- **Daily allowance.** Each account has 20 model requests a day, and a full re-analysis of an inbox of about 24 emails exceeds it. To be decided: whether the allowance is raised for the study accounts.
+- **Daily allowance.** Each account has 20 model requests a day. Sessions analyse only new email, so the allowance matters for the one first check of each account after PR #124's function deploy (about 24 emails: two days, or a raised allowance). To be decided: whether the allowance is raised for that first check.
 - Sessions run in a facilitator-controlled browser signed into dedicated fictional accounts (#55, #56). There is no reset script: between sessions the runner puts the account back by hand, moving tasks back and deleting Calendar events (#101). Tasks go back with Move back, not Delete, because deleting a task permanently blocks that email from being checked again. "New" and "Unread" marks live in the browser.
 - Run a pilot session first (#68, November 18), and don't include it in the results.
 

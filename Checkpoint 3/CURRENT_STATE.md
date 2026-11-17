@@ -239,7 +239,10 @@ note. Not checked: the review screen at phone width or by keyboard alone, hosted
 - **Keyboard focus in every dialog** (`designedUi.tsx`, `index.css`): focus now moves into a
   dialog when it opens, Tab stays inside it, and focus returns to the opening control on close.
   Before, Tab kept moving through the page behind the dialog. This is the shared `Modal`, so it
-  applies to onboarding, settings and dashboard dialogs.
+  applies to every dashboard dialog (source email, the editors, proposed changes, the Calendar
+  event dialog and its follow-ups, follow-up reminders) and to the "Unsaved changes" dialog in
+  Settings. Onboarding has no dialogs (corrected November 17: an earlier version of this line,
+  and commit `34ad667`'s message, said it applied to onboarding too).
 - **Study reset (PR #122, #101), checked in a scratch copy, nothing changed in either branch:**
   with this migration the reset as written refuses (`STUDY_RESET_SCHEMA_CHANGED: unknown
   trigger … extraction_details_follow_summary`). Adding that trigger to its list of known

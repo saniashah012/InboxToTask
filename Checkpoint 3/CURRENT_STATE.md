@@ -390,6 +390,18 @@ entry are not reworded yet; drafts exist and are not posted.
     exploration. The protocol and consent wording (#58) should cover whichever is chosen. Matthew
     is to look at this on the evening of November 18.
 
+**November 17, 12:45 CST: branch pushed; runner wording in the CP4 plan.** Same branch,
+`mzheng/passive-to-task`. Matthew approved the push ("Yes, push"). Origin went from `c22a118` to
+`967a6c0` (`8df183a`, `380adca`, `967a6c0`) with a plain push, so PR #124 now includes Clear
+settings and run setup again, the "Edited by you" fix, Restore original and Delete from
+InboxToTask. CI on PR #124 was still running when this was written. The PR and issue text was not
+changed. This commit adds one line to `Checkpoint 4/CP4_PLAN.md`: the runner, not the participant,
+uses Clear settings and run setup again between sessions. Read from the code, not seen in a
+browser: automatic checks keep running while the runner puts the account back, until Clear
+settings removes consent. The scan panel's Stop link pauses them for that page only. After Clear
+settings the account opens at setup, which also offers "Skip setup for now". Nothing on hosted;
+the four new controls are still not browser-checked. Docs only; `git diff --check`.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

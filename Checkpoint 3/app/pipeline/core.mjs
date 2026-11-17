@@ -227,27 +227,84 @@ function pastDeadline(d, analysisTime) {
 // date's wording is only a relative day ("Thursday", "next Friday", "tomorrow"), the date
 // is recomputed from the sent date in that entry's time zone. A weekday means the first
 // such day on or after the sent day, the sent day included; "next <weekday>" skips the
-// sent day. Wording that also gives a month or a day number is left as the model read it.
-const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+// sent day (on any other day it is simply the coming one). "Tomorrow" is the sent day + 1;
+// "today" and "tonight" are the sent day.
+//
+// The rule applies only to wording that is NOTHING but one relative day, optionally with
+// "this"/"next" before a weekday, one clock time, and the connecting words below. This is
+// a whitelist on purpose: anything else ("the Friday after Thanksgiving", "two weeks from
+// Friday", "last Friday", a month or a day number) returns null and the model's date is
+// kept, because a wrong correction is worse than none.
+// Abbreviations: tue/tues, thu/thur/thurs and fri are accepted; they are not ordinary
+// words. mon, wed, sat and sun are NOT: "wed" (married), "sat" (the verb, or the SAT
+// exam) and "sun" are ordinary words, and "mon" is left out with them for consistency.
+const RELATIVE_WEEKDAYS = { sunday: 0, monday: 1, tuesday: 2, tue: 2, tues: 2, wednesday: 3,
+  thursday: 4, thu: 4, thur: 4, thurs: 4, friday: 5, fri: 5, saturday: 6 };
+const RELATIVE_OFFSETS = { today: 0, tonight: 0, tomorrow: 1 };
+// A part of day does not change the date.
+const RELATIVE_FILLER = new Set(['by', 'before', 'on', 'at', 'due', 'until', 'the', 'is', 'are', 'starts', 'from',
+  'eod', 'morning', 'afternoon', 'evening', 'night']);
+// One clock time: 3:30 PM, 3:30PM, 3 pm, 15:30, noon, midnight ("p.m." is normalised first).
+const CLOCK_TIME = /(?<![a-z0-9:])(?:(?:1[0-2]|0?[1-9])(?::[0-5]\d)?\s?[ap]m|(?:[01]?\d|2[0-3]):[0-5]\d|noon|midnight)(?![a-z0-9:])/g;
 export function relativeDayFromSent(wording, sentAt, timeZone) {
-  const text = wording.toLowerCase();
-  if (/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b\d{1,2}(?:st|nd|rd|th)\b|\d{1,2}[\/-]\d{1,2}|\d{4}/.test(text)) return null;
+  if (typeof wording !== 'string') return null;
+  let text = wording.toLowerCase().replace(/(?<![a-z])([ap])\.\s?m\.?(?![a-z])/g, '$1m');
+  if ((text.match(CLOCK_TIME) ?? []).length > 1) return null;
+  text = text.replace(CLOCK_TIME, ' ').replace(/\bno later than\b|\bend of (?:the )?day\b/g, ' ');
+  const tokens = text.split(/[^a-z0-9]+/).filter(Boolean);
+  let found = null, next = false;
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (RELATIVE_FILLER.has(t)) continue;
+    // "this"/"next" only directly before a weekday; "this" changes nothing.
+    if ((t === 'this' || t === 'next') && Object.hasOwn(RELATIVE_WEEKDAYS, tokens[i + 1] ?? '')) continue;
+    if (found === null && (Object.hasOwn(RELATIVE_WEEKDAYS, t) || Object.hasOwn(RELATIVE_OFFSETS, t))) {
+      found = t; next = tokens[i - 1] === 'next'; continue;
+    }
+    return null; // any other word, a number, or a second day
+  }
+  if (found === null) return null;
   const sent = new Date(sentAt);
-  if (!Number.isFinite(sent.valueOf())) return null;
+  if (!Number.isFinite(sent.valueOf()) || !validTimeZone(timeZone)) return null;
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
     .formatToParts(sent).map((p) => [p.type, p.value]));
   const day = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00Z`);
   const plus = (n) => new Date(day.valueOf() + n * 86400000).toISOString().slice(0, 10);
-  const word = (w) => new RegExp(`\\b${w}\\b`).test(text);
-  const named = WEEKDAY_NAMES.filter(word);
-  const tomorrow = word('tomorrow'), today = word('today') || word('tonight');
-  if (named.length + Number(tomorrow) + Number(today) !== 1) return null; // none, or more than one: not a single relative day
-  if (tomorrow) return word('day after tomorrow') ? null : plus(1);
-  if (today) return plus(0);
-  if (word(`(?:last|every|each|past|previous)\\s+${named[0]}`)) return null;
-  let ahead = (WEEKDAY_NAMES.indexOf(named[0]) - day.getUTCDay() + 7) % 7;
-  if (ahead === 0 && word(`next\\s+${named[0]}`)) ahead = 7;
+  if (Object.hasOwn(RELATIVE_OFFSETS, found)) return plus(RELATIVE_OFFSETS[found]);
+  let ahead = (RELATIVE_WEEKDAYS[found] - day.getUTCDay() + 7) % 7;
+  if (ahead === 0 && next) ahead = 7;
   return plus(ahead);
+}
+// The one place a model date is compared with the sent-day rule, for Passive details and
+// Gmail deadlines alike. `message` is the email the wording was read from. Only `date`
+// ever changes; a null date (time only) or null deadline is returned as is.
+function countedFromSent(d, message) {
+  if (!d || d.date === null) return d;
+  // A date-precision sent time is a midnight placeholder written with an offset
+  // ("2026-10-03T00:00:00-05:00"). Converting it into a zone west of that offset would
+  // move it to the previous day, so its written calendar date is used as the sent day.
+  const datePrecision = message.sentAtPrecision === 'date';
+  let fromSent = datePrecision
+    ? relativeDayFromSent(d.wording, `${message.sentAt.slice(0, 10)}T12:00:00Z`, 'UTC')
+    : relativeDayFromSent(d.wording, message.sentAt, d.timeZone);
+  if (!fromSent) return d;
+  // A weekday named on that same weekday means the sent day only while the stated time
+  // is still ahead: "Thursday at noon" in an email sent Thursday at 3 PM is the Thursday
+  // after. Needs a known sent time and a stated time; "today"/"tonight" never move, and
+  // midnight is left to the two readings handled below.
+  if (!datePrecision && d.time && d.time !== '00:00' && !/\b(?:today|tonight|tomorrow)\b/i.test(d.wording)) {
+    const at = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: d.timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(message.sentAt)).map((p) => [p.type, p.value]));
+    if (fromSent === `${at.year}-${at.month}-${at.day}` && d.time < `${at.hour}:${at.minute}`) {
+      fromSent = new Date(Date.parse(`${fromSent}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+    }
+  }
+  if (fromSent === d.date) return d;
+  // "Thursday at midnight" is often read as the end of Thursday (Friday 00:00). Both
+  // readings are kept; only a date that is neither is corrected.
+  const dayAfter = new Date(Date.parse(`${fromSent}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  if (/\bmidnight\b/i.test(d.wording) && d.date === dayAfter) return d;
+  return { ...d, date: fromSent };
 }
 export function groundDetails(value, payload) {
   const empty = { title: null, dates: [], location: null, links: [] };
@@ -268,10 +325,7 @@ export function groundDetails(value, payload) {
     title: d.title === null || norm(d.title).length > 60 ? null : norm(d.title),
     dates: d.dates.filter((x) => (x.date !== null || x.time !== null) && validTimeZone(x.timeZone)
       && (x.date === null || realDate(x.date)) && stated(x.wording))
-      .map((x) => {
-        const fromSent = x.date === null ? null : relativeDayFromSent(x.wording, payload.currentMessage.sentAt, x.timeZone);
-        return fromSent && fromSent !== x.date ? { ...x, date: fromSent } : x;
-      }),
+      .map((x) => countedFromSent(x, payload.currentMessage)),
     location: d.location !== null && stated(d.location) ? norm(d.location) : null,
     links: [...new Set(d.links.map((link) => link.trim()))].filter((link) => /^https?:\/\/\S+$/i.test(link) && bodyLinks.has(link)),
   };
@@ -323,6 +377,21 @@ export function validateExtraction(value, payload) {
     verifyEvidence(t.evidence); validateDeadline(t.deadline);
   }
   for (const w of value.waitingFor) { verifyEvidence(w.evidence); validateDeadline(w.promisedDeadline); }
+  // Gmail deadlines follow the sent-day rule (see relativeDayFromSent); the fixture
+  // contract is left exactly as the model returned it. This runs after every evidence,
+  // deadline and change check above, so it can neither cause nor hide INVALID_DEADLINE
+  // or OVERWRITTEN_USER_EDIT (only a deadline listed in changedFields is touched, and
+  // that check compares only fields not listed). It runs BEFORE the follow-up check:
+  // a follow-up is allowed only once the promise is past, and that must be judged on
+  // the date the sender meant, not on a miscounted one.
+  if (gmail) {
+    const fromSource = (item, d) => countedFromSent(d, sources.get(item.evidence.messageId) ?? payload.currentMessage);
+    for (const t of value.tasks) t.deadline = fromSource(t, t.deadline);
+    for (const w of value.waitingFor) w.promisedDeadline = fromSource(w, w.promisedDeadline);
+    for (const c of value.taskChanges) {
+      if (c.fields && c.changedFields.includes('deadline')) c.fields.deadline = fromSource(c, c.fields.deadline);
+    }
+  }
   for (const f of value.suggestedFollowUps) {
     verifyEvidence(f.evidence);
     const w = value.waitingFor[f.waitingForIndex];

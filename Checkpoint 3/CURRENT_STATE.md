@@ -175,9 +175,22 @@ never from the day it was analysed):** the prompt now says so for weekdays and "
 `relativeDayFromSent` in `pipeline/core.mjs` recomputes a details date whose wording is only a
 relative day ("Thursday", "next Friday", "tomorrow") from the sent date. A weekday is the first
 such day on or after the sent day, the sent day included; "next <weekday>" skips the sent day.
-This covers Passive details only, not task deadlines on suggestions. Checked: `npm test` 237 and
-80, and three fictional emails sent on a Thursday and analysed five days later, where the model
-itself returned the sent-based dates.
+Checked: `npm test` 237 and 80, and three fictional emails sent on a Thursday and analysed five
+days later, where the model itself returned the sent-based dates.
+**Extended later the same day to task deadlines (`gmail-v1` only; the fixture contract is
+unchanged):** the same rule now corrects a suggestion's deadline, a waiting-for promised date
+(before the follow-up check, which depends on it) and a proposed deadline change, the last only
+when the deadline is a changed field. The day is counted from the message the item's evidence
+cites. The rule is also narrower: it applies only when the wording is nothing but one relative
+day, an optional "this"/"next", a clock time and small connecting words, so "the Friday after
+Thanksgiving" or "two weeks from Friday" keeps the model's date. A weekday named on the sent
+weekday means that day only while its stated time is still ahead; otherwise the next one.
+Known limits: wording that is short while the email sets another week elsewhere ("Next week's
+schedule: quiz Thursday") is still counted from the sent day, and so is a relative day whose
+evidence cites a different message from the one it was written in. Checked: `npm test` 244 and
+80, `deno check`, and five fictional task emails against the live model (four already right;
+"before Thursday at noon", sent that Thursday at 3:23 PM, moved from the sent day to the next
+Thursday). Not checked: a real Gmail scan with this version.
 **Correction to the scan-contract note above:** a routine check only covers mail since the last
 complete check, so already-scanned email is analysed again only on a full 7-day check (after a
 settings change or a Gmail reconnect), not on every next scan.

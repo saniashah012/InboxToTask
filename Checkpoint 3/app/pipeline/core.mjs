@@ -221,6 +221,34 @@ function pastDeadline(d, analysisTime) {
 // current message does not state word for word is dropped, not repaired: a date's
 // wording, the location and each link must appear in its body. A dropped entry only
 // leaves a field empty for the user to fill, so it never fails the whole extraction.
+//
+// A relative day is counted from the day the email was SENT, never from the day it was
+// analysed. That rule is fixed, so code applies it instead of trusting the model: when a
+// date's wording is only a relative day ("Thursday", "next Friday", "tomorrow"), the date
+// is recomputed from the sent date in that entry's time zone. A weekday means the first
+// such day on or after the sent day, the sent day included; "next <weekday>" skips the
+// sent day. Wording that also gives a month or a day number is left as the model read it.
+const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+export function relativeDayFromSent(wording, sentAt, timeZone) {
+  const text = wording.toLowerCase();
+  if (/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b\d{1,2}(?:st|nd|rd|th)\b|\d{1,2}[\/-]\d{1,2}|\d{4}/.test(text)) return null;
+  const sent = new Date(sentAt);
+  if (!Number.isFinite(sent.valueOf())) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(sent).map((p) => [p.type, p.value]));
+  const day = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00Z`);
+  const plus = (n) => new Date(day.valueOf() + n * 86400000).toISOString().slice(0, 10);
+  const word = (w) => new RegExp(`\\b${w}\\b`).test(text);
+  const named = WEEKDAY_NAMES.filter(word);
+  const tomorrow = word('tomorrow'), today = word('today') || word('tonight');
+  if (named.length + Number(tomorrow) + Number(today) !== 1) return null; // none, or more than one: not a single relative day
+  if (tomorrow) return word('day after tomorrow') ? null : plus(1);
+  if (today) return plus(0);
+  if (word(`(?:last|every|each|past|previous)\\s+${named[0]}`)) return null;
+  let ahead = (WEEKDAY_NAMES.indexOf(named[0]) - day.getUTCDay() + 7) % 7;
+  if (ahead === 0 && word(`next\\s+${named[0]}`)) ahead = 7;
+  return plus(ahead);
+}
 export function groundDetails(value, payload) {
   const empty = { title: null, dates: [], location: null, links: [] };
   if (value.category !== 'Passive') { value.details = empty; return value; }
@@ -239,7 +267,11 @@ export function groundDetails(value, payload) {
     // A title is a short phrase. A longer one is dropped, and the form suggests its own.
     title: d.title === null || norm(d.title).length > 60 ? null : norm(d.title),
     dates: d.dates.filter((x) => (x.date !== null || x.time !== null) && validTimeZone(x.timeZone)
-      && (x.date === null || realDate(x.date)) && stated(x.wording)),
+      && (x.date === null || realDate(x.date)) && stated(x.wording))
+      .map((x) => {
+        const fromSent = x.date === null ? null : relativeDayFromSent(x.wording, payload.currentMessage.sentAt, x.timeZone);
+        return fromSent && fromSent !== x.date ? { ...x, date: fromSent } : x;
+      }),
     location: d.location !== null && stated(d.location) ? norm(d.location) : null,
     links: [...new Set(d.links.map((link) => link.trim()))].filter((link) => /^https?:\/\/\S+$/i.test(link) && bodyLinks.has(link)),
   };

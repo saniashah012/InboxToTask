@@ -170,6 +170,14 @@ container restarted, and one full 7-day check run on the dedicated test mailbox.
 Actionable result with none; the dashboard form then opened with the model's title, date and
 time. The earlier bundle was put back and the runtime restarted afterwards. One thing seen: an
 email sent on a Thursday afternoon saying "3:30PM thursday" was dated the following Thursday.
+**Fixed the same day (Matthew's rule: a relative day counts from the day the email was sent,
+never from the day it was analysed):** the prompt now says so for weekdays and "tomorrow", and
+`relativeDayFromSent` in `pipeline/core.mjs` recomputes a details date whose wording is only a
+relative day ("Thursday", "next Friday", "tomorrow") from the sent date. A weekday is the first
+such day on or after the sent day, the sent day included; "next <weekday>" skips the sent day.
+This covers Passive details only, not task deadlines on suggestions. Checked: `npm test` 237 and
+80, and three fictional emails sent on a Thursday and analysed five days later, where the model
+itself returned the sent-based dates.
 **Correction to the scan-contract note above:** a routine check only covers mail since the last
 complete check, so already-scanned email is analysed again only on a full 7-day check (after a
 settings change or a Gmail reconnect), not on every next scan.

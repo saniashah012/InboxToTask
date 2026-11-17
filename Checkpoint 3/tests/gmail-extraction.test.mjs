@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {contentWarnings,extract,groundDetails,prepareInput,validateExtraction} from '../app/pipeline/core.mjs';
+import {contentWarnings,extract,groundDetails,prepareInput,relativeDayFromSent,validateExtraction} from '../app/pipeline/core.mjs';
 import {selectTaskContext} from '../app/pipeline/task-context.mjs';
 import {filterRelevantOutput} from '../app/pipeline/gmail-processor.mjs';
 const ID='11111111-1111-4111-8111-111111111111';
@@ -142,4 +142,20 @@ test('a link is grounded only as a whole link, not as the start of a longer one'
  const body='Register at https://example.org/rsvp-form-2026 before Friday.';
  const v=passive({links:['https://example.org/rsvp']});v.evidence={messageId:'gmail1',quote:'Register at'};
  assert.deepEqual(validateExtraction(v,passivePayload(body)).details.links,[]);
+});
+test('a relative day in Passive details is counted from the day the email was sent, not the day it was analysed',()=>{
+ // The fixture message was sent Thursday, November 5, 2026 (6:00 AM Central).
+ const body='Exam is on 3:30PM thursday. Review is tomorrow. Lab is next Thursday. Fair is Friday, November 20. Quiz is last Friday.';
+ const entry=(wording,date,time=null)=>({label:'Event',date,time,timeZone:'America/Chicago',wording,boundary:'on'});
+ const v=passive({dates:[entry('3:30PM thursday','2026-11-12','15:30'),entry('tomorrow','2026-11-18'),entry('next Thursday','2026-11-05'),
+  entry('Friday, November 20','2026-11-20'),entry('last Friday','2026-10-30'),entry('3:30PM thursday',null,'15:30')]});
+ v.evidence={messageId:'gmail1',quote:'Exam is on 3:30PM thursday.'};
+ const dates=validateExtraction(v,passivePayload(body)).details.dates;
+ // A weekday is the first such day on or after the sent day, the sent day included.
+ assert.deepEqual(dates.map(d=>d.date),['2026-11-05','2026-11-06','2026-11-12','2026-11-20','2026-10-30',null]);
+ assert.equal(dates[0].time,'15:30');
+ const zone='America/Chicago';
+ assert.equal(relativeDayFromSent('thursday','2026-11-13T03:30:00Z',zone),'2026-11-12','the sent day is taken in the email time zone');
+ for(const wording of ['Thursday, November 19','by Friday or Saturday','every Friday','the day after tomorrow','Starts at 3:30 PM','11/20'])
+  assert.equal(relativeDayFromSent(wording,'2026-11-05T12:00:00Z',zone),null,wording);
 });

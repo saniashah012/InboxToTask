@@ -265,6 +265,11 @@ hosted.
   checked: a removal that fails.
 - **Create task form:** it now has an "Open in Gmail" link under the saved excerpt, as the
   review dialog does.
+- **Card button squeezed between about 621 and 720px wide** (`real-dashboard.css`; also on
+  `main`): the row's main button (Add task, Review change) had no column at that width, landed
+  in the 34px menu column and its label spilled out. It now sits under the card text at 720px
+  and below. Checked in a local browser at 420, 650, 700, 720 and 721px on Suggestions and
+  Active: no button clipped or outside its card.
 **Correction to the scan-contract note above:** a routine check only covers mail since the last
 complete check, so already-scanned email is analysed again only on a full 7-day check (after a
 settings change or a Gmail reconnect), not on every next scan.

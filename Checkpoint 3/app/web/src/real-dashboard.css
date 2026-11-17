@@ -127,6 +127,10 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 @media (max-width: 720px) {
   .app-shell .task-row:not(.rd-info-row) > .email-link { grid-column:2; justify-self:start; }
   .app-shell .task-row.is-suggestion:not(.rd-info-row) > .email-link { grid-column:1; }
+  /* The row's main button goes under the text too. Left to auto-placement it landed in the
+     34px menu column and was squeezed until its label spilled out. */
+  .app-shell .task-row:not(.rd-info-row) > .row-button { grid-column:2; justify-self:start; white-space:nowrap; }
+  .app-shell .task-row.is-suggestion:not(.rd-info-row) > .row-button { grid-column:1; }
   .app-shell .task-row > .menu-wrap { grid-row:1; grid-column:-2; }
 }
 @media (min-width: 721px) {

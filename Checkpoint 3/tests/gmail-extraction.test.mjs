@@ -100,7 +100,7 @@ test('links and credential or payment wording in suggestions add review warnings
 
 // "Turn into task" details of a Passive email: ungrounded entries are dropped, never fatal.
 const notice='Open house on November 20 at 6 pm in Room 101,  Main Hall. Doors open at 5:30 pm. RSVP at https://example.org/rsvp or see https://example.org/map; files at ftp://example.org/files.';
-const passivePayload=(body=notice)=>prepareInput({contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',rules,message:{...message,body},threadContext:[],contextLimits:{maxMessages:5,maxAgeDays:90,maxMessageChars:12000,maxTotalChars:24000},semanticPreferences:{include:[],exclude:[]},existingTaskContext:[]},{}).payload;
+const passivePayload=(body=notice,subject=message.subject)=>prepareInput({contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',rules,message:{...message,body,subject},threadContext:[],contextLimits:{maxMessages:5,maxAgeDays:90,maxMessageChars:12000,maxTotalChars:24000},semanticPreferences:{include:[],exclude:[]},existingTaskContext:[]},{}).payload;
 const stated={label:'Open house',date:'2026-11-20',time:'18:00',timeZone:'America/Chicago',wording:'November  20 at 6 PM',boundary:'on'};
 const passive=(details={})=>({...output(),category:'Passive',summary:'An open house is planned.',evidence:{messageId:'gmail1',quote:'Open house on November 20 at 6 pm'},taskChanges:[],
  details:{title:null,dates:[],location:null,links:[],...details}});
@@ -260,12 +260,12 @@ test('the fixture contract keeps a relative-day deadline as the model returned i
 
 // When code and the model disagree about a date, the user is told; when they agree, nothing is added.
 // Every body below is sent Thursday, November 5, 2026, 6:00 AM Central, like the fixture message.
-const datedPayload=(body,threadContext=[])=>prepareInput({contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',
- rules,message:{...message,body},threadContext,contextLimits:limits,semanticPreferences:{include:[],exclude:[]},existingTaskContext:[]},{}).payload;
+const datedPayload=(body,threadContext=[],subject=message.subject)=>prepareInput({contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',
+ rules,message:{...message,body,subject},threadContext,contextLimits:limits,semanticPreferences:{include:[],exclude:[]},existingTaskContext:[]},{}).payload;
 const datedTasks=(deadlines,quote='the slides by Friday',messageId='gmail1')=>{const v=output();v.taskChanges=[];v.evidence={messageId:'gmail1',quote:'Hi all.'};
  v.tasks=deadlines.map(d=>slides(d,quote,messageId));return v;};
-const dated=(body,deadline,quote,{threadContext=[],messageId}={})=>{
- const notes=[];const v=validateExtraction(datedTasks([deadline],quote,messageId),datedPayload(body,threadContext),notes);
+const dated=(body,deadline,quote,{threadContext=[],messageId,subject}={})=>{
+ const notes=[];const v=validateExtraction(datedTasks([deadline],quote,messageId),datedPayload(body,threadContext,subject),notes);
  return {date:v.tasks[0].deadline.date,notes};
 };
 const earlierMessage=(id,body,sentAt='2026-11-02T15:00:00Z')=>({id,threadId:'thread1',from:'teacher@example.org',subject:'Research report',labels:[],sentAt,body});
@@ -292,14 +292,81 @@ test('a weekday next to wording about another week keeps the model date, with a 
  kept('Hi all. The schedule moves to the following week. Upload the slides by Friday.','previous sentence');
  kept("Hi all.\n\nNext week's schedule:\nReading quiz on Monday.\nUpload the slides by Friday.\n",'under a colon heading');
  fixed("Hi all.\nNext week's schedule:\nQuiz Monday.\n\nUpload the slides by Friday.",'a blank line ends the heading');
- fixed('Hi all. In two weeks we start a new unit. The lab is open. Upload the slides by Friday.','two sentences away');
+ // An earlier sentence of the same paragraph counts (up to three back); a different
+ // paragraph does not, beyond the sentence just before the wording.
+ kept('Hi all. In two weeks we start a new unit. The lab is open. Upload the slides by Friday.','two sentences back, same paragraph');
+ fixed('Hi all. In two weeks we start a new unit. The lab is open.\n\nUpload the slides by Friday.','a different paragraph');
  for(const cue of ["Next week's","After Thanksgiving,",'After the break,','The week of November 16,','In a couple of weeks,','In 3 weeks,','After Spring Break,',
   'Later this month,','Next month,','In the upcoming week,','The week after,','After the holidays,','The following week,'])
   kept(`Hi all.\n${cue} upload the slides by Friday.`,cue);
  for(const plain of ['This week,',"After Friday's lecture,",'Every day,','After class,','The week is busy, so'])
   fixed(`Hi all.\n${plain} upload the slides by Friday.`,plain);
- // With the model already on the plain rule's date, nothing is added.
- assert.deepEqual(dated('Hi all.\nNext week, upload the slides by Friday.',due('by Friday','2026-11-06')),{date:'2026-11-06',notes:[]});
+ // With the model already on the plain rule's date the date stays, but both may be a week
+ // early, so the user is shown the week-later reading as well.
+ assert.deepEqual(dated('Hi all.\nNext week, upload the slides by Friday.',due('by Friday','2026-11-06')),{date:'2026-11-06',notes:[
+  'The email says "by Friday" near wording about another week. It was read as Fri, Nov 6, 2026, in the week the email was sent; a week later is Fri, Nov 13, 2026. Check the date.']});
+});
+// Shared by the cue tests below: `kept` and `fixed` also check that a date already on the
+// plain rule's date adds no note.
+const cueNote='The email says "by Friday" near wording about another week. The date was left as Fri, Nov 13, 2026; counted from the day it was sent, it would be Fri, Nov 6, 2026. Check the date.';
+const plainNote='The email says "by Friday". That was read as Fri, Nov 13, 2026; counted from the day it was sent, it is Fri, Nov 6, 2026. Check the date.';
+const agrees=(body,label,options)=>assert.deepEqual(dated(body,due('by Friday','2026-11-06'),undefined,options),{date:'2026-11-06',notes:[]},`${label} (agreeing date)`);
+// Near a cue an agreeing date stays, and the week-later reading is offered too.
+const sameWeekNote='The email says "by Friday" near wording about another week. It was read as Fri, Nov 6, 2026, in the week the email was sent; a week later is Fri, Nov 13, 2026. Check the date.';
+const agreesNearCue=(body,label,options)=>assert.deepEqual(dated(body,due('by Friday','2026-11-06'),undefined,options),{date:'2026-11-06',notes:[sameWeekNote]},`${label} (agreeing date near a cue)`);
+const keptBy=(body,label,options)=>{assert.deepEqual(dated(body,due('by Friday','2026-11-13'),undefined,options),{date:'2026-11-13',notes:[cueNote]},label);agreesNearCue(body,label,options);};
+const fixedBy=(body,label,options)=>{assert.deepEqual(dated(body,due('by Friday','2026-11-13'),undefined,options),{date:'2026-11-06',notes:[plainNote]},label);agrees(body,label,options);};
+test('a week cue in the subject line keeps the model date, with a note',()=>{
+ const body='Hi all.\nUpload the slides by Friday.';
+ keptBy(body,'subject',{subject:"Next week's schedule"});
+ keptBy(body,'subject, after a holiday',{subject:'After Thanksgiving: slides'});
+ fixedBy(body,'subject without a cue',{subject:'Re: Research report'});
+ fixedBy(body,'subject with past wording only',{subject:'Notes from last week'});
+});
+test('a heading without a colon above the wording is a cue, within 6 lines and one blank line',()=>{
+ // Each heading here is more than three sentences above the wording, so only the heading
+ // rule finds it. "Hi all." opens each body because it is the email's evidence quote.
+ keptBy("Hi all.\n\nNEXT WEEK'S SCHEDULE\nQuiz Monday.\nLab Tuesday.\nTalk Wednesday.\nUpload the slides by Friday.",'first line of the block');
+ keptBy('Hi all.\n\nWeek of Nov 16\n\nQuiz Monday.\nLab Tuesday.\nTalk Wednesday.\nUpload the slides by Friday.','separated by a blank line');
+ keptBy('Hi all.\nNext week\n\n- Quiz Monday\n- Lab Tuesday\n- Talk Wednesday\n- Upload the slides by Friday','last line above a list');
+ keptBy('Hi all.\n\nNext week\nItem A.\nItem B.\nItem C.\nItem D.\nItem E.\nUpload the slides by Friday.','6 lines up');
+ fixedBy('Hi all.\n\nNext week\nItem A.\nItem B.\nItem C.\nItem D.\nItem E.\nItem F.\nUpload the slides by Friday.','7 lines up');
+ fixedBy('Hi all.\n\nNext week we will review chapters one through nine in the lab.\nQuiz Monday.\nLab Tuesday.\nTalk Wednesday.\nUpload the slides by Friday.','a long first line is not a heading');
+ fixedBy('Hi all.\n\nNext week\n\nThe lab is open.\n\nUpload the slides by Friday.','a second blank line stops the look-back');
+ keptBy('Hi all.\n\nNext week\n\nUpload the slides by Friday.','one blank line does not');
+});
+test('an earlier sentence in the same paragraph is a cue up to three sentences back',()=>{
+ keptBy('Hi all.\n\nIn two weeks we start a new unit. The lab is open. Upload the slides by Friday.','2 back');
+ keptBy('Hi all.\n\nIn two weeks we start a new unit. The lab is open. Bring a laptop. Upload the slides by Friday.','3 back');
+ fixedBy('Hi all.\n\nIn two weeks we start a new unit. The lab is open. Bring a laptop. Read chapter two. Upload the slides by Friday.','4 back');
+ keptBy('Hi all.\nIn two weeks we start a new unit.\nThe lab is open.\nUpload the slides by Friday.','3 back, one sentence per line');
+});
+test('past, repeating, lasting and same-week wording is not a cue',()=>{
+ for(const plain of ['3 weeks ago we met;','Two weeks ago we met;','A couple of weeks ago we met;','A week ago we met;','Last week we met;','Over the past two weeks we met;',
+  'Every week,','Every two weeks,','Every other week,','Each week,','At our weekly meeting we agreed to','For two weeks the lab is closed, so','Over the next two weeks,',
+  'For the next 3 weeks,','This week,'])
+  fixedBy(`Hi all.\n${plain} upload the slides by Friday.`,plain);
+ // A cue next to them still counts, and "the last week of" a month names a week.
+ keptBy('Hi all.\nTwo weeks ago we met; next week, upload the slides by Friday.','past wording beside a cue');
+ keptBy('Hi all.\nIn the last week of November, upload the slides by Friday.','the last week of');
+});
+test('"after <Name>" is a cue unless a person\'s action follows the name',()=>{
+ for(const plain of ['After Maria sends the file,','After Maria Lopez sends the file,',"After Maria's email,",'After Dr. Lee returns,','After I reply,'])
+  fixedBy(`Hi all.\n${plain} upload the slides by Friday.`,plain);
+ for(const cue of ['After Thanksgiving,','After Break,','After Finals week,','After Homecoming,','After November 20,'])
+  keptBy(`Hi all.\n${cue} upload the slides by Friday.`,cue);
+});
+test('only the email the wording was read from is searched for a cue',()=>{
+ const body='Hi all.\nReminder about the slides.',quote='Reminder about the slides.';
+ // The current email's subject sets another week, but the wording is in the earlier Monday email.
+ const earlier=earlierMessage('earlier','Please upload the slides by Wednesday.');
+ assert.equal(dated(body,due('by Wednesday','2026-11-11'),quote,{threadContext:[earlier],subject:"Next week's schedule"}).date,'2026-11-04');
+ // The earlier email's own subject does count.
+ const cued={...earlier,subject:"Next week's schedule"};
+ const kept=dated(body,due('by Wednesday','2026-11-11'),quote,{threadContext:[cued]});
+ assert.equal(kept.date,'2026-11-11');assert.match(kept.notes[0],/near wording about another week/);
+ assert.deepEqual(dated(body,due('by Wednesday','2026-11-04'),quote,{threadContext:[cued]}),{date:'2026-11-04',notes:[
+  'The email says "by Wednesday" near wording about another week. It was read as Wed, Nov 4, 2026, in the week the email was sent; a week later is Wed, Nov 11, 2026. Check the date.']});
 });
 test('"next <weekday>" keeps the rule date and says the wording can mean either of two weeks',()=>{
  const body='Hi all.\nUpload the slides next Thursday.';
@@ -357,6 +424,17 @@ test('Passive details add notes too, except for an email outside the selected to
  const none=[];assert.equal(groundDetails(outside,passivePayload(body),none).details.dates[0].date,'2026-11-12');assert.deepEqual(none,[]);
  // Two arguments still work.
  assert.equal(groundDetails(passive({dates:[entry('next Thursday','2026-11-19')]}),passivePayload(body)).details.dates[0].date,'2026-11-12');
+});
+test('a week cue in the subject keeps a Passive detail date, with a note',()=>{
+ const body='Lab is Thursday.';
+ const entry=(date)=>({label:'Lab',date,time:null,timeZone:'America/Chicago',wording:'Thursday',boundary:'on'});
+ const run=(date,subject)=>{const v=passive({dates:[entry(date)]});v.evidence={messageId:'gmail1',quote:'Lab is Thursday.'};const notes=[];
+  return {date:validateExtraction(v,passivePayload(body,subject),notes).details.dates[0].date,notes};};
+ assert.deepEqual(run('2026-11-12',"Next week's lab schedule"),{date:'2026-11-12',notes:[
+  'The email says "Thursday" near wording about another week. The date was left as Thu, Nov 12, 2026; counted from the day it was sent, it would be Thu, Nov 5, 2026. Check the date.']});
+ assert.deepEqual(run('2026-11-05',"Next week's lab schedule"),{date:'2026-11-05',notes:[
+  'The email says "Thursday" near wording about another week. It was read as Thu, Nov 5, 2026, in the week the email was sent; a week later is Thu, Nov 12, 2026. Check the date.']});
+ assert.equal(run('2026-11-12','Lab schedule').date,'2026-11-05');
 });
 test('a few holiday phrases are counted by the calendar, with a note when the model differs',()=>{
  const body='Hi all.\nPlease upload the slides by the Friday after Thanksgiving.',quote='the slides by the Friday after Thanksgiving';

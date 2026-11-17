@@ -93,6 +93,11 @@ export function sentDayHint(wording: string | null | undefined, sentAt: string |
   else {
     offset = (WEEKDAYS_LONG.findIndex((w) => w.toLowerCase() === word) - sent.weekday + 7) % 7
     if (modifier === "next" && offset === 0) offset = 7
+    // A weekday named on the sent weekday with a clock time is that day only while the
+    // time was still ahead when the email was sent; otherwise it is the next one. The scan
+    // works that out from the exact times. Rather than risk disagreeing with it here, no
+    // hint is shown for that one case.
+    else if (offset === 0 && /\d|noon|midnight/i.test(text)) return null
   }
   const target = new Date(Date.UTC(sent.y, sent.m - 1, sent.d + offset))
   const ty = target.getUTCFullYear()

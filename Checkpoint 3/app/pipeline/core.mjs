@@ -303,17 +303,20 @@ const states = (body, wording) => typeof wording === 'string' && occurrences(fla
 // Sentences end at . ! or ? followed by a space or the end of a line, and at every line
 // break ("3.30" and "example.org/a.b" do not end one). A line ending in a colon heads
 // the lines under it until a blank line: "Next week's schedule:" then "Quiz Thursday".
+// `para` numbers paragraphs: a run of blank lines starts the next one.
 function sentencesOf(text) {
   const out = [];
-  let offset = 0, header = null;
+  let offset = 0, header = null, para = 0, blank = false;
   for (const line of text.split('\n')) {
-    if (!line.trim()) header = null;
+    if (!line.trim()) { header = null; blank = true; }
     else {
+      if (blank && out.length) para++;
+      blank = false;
       const ends = [...line.matchAll(/[.!?](?=\s|$)/g)].map((m) => m.index + 1);
       if (!ends.length || ends.at(-1) < line.length) ends.push(line.length);
       let from = 0;
       for (const end of ends) {
-        if (line.slice(from, end).trim()) out.push({ from: offset + from, to: offset + end, header });
+        if (line.slice(from, end).trim()) out.push({ from: offset + from, to: offset + end, header, para });
         from = end;
       }
       if (/:\s*$/.test(line)) header = line;
@@ -335,19 +338,75 @@ const WEEK_CUES = [
   /\b(?:in\s+a\s+week|a\s+week\s+(?:from|after|later))\b/i,
   /\bafter\s+(?:the\s+)?(?:break|holidays?|thanksgiving|christmas|easter|halloween|new\s+year'?s?|labor\s+day|memorial\s+day|(?:spring|fall|winter|thanksgiving)\s+break|midterms?|finals?)\b/i,
 ];
+// Week wording that does NOT move a weekday into another week. It is blanked out of the
+// window before the cues are tested, so "two weeks ago" is not read as "two weeks":
+// - the past: "3 weeks ago", "a couple of weeks ago", "a week ago", "last week",
+//   "the past two weeks", "the previous week";
+// - a repeat: "every week", "every two weeks", "every other week", "each week", "weekly",
+//   "biweekly";
+// - a duration: "for two weeks", "over the next two weeks", "for the next 3 weeks",
+//   "during the coming two weeks" (a number of weeks is needed: "for the next week"
+//   stays a cue, since it may name next week);
+// - the same week: "this week".
+// "last"/"past"/"this" week followed by "of" is not blanked: "the last week of November"
+// names a week and stays a cue.
+const WEEK_COUNT = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|several|a\s+few|few|(?:a\s+)?couple(?:\s+of)?)`;
+const NOT_WEEK_CUES = [
+  new RegExp(String.raw`\b(?:${WEEK_COUNT}|a)\s+weeks?\s+ago\b`, 'gi'),
+  new RegExp(String.raw`\b(?:the\s+)?(?:last|past|previous)\s+(?:${WEEK_COUNT}\s+)?weeks?\b(?!\s+of\b)`, 'gi'),
+  new RegExp(String.raw`\b(?:every|each)\s+(?:other\s+)?(?:${WEEK_COUNT}\s+)?weeks?\b`, 'gi'),
+  /\b(?:bi-?)?weekly\b/gi,
+  new RegExp(String.raw`\b(?:for|over|during|throughout)\s+(?:the\s+)?(?:(?:next|coming|following)\s+)?${WEEK_COUNT}\s+weeks?\b`, 'gi'),
+  /\bthis\s+week\b(?!\s+of\b)/gi,
+];
+// A lowercase word after a name that makes "after <Name>" a person's action ("after Maria
+// sends the file"), which sets no week. "after Thanksgiving", "after Finals week" and
+// "after November 20" are still cues: a month and day after "after" is kept as a cue,
+// because the weekday most likely falls after that date and the user should check.
+const PERSON_ACTIONS = new Set(['sends', 'send', 'replies', 'reply', 'confirms', 'confirm', 'returns', 'return', 'gets', 'get',
+  'finishes', 'finish', 'submits', 'submit', 'reviews', 'review', 'approves', 'approve', 'emails', 'email', 'calls', 'call',
+  'meets', 'meet', 'leaves', 'leave', 'arrives', 'arrive', 'is', 'has', 'will', 'can', 'does', 'did']);
 function weekCue(window) {
-  const text = window.replace(/\s+/g, ' ');
+  let text = window.replace(/\s+/g, ' ');
+  for (const not of NOT_WEEK_CUES) text = text.replace(not, ' | ');
   if (WEEK_CUES.some((cue) => cue.test(text))) return true;
   // "after Thanksgiving", "after Spring Break", "after November 20": "after" and then a
-  // capitalised word that is not a weekday ("after Friday's class" stays in the week).
-  return [...text.matchAll(/\b[Aa]fter\s+(?:the\s+)?([A-Z][A-Za-z'’]*)/g)]
-    .some((m) => !Object.hasOwn(RELATIVE_WEEKDAYS, m[1].toLowerCase().replace(/['’]s$/, '')) && m[1] !== 'I');
+  // capitalised word that is not a weekday ("after Friday's class" stays in the week),
+  // unless the capitalised words are followed by a person's action (PERSON_ACTIONS).
+  return [...text.matchAll(/\b[Aa]fter\s+(?:the\s+)?([A-Z][A-Za-z'’]*)(?:\.?\s+[A-Z][A-Za-z'’]*)*(?:\s+([A-Za-z]+))?/g)]
+    .some((m) => !Object.hasOwn(RELATIVE_WEEKDAYS, m[1].toLowerCase().replace(/['’]s$/, '')) && m[1] !== 'I'
+      && !PERSON_ACTIONS.has((m[2] ?? '').toLowerCase()));
 }
-// True when the sentence holding the wording, the sentence before it or its colon heading
-// sets another week. When the wording appears more than once, the occurrence inside the
-// item's evidence quote decides if exactly one is; otherwise any occurrence with a cue
-// counts, since keeping the model's date is the safer side. Null if the wording is absent.
-function weekCueNear(body, wording, quote) {
+// A heading over the wording that has no colon ("Next week", "Week of Nov 16"): a line of
+// at most 8 words that is the first line of the wording's block, when the wording is on a
+// later line of it, or the last line of the block above, across one run of blank lines.
+// Only lines up to 6 above the wording's line are looked at, and never past a second run
+// of blank lines. A greeting ("Hi all,") qualifies too but sets no week.
+function headingAbove(lines, at) {
+  const short = (i) => lines[i].trim().split(/\s+/).length <= 8;
+  const found = [];
+  let i = at;
+  while (i > 0 && lines[i - 1].trim()) i--; // first line of the wording's block
+  if (i < at && at - i <= 6 && short(i)) found.push(lines[i]);
+  let j = i - 1;
+  while (j >= 0 && !lines[j].trim()) j--; // across one run of blank lines
+  if (j >= 0 && j < i - 1 && at - j <= 6 && short(j)) found.push(lines[j]);
+  return found.join(' | ');
+}
+// True when another week is set near the wording. The window is:
+// - the sentence holding the wording (the wording itself cut out);
+// - up to 3 sentences before it in the same paragraph, and the sentence just before it
+//   even across a blank line;
+// - its colon heading ("Next week's schedule:" over the lines under it, until a blank line);
+// - a heading without a colon (see headingAbove);
+// - the subject line of the email the wording was read from.
+// Only that email is searched. Quoted history is already cut from bodies (cleanBody), and
+// other emails in the thread are never searched for cues to this wording; when the
+// wording was read from an earlier thread email, that email's own body and subject are.
+// When the wording appears more than once, the occurrence inside the item's evidence quote
+// decides if exactly one is; otherwise any occurrence with a cue counts, since keeping the
+// model's date is the safer side. Null if the wording is absent.
+function weekCueNear(body, wording, quote, subject = '') {
   const text = body.replace(/\r\n?/g, '\n');
   const flat = flatten(text), needle = flatten(wording).s;
   let starts = occurrences(flat.s, needle);
@@ -358,15 +417,18 @@ function weekCueNear(body, wording, quote) {
     const inside = starts.filter((w) => spans.some((s) => w >= s && w + needle.length <= s + q.length));
     if (inside.length === 1) starts = inside;
   }
-  const sentences = sentencesOf(text);
+  if (typeof subject === 'string' && weekCue(subject)) return true;
+  const sentences = sentencesOf(text), lines = text.split('\n');
   return starts.some((w) => {
     const from = flat.at[w], to = flat.at[w + needle.length - 1] + 1;
     const first = sentences.findIndex((s) => s.to > from);
     if (first < 0) return weekCue(text);
     let last = first;
     while (last + 1 < sentences.length && sentences[last + 1].from < to) last++;
-    const start = sentences[first > 0 ? first - 1 : first].from;
-    return weekCue(`${sentences[first].header ?? ''} | ${text.slice(start, from)} | ${text.slice(to, sentences[last].to)}`);
+    let back = first > 0 ? first - 1 : first;
+    while (back > 0 && first - back < 3 && sentences[back - 1].para === sentences[first].para) back--;
+    const heading = headingAbove(lines, text.slice(0, from).split('\n').length - 1);
+    return weekCue(`${sentences[first].header ?? ''} | ${heading} | ${text.slice(sentences[back].from, from)} | ${text.slice(to, sentences[last].to)}`);
   });
 }
 // Notes the user sees when code and the model disagree about a date. They quote only the
@@ -380,6 +442,7 @@ const DATE_NOTES = {
   context: (w, was, now) => `The email says "${w}" near wording about another week. The date was left as ${was}; counted from the day it was sent, it would be ${now}. Check the date.`,
   twoWeeks: (w, was, now) => `The email says "${w}", which can mean either of two weeks. It was set to ${now}. Check the date.`,
   holiday: (w, was, now) => `The email says "${w}". That was read as ${was}; by the calendar it is ${now}. Check the date.`,
+  sameWeek: (w, was, now) => `The email says "${w}" near wording about another week. It was read as ${was}, in the week the email was sent; a week later is ${now}. Check the date.`,
   // The wording is not in one identifiable email (a paraphrase, or several emails say
   // it), so code cannot tell which sent day to count from. Unsure means the user decides.
   unplaced: (w, was, now) => `The date wording "${w}" could not be matched to one email. The date was left as ${was}; counted from the day this email was sent, it would be ${now}. Check the date.`,
@@ -431,14 +494,22 @@ function countedFromSent(d, message, { notes = null, quote = null } = {}) {
       fromSent = new Date(Date.parse(`${fromSent}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
     }
   }
-  if (fromSent === d.date) return d;
+  if (fromSent === d.date) {
+    // The model and the rule agree, but both may be a week early: "Next week's schedule"
+    // over "quiz Thursday" most likely means next week's Thursday. Code cannot tell, so
+    // the date stays and the user is shown the week-later reading to choose from.
+    if (!/\b(?:today|tonight|tomorrow)\b/i.test(d.wording) && weekCueNear(message.body, d.wording, quote, message.subject) === true) {
+      addNote(notes, 'sameWeek', d, new Date(Date.parse(`${fromSent}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10));
+    }
+    return d;
+  }
   // "Thursday at midnight" is often read as the end of Thursday (Friday 00:00). Both
   // readings are kept; only a date that is neither is corrected.
   const dayAfter = new Date(Date.parse(`${fromSent}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
   if (/\bmidnight\b/i.test(d.wording) && d.date === dayAfter) return d;
   // "Next week's schedule: quiz Thursday" means the Thursday of next week. When the email
   // sets another week nearby, the model's date is kept and the user is asked to check it.
-  const cue = weekCueNear(message.body, d.wording, quote);
+  const cue = weekCueNear(message.body, d.wording, quote, message.subject);
   if (cue === null) return d;
   if (cue) { addNote(notes, 'context', d, fromSent); return d; }
   // "next Friday" is read as either the coming Friday or the one after; the rule picks

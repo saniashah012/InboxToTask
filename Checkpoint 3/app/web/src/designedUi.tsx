@@ -1,5 +1,5 @@
 // Shared pieces of the designed product UI, used by onboarding, settings and the dashboard.
-import { useId, type ReactNode } from "react"
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react"
 
 export function Icon({
   name,
@@ -76,6 +76,25 @@ export function Modal({
   subtitle?: string
 }) {
   const subtitleId = useId()
+  const dialog = useRef<HTMLElement>(null)
+  // Keyboard focus follows the dialog: it moves in when the dialog opens (unless a field
+  // inside already took it), Tab stays inside while it is open, and focus returns to
+  // where it was when it closes. Without this, Tab kept walking the page underneath.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    if (dialog.current && !dialog.current.contains(document.activeElement)) dialog.current.focus()
+    return () => { if (opener?.isConnected) opener.focus() }
+  }, [])
+  const keepFocusInside = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Tab" || !dialog.current) return
+    const items = [...dialog.current.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+    )].filter((item) => item.offsetParent !== null)
+    if (!items.length) { event.preventDefault(); return }
+    const first = items[0], last = items[items.length - 1], active = document.activeElement
+    if (event.shiftKey && (active === first || active === dialog.current)) { event.preventDefault(); last.focus() }
+    else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus() }
+  }
   return (
     <div className="overlay" role="presentation" onMouseDown={onClose}>
       <section
@@ -84,6 +103,9 @@ export function Modal({
         aria-modal="true"
         className={`modal ${wide ? "modal-wide" : ""} ${className}`.trim()}
         role="dialog"
+        ref={dialog}
+        tabIndex={-1}
+        onKeyDown={keepFocusInside}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-head">

@@ -1537,7 +1537,8 @@ function EditFieldsModal({ editing, email, busy, onSave, onCancel }: { editing: 
   const original = editing.fields.deadline?.wording
   const wording = original && original !== USER_ENTERED_WORDING ? original : null
   const choices = useMemo(() => (adding ? dateChoicesFromNotes(editing.reasons ?? []) : []), [adding, editing.reasons])
-  const hint = editing.context ? sentDayHint(wording, editing.context.sentAt, viewerZone) : null
+  // The sent day is taken in the deadline's own time zone, as the scan does.
+  const hint = editing.context ? sentDayHint(wording, editing.context.sentAt, editing.fields.deadline?.timeZone || viewerZone) : null
   const submit = () => {
     if (!draft.action.trim()) return setError("Enter the task action.")
     // Nothing reaches Active tasks without a deadline.

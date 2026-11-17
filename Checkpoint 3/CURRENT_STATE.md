@@ -111,7 +111,7 @@ states (no such proposals existed), a task with several linked emails, phone wid
 live site. Escape does not close these popups (existing behavior, not changed here).
 
 **November 17: turn a Passive email into a task.** Branch `mzheng/passive-to-task` (off `main`;
-unpushed and not merged when written). The study freeze was moved at the November 16 team meeting to start
+pushed on November 17, no pull request yet, not merged). The study freeze was moved at the November 16 team meeting to start
 Thursday November 19 (night), so whether this merges before it is Matthew's decision. No hosted change: the
 migration is applied to the local database only, and nothing was deployed.
 - **Dashboard:** the Source email popup of a Passive item has **Turn into task**, which opens a
@@ -129,7 +129,8 @@ migration is applied to the local database only, and nothing was deployed.
   what the email is about, then when and where. A date's wording, the location and each link must
   appear in the email or the entry is dropped (`groundDetails` in `pipeline/core.mjs`). The prompt
   and schema are part of the cache key, so already-scanned email is analysed again on its next
-  scan. Passive read marks stay in the browser; the earlier mark is restored by Undo and Move
+  full 7-day check (after a settings change or a Gmail reconnect); a routine check only covers
+  mail since the last complete one. Passive read marks stay in the browser; the earlier mark is restored by Undo and Move
   back in the same browser only.
 - **Database, migration `20261117000000_passive_to_task`:** `storage_extractions.details`
   (cleared whenever the summary is), service-only `gmail_extraction_details`,
@@ -221,6 +222,40 @@ placed on one suggestion and removed afterwards: the email block, the two date b
 hint. Known limits: a week cue two or more sentences away, in the subject or in an earlier
 email is not seen; cue words can match unrelated phrases ("every two weeks"), which only adds a
 note. Not checked: the review screen at phone width or by keyboard alone, hosted.
+**Later on November 17, the open items from that round:**
+- **Wider week check** (`core.mjs`): a week cue is now also looked for in the subject line of the
+  email the wording was read from, in a short heading above the wording with no colon (within 6
+  lines and one blank line), and up to 3 sentences back in the same paragraph. Past, repeating,
+  lasting and same-week phrasing ("two weeks ago", "every two weeks", "for the next two weeks",
+  "this week") and "after <Name> <does something>" are no longer cues. Other emails in the
+  thread are still not searched.
+- **Agreeing date near a cue:** when the model and the sent-day rule agree but the email sets
+  another week nearby, the date stays and a note offers the week-later reading. Found with the
+  live model: subject "Next week's schedule" over "quiz corrections Thursday" was dated in the
+  sent week by both.
+- **Review-screen hint** (`reviewNotes.ts`, `RealDashboard.tsx`): it uses the deadline's time
+  zone, and shows nothing for a weekday named on the sent weekday with a clock time, which only
+  the scan can settle.
+- **Keyboard focus in every dialog** (`designedUi.tsx`, `index.css`): focus now moves into a
+  dialog when it opens, Tab stays inside it, and focus returns to the opening control on close.
+  Before, Tab kept moving through the page behind the dialog. This is the shared `Modal`, so it
+  applies to onboarding, settings and dashboard dialogs.
+- **Study reset (PR #122, #101), checked in a scratch copy, nothing changed in either branch:**
+  with this migration the reset as written refuses (`STUDY_RESET_SCHEMA_CHANGED: unknown
+  trigger … extraction_details_follow_summary`). Adding that trigger to its list of known
+  triggers is enough; a full snapshot, Passive-to-task session and reset then restored the
+  account exactly in PGlite. If the migration is applied after the snapshot, every reset
+  refuses. Its test also needs the empty `details` object once merged with this pipeline.
+- **Scan now after a Gmail reconnect:** fixed separately on branch
+  `mzheng/scan-now-after-reconnect` (off `main`, local, not pushed); see that branch's entry.
+Checked: `npm test` 274 and 99, `test:calendar` 45, `tsc --noEmit`, the web build, `deno check`.
+Live model, three fictional emails for the new cue rules (dates unchanged; this run is what
+showed the agreeing-date gap, fixed afterwards and covered by tests, not rerun live). In a local
+browser with a sample note placed on one suggestion and removed afterwards: Tab order through
+Review before adding, a date button chosen with Space, focus returning on close. At phone width
+the dialog's rows stack and it scrolls inside itself, but the Suggestions page is already wider
+than the screen (#100), which pushes the dialog partly off it. Not checked: a screen reader,
+the Calendar question on Move back, hosted.
 **Correction to the scan-contract note above:** a routine check only covers mail since the last
 complete check, so already-scanned email is analysed again only on a full 7-day check (after a
 settings change or a Gmail reconnect), not on every next scan.

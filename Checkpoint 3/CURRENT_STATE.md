@@ -110,6 +110,31 @@ dismissing). Not checked: the Dismissed tab (empty), the edit-proposal popup and
 states (no such proposals existed), a task with several linked emails, phone width, and the
 live site. Escape does not close these popups (existing behavior, not changed here).
 
+**November 17: Scan now after a Gmail reconnect.** Branch `mzheng/scan-now-after-reconnect`
+(from `main` at `bfe32cc`; unpushed when written). Frontend only; no migration, function or
+hosted change.
+- The problem (reproduced on a local stack on November 17): when a check stopped with unfinished
+  work and Gmail was then reconnected (or the scan settings or storage generation changed), the
+  status still reported a backlog, so "Scan now", "Check now" and automatic checks asked to
+  continue it. The backend refuses to continue work from before the change, and the dashboard
+  showed "Scanning permission or saved state changed…" on every try until settings were saved.
+- The fix: the dashboard sends a refused continuation once more as a new check
+  (`requestScan` in the new `web/src/scanRequest.ts`, used by `runScan` in `RealDashboard.tsx`,
+  so manual and automatic checks take the same path). The new check passes every server check
+  again; if it is refused too, the existing message is shown, and it never retries more than
+  once. A new check after a reconnect covers the full 7 days, as before. After a manual press
+  the notice says a new check ran instead of continuing the earlier one. Scan limits, cooldowns,
+  permission checks and what is scanned are unchanged. The status function still reports the
+  stale backlog until the next check runs (not changed, to avoid a migration).
+- Tests: `tests/scan-request.test.mjs` (7 tests, added to `npm test`) covers the retry rule; a
+  new PGlite case in `tests/scan-settings.test.mjs` shows that after a connection-generation
+  change continuing is refused, a new check right after it is claimed over 7 days and clears the
+  backlog, an up-to-date backlog still continues, and a paused or reconnect-required account
+  still refuses both modes.
+
+Verified offline: `npm test` (223 + 63 pass), `tsc --noEmit` and the web build. Not checked in
+a browser, against a local stack after the change, or against live Gmail.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

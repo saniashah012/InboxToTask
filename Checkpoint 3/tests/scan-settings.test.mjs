@@ -290,6 +290,46 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       await as('authenticated',A,()=>scalar('select public.scan_auto_scan_save(true)'));
       c=await claim();await expectIncremental(c);
     });
+    await t.test('a continuation left before a reconnect is refused, and a new check right after it starts fresh',async()=>{
+      // The dashboard retries a refused "more" once as "initial"; this is the database side of that.
+      const scan=(action,data={})=>as('service_role',A,()=>scalar('select public.gmail_scan_service($1,$2,$3)',[A,action,data]));
+      const status=()=>as('authenticated',A,()=>scalar('select public.gmail_scan_status()'));
+      const cool=()=>q("update private.gmail_scan_work set lease=null,lease_until=null,last_started=now()-interval '2 minutes' where user_id=$1",[A]);
+      const days=(c)=>(Date.parse(c.end)-Date.parse(c.start))/86400000;
+      const persistent=(error=null)=>({executionMode:'GMAIL_PERSISTENT_MANUAL',counts:{},error});
+      const leaveBacklog=async()=>{await cool();const c=await scan('claim',{mode:'initial'});assert.equal(c.state,'claimed');
+        await scan('finish',{lease:c.lease,continuation:{pending:['gmail1'],next:null},result:persistent('SCAN_INFERENCE_LIMIT')});await cool();};
+      // Up to date: the backlog continues.
+      await leaveBacklog();
+      assert.equal((await status()).backlog,true);
+      let c=await scan('claim',{mode:'more'});assert.equal(c.state,'claimed');assert.deepEqual(c.continuation.pending,['gmail1']);
+      await scan('finish',{lease:c.lease,continuation:{pending:['gmail1'],next:null},result:persistent('SCAN_INFERENCE_LIMIT')});
+      // Reconnect after the batch stopped: status still reports the backlog, but continuing is refused.
+      await cool();
+      await q('update private.google_connections set generation=generation+1 where user_id=$1',[A]);
+      assert.equal((await status()).backlog,true);
+      await assert.rejects(scan('claim',{mode:'more'}),{code:'PT409',message:'SCAN_CONTINUATION_STALE'});
+      // The refusal took no cooldown, so a new check starts right away over the full 7 days.
+      c=await scan('claim',{mode:'initial'});assert.equal(c.state,'claimed');assert.equal(days(c),7);assert.equal(c.continuation,null);
+      await scan('finish',{lease:c.lease,continuation:null,result:persistent()});
+      assert.equal((await status()).backlog,false,'the stale backlog is gone after the new check');
+      // A new check that leaves its own backlog can be continued again.
+      await leaveBacklog();
+      c=await scan('claim',{mode:'more'});assert.equal(c.state,'claimed');
+      await scan('finish',{lease:c.lease,continuation:{pending:['gmail1'],next:null},result:persistent('SCAN_INFERENCE_LIMIT')});
+      // A real permission problem refuses both modes, so the retry shows the error.
+      await cool();
+      await q('update private.google_connections set generation=generation+1 where user_id=$1',[A]);
+      await q("update public.scan_settings set paused=true where user_id=$1",[A]);
+      await assert.rejects(scan('claim',{mode:'more'}),{code:'PT409',message:'SCAN_PERMISSION_REQUIRED'});
+      await assert.rejects(scan('claim',{mode:'initial'}),{code:'PT409',message:'SCAN_PERMISSION_REQUIRED'});
+      await q("update public.scan_settings set paused=false where user_id=$1",[A]);
+      await q("update private.google_connections set state='reconnect_required' where user_id=$1",[A]);
+      await assert.rejects(scan('claim',{mode:'initial'}),{code:'PT409',message:'SCAN_PERMISSION_REQUIRED'});
+      await q("update private.google_connections set state='connected' where user_id=$1",[A]);
+      // Leave a clean slate for later tests.
+      c=await scan('claim',{mode:'initial'});await scan('finish',{lease:c.lease,continuation:null,result:persistent()});await cool();
+    });
     await t.test('automatic scanning saves on its own without bumping the revision or fencing work',async()=>{
       const before=await get(C);assert.equal(before.auto_scan,false);
       const generation=await scalar('select generation from public.storage_preferences where user_id=$1',[C]);

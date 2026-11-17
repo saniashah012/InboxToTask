@@ -6,6 +6,7 @@ import { Icon, Modal } from "./designedUi"
 import { supabase } from "./supabase"
 import { googleConnectionStatus, loadStorageSnapshot, reviewStoredRecord, type Deadline, type ScanSettings, type Snapshot, type StoredRow, type TaskFields } from "./storageAdapter"
 import { isScanBusy, manualScan, manualScanStatus, ScanRequestError, resolveTaskChange, reviewTaskChange, scanStopMessage, type ScanStatus } from "./manualScanAdapter"
+import { requestScan } from "./scanRequest"
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
 import { loadTaskSourceLinks, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
 import { loadRead, saveRead } from "./readMarks"
@@ -373,8 +374,9 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     }
   }
 
+  // Returns true when a saved backlog could not be continued and a new check ran instead.
   async function runScan(mode: "initial" | "more") {
-    const result = await manualScan(mode)
+    const { result, restarted } = await requestScan(mode, manualScan)
     if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
     // A check that caught up is never a stall; repeated backlog batches without
     // progress are, so a stuck message cannot loop forever.
@@ -383,6 +385,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     if (stalls.current >= 3) setAutoHalt("stalled")
     // Planned limits are not failures; the status bar explains them.
     if (result.error && !BATCH_LIMIT_STOPS.includes(result.error) && result.error !== DAILY_LIMIT_STOP) throw new ScanRequestError(`${scanStopMessage(result.error)} Saved results remain available.`, result.error, true)
+    return restarted
   }
 
   async function scan(mode: "initial" | "more", auto = false) {
@@ -395,11 +398,11 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
       const before = scanIds(latestSnapshot.current)
       // With automatic checks on, a check already running or cooling down is not an
       // error: it finishes on its own and its results appear by themselves.
-      let alreadyRunning = false, stopped = false
+      let alreadyRunning = false, stopped = false, restarted = false
       setQuietRetries(0)
       try {
         const finished = await perform(async () => {
-          try { await runScan(mode) } catch (err) {
+          try { restarted = await runScan(mode) } catch (err) {
             if (autoOn && isScanBusy(err)) { alreadyRunning = true; return }
             // One message only: the status panel already says why the check stopped.
             if (err instanceof ScanRequestError && err.fromResult) { stopped = true; return }
@@ -412,7 +415,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         if (!finished) setFailure((f) => (f ? { message: `${f.message} ${added}` } : f))
         else if (alreadyRunning) setNotice("A check is already running. New items will appear on their own.")
         else if (stopped) setNotice(added === NOTHING_ADDED ? "" : added)
-        else setNotice(`This check finished. ${added}`)
+        else setNotice(restarted ? `The earlier unfinished check could no longer continue, so a new check ran instead. ${added}` : `This check finished. ${added}`)
       } finally { setScanning(false) }
       return
     }
@@ -1181,7 +1184,9 @@ function RealScanStatus({ now, state, status, cooldownLeft, busy, scanning, sett
 }) {
   // One button: it continues unfinished work when an earlier check left some,
   // otherwise it checks right now for email since the last complete check (the
-  // full 7 days the first time, and after a settings change or reconnect).
+  // full 7 days the first time, and after a settings change or reconnect). If the
+  // backend refuses to continue (the unfinished work predates a reconnect or a
+  // settings or storage change), runScan starts one new check instead.
   const resume = Boolean(status?.backlog) && !needsReconnect
   const [title, detail] = stateCopy(state, settings, gmail, status, auto.on && !auto.halted)
   const counts = status?.result?.counts

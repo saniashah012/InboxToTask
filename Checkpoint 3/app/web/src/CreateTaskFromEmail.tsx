@@ -4,6 +4,7 @@
 import { useId, useMemo, useState } from "react"
 import { Modal } from "./designedUi"
 import { applyStatedDate, draftFromPrefill, fieldsFromCreateDraft, prefillFromPassive, type CreateDraft, type StatedDate } from "./passiveTask"
+import { sentLabel } from "./reviewNotes"
 import type { StoredRow, TaskFields } from "./storageAdapter"
 
 export type PassiveEmail = {
@@ -102,6 +103,8 @@ export default function CreateTaskFromEmail({ email, timeZone, busy, onCancel, o
         <div className="rd-create-source" role="group" aria-labelledby={`${ids}-source`}>
           <span id={`${ids}-source`}>From source email</span>
           <p>{email.summary || "Summary unavailable."}</p>
+          <p>Sent {sentLabel(email.sentAt, timeZone) ?? "date unavailable"}</p>
+          {email.quote ? <blockquote aria-label="Saved excerpt">{email.quote}</blockquote> : <p>The saved excerpt has expired.</p>}
         </div>
         {error && <p className="inline-validation" role="alert">{error}</p>}
         <div className="modal-actions">

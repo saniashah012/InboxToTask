@@ -191,6 +191,36 @@ evidence cites a different message from the one it was written in. Checked: `npm
 80, `deno check`, and five fictional task emails against the live model (four already right;
 "before Thursday at noon", sent that Thursday at 3:23 PM, moved from the sent day to the next
 Thursday). Not checked: a real Gmail scan with this version.
+**Flag it and let the user decide in the app (Matthew's rule, November 17):** when code and the
+model disagree about a date, or code cannot be sure, the item gets a specific note and is marked
+"Needs verification"; when they agree, nothing is added.
+- **Notes** (`core.mjs`, stored with the result's warnings): a date the sent-day rule changed; a
+  date left alone because the sentence around it, the one before it or a colon heading sets
+  another week ("Next week's schedule:"); "next <weekday>" wording the rule changed; a holiday
+  phrase the calendar disagrees on; and wording that cannot be matched to one supplied email (a
+  paraphrase, or several emails say it), where the date is left as the model gave it. Each note
+  names the wording and both dates.
+- **Holidays** (`pipeline/holidays.mjs`): 14 fixed-rule US holidays, for wording that is only a
+  holiday or a weekday or day before or after one ("by the Friday after Thanksgiving"). Anything
+  else, school breaks included, keeps the model's date.
+- **Which email:** a deadline is counted from the email whose body contains its wording: the
+  cited one, else the only other supplied one.
+- **Review screen** (`RealDashboard.tsx`, `reviewNotes.ts`): Review before adding and Edit
+  suggestion show the sender, subject, the sent time with its weekday, the email's date wording
+  and the saved excerpt; Review before adding also offers each date named in a note as a
+  one-click choice and, for plain relative wording, a line saying what the sent-day rule gives.
+  Create task shows the sent time and excerpt too. Only the saved excerpt is shown; full email
+  bodies are still not stored.
+Checked: `npm test` 267 and 99, `test:calendar` 45, `tsc --noEmit`, the web build, `deno check`.
+Live model, five fictional emails sent on a Thursday and analysed five days later: the holiday
+phrase and the plain cases agreed with the rule and got no note; "Next week's schedule:" kept
+the model's next-week dates with a note for each. Real Gmail scan, local, on the dedicated test
+mailbox with this version (three model calls): two Passive results dated from the sent day and
+one Actionable result, no failures and no date notes. In a local browser, with a sample note
+placed on one suggestion and removed afterwards: the email block, the two date buttons and the
+hint. Known limits: a week cue two or more sentences away, in the subject or in an earlier
+email is not seen; cue words can match unrelated phrases ("every two weeks"), which only adds a
+note. Not checked: the review screen at phone width or by keyboard alone, hosted.
 **Correction to the scan-contract note above:** a routine check only covers mail since the last
 complete check, so already-scanned email is analysed again only on a full 7-day check (after a
 settings change or a Gmail reconnect), not on every next scan.

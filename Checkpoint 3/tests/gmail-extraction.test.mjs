@@ -199,7 +199,7 @@ test('the sent-day rule applies only to wording that is nothing but one relative
 });
 
 // Gmail deadlines follow the same rule; the fixture contract does not.
-const dueBody='The report is now due November 9. The report is now due Friday. Please upload the slides by Friday at 5 PM. Maria will send the data by Tuesday.';
+const dueBody='The report is now due November 9. The report is now due Friday. Please upload the slides by Friday at 5 PM. Maria will send the data by Tuesday. The poster is due Thursday at midnight.';
 const limits={maxMessages:5,maxAgeDays:90,maxMessageChars:12000,maxTotalChars:24000};
 const duePayload=({threadContext=[],existing=context,analysisTime='2026-11-05T13:00:00Z'}={})=>prepareInput({contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},
  analysisTime,rules,message:{...message,body:dueBody},threadContext,contextLimits:limits,semanticPreferences:{include:[],exclude:[]},existingTaskContext:existing},{}).payload;
@@ -255,5 +255,125 @@ test('the fixture contract keeps a relative-day deadline as the model returned i
  const late=due('by Friday at 5 PM','2026-11-13','17:00');
  const v={category:'Actionable',confidence:90,evidence,explanation:'Slides are due.',summary:'Upload the slides.',uncertainties:[],waitingFor:[],suggestedFollowUps:[],
   tasks:[{action:'Upload the slides',owner:'student@example.org',deadline:late,condition:null,requirements:[],evidence:{messageId:'gmail1',quote:'Please upload the slides by Friday at 5 PM.'}}]};
- assert.deepEqual(validateExtraction(v,fixture).tasks[0].deadline,late);
+ const notes=[];assert.deepEqual(validateExtraction(v,fixture,notes).tasks[0].deadline,late);assert.deepEqual(notes,[]);
+});
+
+// When code and the model disagree about a date, the user is told; when they agree, nothing is added.
+// Every body below is sent Thursday, November 5, 2026, 6:00 AM Central, like the fixture message.
+const datedPayload=(body,threadContext=[])=>prepareInput({contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',
+ rules,message:{...message,body},threadContext,contextLimits:limits,semanticPreferences:{include:[],exclude:[]},existingTaskContext:[]},{}).payload;
+const datedTasks=(deadlines,quote='the slides by Friday',messageId='gmail1')=>{const v=output();v.taskChanges=[];v.evidence={messageId:'gmail1',quote:'Hi all.'};
+ v.tasks=deadlines.map(d=>slides(d,quote,messageId));return v;};
+const dated=(body,deadline,quote,{threadContext=[],messageId}={})=>{
+ const notes=[];const v=validateExtraction(datedTasks([deadline],quote,messageId),datedPayload(body,threadContext),notes);
+ return {date:v.tasks[0].deadline.date,notes};
+};
+const earlierMessage=(id,body,sentAt='2026-11-02T15:00:00Z')=>({id,threadId:'thread1',from:'teacher@example.org',subject:'Research report',labels:[],sentAt,body});
+test('a corrected date adds one plain note naming both dates; an agreeing date adds none',()=>{
+ const body='Hi all.\nPlease upload the slides by Friday.';
+ assert.deepEqual(dated(body,due('by Friday','2026-11-13')),{date:'2026-11-06',notes:[
+  'The email says "by Friday". That was read as Fri, Nov 13, 2026; counted from the day it was sent, it is Fri, Nov 6, 2026. Check the date.']});
+ assert.deepEqual(dated(body,due('by Friday','2026-11-06')),{date:'2026-11-06',notes:[]});
+ // Two items with the same wording and dates give one note.
+ const notes=[];const v=validateExtraction(datedTasks([due('by Friday','2026-11-13'),due('by Friday','2026-11-13')]),datedPayload(body),notes);
+ assert.deepEqual(v.tasks.map(t=>t.deadline.date),['2026-11-06','2026-11-06']);assert.equal(notes.length,1);
+ // Called with two arguments, it still returns the value and corrects the date.
+ const two=datedTasks([due('by Friday','2026-11-13')]);assert.equal(validateExtraction(two,datedPayload(body)),two);assert.equal(two.tasks[0].deadline.date,'2026-11-06');
+ // A long wording is cut to 80 characters in the note.
+ const long=`${'by '.repeat(40)}Friday`;
+ const cut=dated(`Hi all.\nUpload the slides ${long}.`,due(long,'2026-11-13'),`the slides ${long}`).notes[0];
+ assert.ok(cut.startsWith(`The email says "${'by '.repeat(25)}by...". That was read`),cut);
+});
+test('a weekday next to wording about another week keeps the model date, with a note',()=>{
+ const kept=(body,label)=>assert.deepEqual(dated(body,due('by Friday','2026-11-13')),{date:'2026-11-13',notes:[
+  'The email says "by Friday" near wording about another week. The date was left as Fri, Nov 13, 2026; counted from the day it was sent, it would be Fri, Nov 6, 2026. Check the date.']},label);
+ const fixed=(body,label)=>assert.equal(dated(body,due('by Friday','2026-11-13')).date,'2026-11-06',label);
+ kept('Hi all.\nNext week, upload the slides by Friday.','same sentence');
+ kept('Hi all. The schedule moves to the following week. Upload the slides by Friday.','previous sentence');
+ kept("Hi all.\n\nNext week's schedule:\nReading quiz on Monday.\nUpload the slides by Friday.\n",'under a colon heading');
+ fixed("Hi all.\nNext week's schedule:\nQuiz Monday.\n\nUpload the slides by Friday.",'a blank line ends the heading');
+ fixed('Hi all. In two weeks we start a new unit. The lab is open. Upload the slides by Friday.','two sentences away');
+ for(const cue of ["Next week's","After Thanksgiving,",'After the break,','The week of November 16,','In a couple of weeks,','In 3 weeks,','After Spring Break,',
+  'Later this month,','Next month,','In the upcoming week,','The week after,','After the holidays,','The following week,'])
+  kept(`Hi all.\n${cue} upload the slides by Friday.`,cue);
+ for(const plain of ['This week,',"After Friday's lecture,",'Every day,','After class,','The week is busy, so'])
+  fixed(`Hi all.\n${plain} upload the slides by Friday.`,plain);
+ // With the model already on the plain rule's date, nothing is added.
+ assert.deepEqual(dated('Hi all.\nNext week, upload the slides by Friday.',due('by Friday','2026-11-06')),{date:'2026-11-06',notes:[]});
+});
+test('"next <weekday>" keeps the rule date and says the wording can mean either of two weeks',()=>{
+ const body='Hi all.\nUpload the slides next Thursday.';
+ assert.deepEqual(dated(body,due('next Thursday','2026-11-19'),'the slides next Thursday'),{date:'2026-11-12',notes:[
+  'The email says "next Thursday", which can mean either of two weeks. It was set to Thu, Nov 12, 2026. Check the date.']});
+ assert.deepEqual(dated(body,due('next Thursday','2026-11-12'),'the slides next Thursday'),{date:'2026-11-12',notes:[]});
+ // "next Thursday" is not itself a cue; "next week" before it is.
+ const near=dated('Hi all. Next week is busy. Upload the slides next Thursday.',due('next Thursday','2026-11-19'),'the slides next Thursday');
+ assert.equal(near.date,'2026-11-19');assert.match(near.notes[0],/near wording about another week/);
+});
+test('wording that appears twice is judged at the occurrence inside its evidence quote',()=>{
+ const body='Hi all. The lab is Friday.\nNext week: the slides are due Friday.';
+ assert.equal(dated(body,due('Friday','2026-11-13'),'the slides are due Friday.').date,'2026-11-13');
+ assert.deepEqual(dated(body,due('Friday','2026-11-13'),'The lab is Friday.'),{date:'2026-11-06',notes:[
+  'The email says "Friday". That was read as Fri, Nov 13, 2026; counted from the day it was sent, it is Fri, Nov 6, 2026. Check the date.']});
+ // A quote holding neither occurrence: any occurrence with a cue keeps the model date.
+ assert.equal(dated(body,due('Friday','2026-11-13'),'Hi all.').date,'2026-11-13');
+});
+test('a date is counted from the one supplied email that contains its wording, and left alone otherwise',()=>{
+ const body='Hi all.\nReminder about the slides.',quote='Reminder about the slides.';
+ // Only the earlier Monday message says "by Wednesday": November 4, not November 11.
+ const earlier=earlierMessage('earlier','Please upload the slides by Wednesday.');
+ assert.deepEqual(dated(body,due('by Wednesday','2026-11-11'),quote,{threadContext:[earlier]}),{date:'2026-11-04',notes:[
+  'The email says "by Wednesday". That was read as Wed, Nov 11, 2026; counted from the day it was sent, it is Wed, Nov 4, 2026. Check the date.']});
+ // Two other emails say it, or none does: the model date stays. Nothing is added when the
+ // rule from the cited email agrees; when it would differ, the user is told both dates.
+ const again=earlierMessage('again','Again: the slides by Wednesday.','2026-10-30T15:00:00Z');
+ assert.deepEqual(dated(body,due('by Wednesday','2026-11-11'),quote,{threadContext:[again,earlier]}),{date:'2026-11-11',notes:[]});
+ assert.deepEqual(dated(body,due('by Wednesday','2026-11-18'),quote,{threadContext:[again,earlier]}),{date:'2026-11-18',notes:[
+  'The date wording "by Wednesday" could not be matched to one email. The date was left as Wed, Nov 18, 2026; counted from the day this email was sent, it would be Wed, Nov 11, 2026. Check the date.']});
+ assert.deepEqual(dated(body,due('due Wednesday','2026-11-18'),quote,{threadContext:[earlier]}),{date:'2026-11-18',notes:[
+  'The date wording "due Wednesday" could not be matched to one email. The date was left as Wed, Nov 18, 2026; counted from the day this email was sent, it would be Wed, Nov 11, 2026. Check the date.']});
+ assert.deepEqual(dated(body,due('due Wednesday','2026-11-11'),quote,{threadContext:[earlier]}),{date:'2026-11-11',notes:[]});
+ // The cited email wins when it contains the wording, even if another one does too.
+ assert.equal(dated('Hi all.\nUpload the slides by Wednesday.',due('by Wednesday','2026-11-04'),'the slides by Wednesday',{threadContext:[earlier]}).date,'2026-11-11');
+});
+test('a task change deadline is counted only from the current email, and only when it contains the wording',()=>{
+ const earlier=earlierMessage('earlier','The report is now due Monday.');
+ for(const threadContext of [[],[earlier]]){
+  const v=output();v.taskChanges[0].fields.deadline=due('due Monday','2026-11-16');const notes=[];
+  // Not in the current email: the date is left alone, and the user is told what the rule would give.
+  assert.deepEqual(validateExtraction(v,duePayload({threadContext}),notes).taskChanges[0].fields.deadline,due('due Monday','2026-11-16'));
+  assert.equal(notes.length,1);assert.match(notes[0],/could not be matched to one email\. The date was left as Mon, Nov 16, 2026; counted from the day this email was sent, it would be Mon, Nov 9, 2026\./);
+ }
+ const v=output();v.taskChanges[0].fields.deadline=due('due Friday','2026-11-13');const notes=[];
+ assert.equal(validateExtraction(v,duePayload(),notes).taskChanges[0].fields.deadline.date,'2026-11-06');assert.equal(notes.length,1);
+});
+test('Passive details add notes too, except for an email outside the selected topics',()=>{
+ const body='Lab is next Thursday. Fair is tomorrow.';
+ const entry=(wording,date)=>({label:'Event',date,time:null,timeZone:'America/Chicago',wording,boundary:'on'});
+ const v=passive({dates:[entry('next Thursday','2026-11-19'),entry('tomorrow','2026-11-06')]});v.evidence={messageId:'gmail1',quote:'Lab is next Thursday.'};
+ const notes=[];assert.deepEqual(validateExtraction(v,passivePayload(body),notes).details.dates.map(d=>d.date),['2026-11-12','2026-11-06']);
+ assert.deepEqual(notes,['The email says "next Thursday", which can mean either of two weeks. It was set to Thu, Nov 12, 2026. Check the date.']);
+ const outside=passive({dates:[entry('next Thursday','2026-11-19')]});outside.evidence=v.evidence;outside.topicRelevance={decision:'irrelevant',reason:'Outside selected topics.'};
+ const none=[];assert.equal(groundDetails(outside,passivePayload(body),none).details.dates[0].date,'2026-11-12');assert.deepEqual(none,[]);
+ // Two arguments still work.
+ assert.equal(groundDetails(passive({dates:[entry('next Thursday','2026-11-19')]}),passivePayload(body)).details.dates[0].date,'2026-11-12');
+});
+test('a few holiday phrases are counted by the calendar, with a note when the model differs',()=>{
+ const body='Hi all.\nPlease upload the slides by the Friday after Thanksgiving.',quote='the slides by the Friday after Thanksgiving';
+ assert.deepEqual(dated(body,due('by the Friday after Thanksgiving','2026-12-04'),quote),{date:'2026-11-27',notes:[
+  'The email says "by the Friday after Thanksgiving". That was read as Fri, Dec 4, 2026; by the calendar it is Fri, Nov 27, 2026. Check the date.']});
+ assert.deepEqual(dated(body,due('by the Friday after Thanksgiving','2026-11-27'),quote),{date:'2026-11-27',notes:[]});
+ assert.deepEqual(dated('Hi all.\nUpload the slides after Thanksgiving break.',due('Thanksgiving break','2026-11-30'),'the slides after Thanksgiving break'),{date:'2026-11-30',notes:[]});
+});
+test('extract puts a date note in the warnings and marks the result for review, and adds nothing when the dates agree',async()=>{
+ const input={contract:'gmail-v1',user:{email:'student@example.org',timeZone:'America/Chicago'},analysisTime:'2026-11-05T13:00:00Z',rules,message:{...message,body:dueBody},threadContext:[],
+  contextLimits:limits,semanticPreferences:{include:[],exclude:[]},existingTaskContext:[]};
+ const run=date=>{const value=output();value.taskChanges=[];value.tasks=[slides(due('by Friday at 5 PM',date,'17:00'))];
+  return extract(input,{settings:{contextLimits:{}},systemPrompt:'Unit test prompt',generate:async()=>({value,attempts:1})});};
+ const wrong=await run('2026-11-13');
+ assert.equal(wrong.result.tasks[0].deadline.date,'2026-11-06');assert.equal(wrong.needsReview,true);
+ assert.deepEqual(wrong.contextWarnings,['The email says "by Friday at 5 PM". That was read as Fri, Nov 13, 2026; counted from the day it was sent, it is Fri, Nov 6, 2026. Check the date.']);
+ assert.deepEqual(wrong.result.uncertainties,[]);
+ const right=await run('2026-11-06');
+ assert.deepEqual(right.contextWarnings,[]);assert.equal(right.needsReview,false);
 });

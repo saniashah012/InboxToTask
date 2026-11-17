@@ -1,13 +1,15 @@
 // Sania's designed dashboard, fed by saved records for a signed-in account.
 // Backend calls are the ones ManualWorkspace already uses; nothing here is simulated.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react"
 import inboxToTaskLogo from "./assets/inbox-to-task-logo.png"
 import { Icon, Modal } from "./designedUi"
 import { supabase } from "./supabase"
 import { googleConnectionStatus, loadStorageSnapshot, reviewStoredRecord, type Deadline, type ScanSettings, type Snapshot, type StoredRow, type TaskFields } from "./storageAdapter"
 import { isScanBusy, manualScan, manualScanStatus, ScanRequestError, resolveTaskChange, reviewTaskChange, scanStopMessage, type ScanStatus } from "./manualScanAdapter"
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
-import { loadTaskSourceLinks, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
+import { gmailConversationUrl, loadTaskSourceLinks, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
+import { dateChoicesFromNotes, sentDayHint, sentLabel, shortDateLabel } from "./reviewNotes"
+import { USER_ENTERED_WORDING } from "./passiveTask"
 import { loadRead, rememberPriorRead, restorePriorRead, saveRead } from "./readMarks"
 import CreateTaskFromEmail from "./CreateTaskFromEmail"
 import { changeKey, countAdded, NOTHING_ADDED, scanSummary, suggestionKey } from "./newItems"
@@ -37,7 +39,9 @@ type SourceView = { title: string; sender?: string | null; subject?: string | nu
   passive?: { sourceId: string; wasRead: boolean } }
 // adding: the editor was opened by Add task, for a suggestion that needs verification or
 // has no deadline. Saving it adds the task; reasons are what the scan asked the user to check.
-type Editing = { kind: "suggestion" | "task"; row: StoredRow; fields: TaskFields; adding?: boolean; reasons?: string[] }
+// context: the suggestion's email as already loaded, so the user can judge it without Gmail.
+type EmailContext = { sender: string | null; subject: string | null; sentAt: string | null; quote: string | null; messageId: string | null }
+type Editing = { kind: "suggestion" | "task"; row: StoredRow; fields: TaskFields; adding?: boolean; reasons?: string[]; context?: EmailContext }
 type Category = "suggestions" | "active" | "completed" | "dismissed"
 // A question shown after a task change when the task has a Google Calendar event.
 type CalendarFollowUp =
@@ -545,8 +549,11 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   // A task is never added to Active without a deadline, and a suggestion marked "Needs
   // verification" is never added unread: Add task opens the editor for these instead.
   const mustReview = (s: SuggestionItem) => !s.fields.deadline || Boolean(s.extraction?.needs_review)
+  const contextOf = (s: SuggestionItem): EmailContext => ({
+    sender: s.source?.sender ?? null, subject: s.source?.subject ?? null, sentAt: s.source?.sent_at ?? null, quote: s.quote, messageId: s.messageId,
+  })
   const reviewToAdd = (s: SuggestionItem) => setEditing({
-    kind: "suggestion", row: s.row, fields: s.fields, adding: true,
+    kind: "suggestion", row: s.row, fields: s.fields, adding: true, context: contextOf(s),
     reasons: Array.isArray(s.extraction?.warnings) ? s.extraction.warnings.filter((w: unknown): w is string => typeof w === "string") : [],
   })
   const move = (from: Category, row: StoredRow, to: Category, suggestionId: string) => {
@@ -873,7 +880,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                             onSource={() => { seen(); setSource(sourceForSuggestion(s, s.fields.action)) }}
                             primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
                               onClick={() => { seen(); if (mustReview(s)) reviewToAdd(s); else void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added.") }}>Add task</button>}
-                            menu={<><button onClick={() => { setMenuId(null); seen(); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
+                            menu={<><button onClick={() => { setMenuId(null); seen(); setEditing({ kind: "suggestion", row: s.row, fields: s.fields, context: contextOf(s) }) }}>Edit before adding</button>
                               {moveItems("suggestions", s.row, s.row.id, Boolean(s.quote), seen)}
                               <button className="danger-action" onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) }) }}>Dismiss suggestion</button></>}
                           />)
@@ -985,7 +992,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         email={{ subject: creating.subject ?? null, sentAt: creating.sentAt ?? null, summary: creating.summary ?? null, quote: creating.quote, extraction: creating.extraction }}
         onCancel={() => setCreating(null)}
         onSave={(fields) => saveCreatedTask(creating, fields)} />}
-      {editing && <EditFieldsModal editing={editing} busy={busy} onCancel={() => setEditing(null)}
+      {editing && <EditFieldsModal editing={editing} email={email} busy={busy} onCancel={() => setEditing(null)}
         onSave={(fields) => {
           const { kind, row } = editing, before = editing.fields.deadline
           if (editing.adding) {
@@ -1498,12 +1505,39 @@ function SourceModal({ source, email, links, onClose, onTurnIntoTask }: { source
   )
 }
 
-function EditFieldsModal({ editing, busy, onSave, onCancel }: { editing: Editing; busy: boolean; onSave: (fields: TaskFields) => void; onCancel: () => void }) {
+// "From the email" in the suggestion editors: sender, subject, sent time with its weekday,
+// the saved excerpt and the deadline's original wording. Text only; nothing is fetched.
+function EmailContextBlock({ context, wording, email }: { context: EmailContext; wording: string | null; email: string }) {
+  const id = useId()
+  return (
+    <div className="rd-email-context" role="group" aria-labelledby={`${id}-head`}>
+      <span id={`${id}-head`}>From the email</span>
+      <dl>
+        <div><dt>From</dt><dd>{context.sender ?? "Unavailable"}</dd></div>
+        <div><dt>Subject</dt><dd>{context.subject || "(no subject)"}</dd></div>
+        <div><dt>Sent</dt><dd>{sentLabel(context.sentAt, viewerZone) ?? "Unavailable"}</dd></div>
+        {wording && <div><dt>Date wording</dt><dd>“{wording}”</dd></div>}
+      </dl>
+      <span id={`${id}-quote`} className="rd-email-context-label">Saved excerpt</span>
+      {context.quote ? <blockquote aria-labelledby={`${id}-quote`}>{context.quote}</blockquote> : <p>The saved excerpt has expired.</p>}
+      {context.messageId && <a className="rd-quiet-link" href={gmailConversationUrl(email, context.messageId)} target="_blank" rel="noopener noreferrer">
+        Open in Gmail<span className="visually-hidden"> (opens in a new tab)</span></a>}
+    </div>
+  )
+}
+
+function EditFieldsModal({ editing, email, busy, onSave, onCancel }: { editing: Editing; email: string; busy: boolean; onSave: (fields: TaskFields) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(editing.fields))
   const [error, setError] = useState("")
   const set = (patch: Partial<Draft>) => { setDraft((d) => ({ ...d, ...patch })); setError("") }
   const adding = Boolean(editing.adding)
   const dateRequired = adding || editing.kind === "task"
+  const ids = useId()
+  // The email's own timing words; the fixed sentence for a typed date says nothing new.
+  const original = editing.fields.deadline?.wording
+  const wording = original && original !== USER_ENTERED_WORDING ? original : null
+  const choices = useMemo(() => (adding ? dateChoicesFromNotes(editing.reasons ?? []) : []), [adding, editing.reasons])
+  const hint = editing.context ? sentDayHint(wording, editing.context.sentAt, viewerZone) : null
   const submit = () => {
     if (!draft.action.trim()) return setError("Enter the task action.")
     // Nothing reaches Active tasks without a deadline.
@@ -1514,15 +1548,25 @@ function EditFieldsModal({ editing, busy, onSave, onCancel }: { editing: Editing
     onSave(fields)
   }
   return (
-    <Modal onClose={onCancel} title={adding ? "Review before adding" : editing.kind === "suggestion" ? "Edit suggestion" : "Edit task"}
+    <Modal className="rd-edit-modal" onClose={onCancel} title={adding ? "Review before adding" : editing.kind === "suggestion" ? "Edit suggestion" : "Edit task"}
       subtitle={adding ? "Check these values, then add the task. A task needs a due date." : undefined}>
       <form className="form-stack" onSubmit={(e) => { e.preventDefault(); submit() }}>
+        {editing.context && <EmailContextBlock context={editing.context} wording={wording} email={email} />}
         {adding && editing.reasons && editing.reasons.length > 0 && <div className="rd-review-reasons" role="group" aria-label="What to check">
           <span>What to check</span>
           <ul>{editing.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
         </div>}
+        {choices.length > 0 && <div className="rd-date-buttons" role="group" aria-labelledby={`${ids}-dates`}>
+          <span id={`${ids}-dates`}>Dates mentioned</span>
+          <div>{choices.map((c) => (
+            <button type="button" key={c.date} className="secondary-button" aria-pressed={draft.date === c.date} disabled={busy}
+              aria-label={`Use ${c.label} as the deadline date`} onClick={() => set({ date: c.date })}>Use {shortDateLabel(c.label)}</button>
+          ))}</div>
+        </div>}
         <label><span>Action</span><input value={draft.action} maxLength={350} disabled={busy} onChange={(e) => set({ action: e.target.value })} /></label>
-        <label><span>{dateRequired ? "Deadline date" : "Deadline date (optional)"}</span><input type="date" aria-required={dateRequired} value={draft.date} disabled={busy} onChange={(e) => set({ date: e.target.value })} /></label>
+        <label><span>{dateRequired ? "Deadline date" : "Deadline date (optional)"}</span><input type="date" aria-required={dateRequired} value={draft.date} disabled={busy}
+          aria-describedby={hint ? `${ids}-hint` : undefined} onChange={(e) => set({ date: e.target.value })} /></label>
+        {hint && <p className="form-hint" id={`${ids}-hint`}>{hint}</p>}
         <label><span>Time (optional; leave empty for date only)</span><input type="time" value={draft.time} disabled={busy || !draft.date} onChange={(e) => set({ time: e.target.value })} /></label>
         <label><span>Timing</span><select value={draft.boundary} disabled={busy || !draft.date} onChange={(e) => set({ boundary: e.target.value as Deadline["boundary"] })}>
           <option value="by">By</option><option value="before">Before</option><option value="on">On</option><option value="unspecified">Unspecified</option></select></label>

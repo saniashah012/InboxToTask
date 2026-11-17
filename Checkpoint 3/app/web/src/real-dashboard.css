@@ -35,6 +35,12 @@
 /* The email details above already end in a divider, so the history list adds none. */
 .rd-modal-body .manual-timeline { margin-top:0; padding-top:0; border-top:0; }
 .rd-modal-body .form-hint { margin:-6px 0 0; font-size:12px; }
+.rd-modal-body .form-hint.rd-delete-hint { margin:0; }
+/* "Delete from InboxToTask": destructive, so it sits apart on the left of the actions,
+   at the same size as the buttons beside it. */
+.modal-actions .danger-button { font-size:11px; }
+.modal-actions .rd-source-delete { margin-right:auto; }
+.modal-copy .notice.warning { margin:12px 0 0; }
 /* The Gmail button lines up with the dialog's left edge, not the indented entry text.
    It sits above the timeline's connecting line when there are several emails. */
 .rd-modal-body .manual-timeline li > p.gmail-open { position:relative; margin-left:-22px; }

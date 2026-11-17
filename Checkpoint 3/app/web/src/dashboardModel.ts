@@ -221,6 +221,43 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
   }
 }
 
+// When the Source email dialog offers "Delete from InboxToTask" (storage_action with
+// kind "source" and action "delete"). That action removes the email's summary, saved
+// excerpts, suggestions that are not tasks and waiting-for items, and InboxToTask never
+// checks the email again. It leaves any task made from the email in place, without its
+// email, so the control is offered only when no task (open, completed or cancelled)
+// was created or changed from this email. Tasks have to be moved back first. Judged
+// from what the dashboard loaded; the dashboard checks again on fresh records just
+// before deleting.
+// - "unavailable": not a Gmail email that is still stored (already deleted, or unknown).
+// - "task": a task was added from this email, or the email changed one.
+// - "links-unavailable": tasks exist but their source emails could not be loaded, so
+//   it cannot be confirmed that none comes from this email.
+export type SourceDeleteCheck = { allowed: true } | { allowed: false; reason: "unavailable" | "task" | "links-unavailable" }
+type LinkLike = Pick<SourceLink, "taskId" | "threadId" | "messageId"> & { earlierMessage?: boolean }
+
+export function sourceDeleteCheck(snapshot: Snapshot, links: LinkLike[] | null, sourceId: string | null | undefined): SourceDeleteCheck {
+  const rows = (key: string) => snapshot[key] ?? []
+  const source = sourceId ? rows("sources").find((s) => s.id === sourceId) : undefined
+  if (!source || source.namespace !== "gmail" || source.deleted_at) return { allowed: false, reason: "unavailable" }
+  const own = new Set(rows("extractions").filter((e) => e.source_id === sourceId).map((e) => e.id))
+  const fromThisEmail = new Set(rows("suggestions").filter((s) => own.has(s.extraction_id)).map((s) => s.id))
+  const live = rows("tasks").filter((t) => !t.deleted_at)
+  const liveIds = new Set(live.map((t) => t.id))
+  const task = live.some((t) => own.has(t.origin_extraction_id) || fromThisEmail.has(t.origin_suggestion_id))
+    || rows("suggestions").some((s) => own.has(s.extraction_id) && liveIds.has(s.approved_task_id))
+    || rows("changes").some((c) => own.has(c.extraction_id) && c.state === "approved" && liveIds.has(c.target_task_id))
+  if (task) return { allowed: false, reason: "task" }
+  if (!live.length) return { allowed: true }
+  if (links === null) return { allowed: false, reason: "links-unavailable" }
+  // Links outlive expired suggestions and approved changes. A link names the message
+  // its excerpt quotes, which can be an earlier message in the thread, so a link to an
+  // earlier message in this email's thread counts too.
+  const linked = links.some((l) => liveIds.has(l.taskId)
+    && (l.messageId === source.message_id || (Boolean(l.earlierMessage) && Boolean(source.thread_id) && l.threadId === source.thread_id)))
+  return linked ? { allowed: false, reason: "task" } : { allowed: true }
+}
+
 const dayMs = 86_400_000
 const utcDay = (date: string) => Date.parse(`${date}T00:00:00Z`)
 

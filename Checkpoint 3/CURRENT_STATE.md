@@ -316,6 +316,35 @@ and the settings database test were run once when the migration was written. **N
 anything in a browser (the dialog, the move to onboarding, the badge, Restore original); the new
 function through the HTTP API (`test:local`); hosted.
 
+**November 17, later: Delete from InboxToTask in the Source email dialog.** Same branch,
+`mzheng/passive-to-task`; web only, no new migration. For the study: an email a participant sends
+to the study account must be removed before the next participant, and leaving it in Dismissed
+would show it to them. The Source email dialog of a suggestion (also a dismissed one, a proposed
+change or a waiting-for item) and of a Passive email now has "Delete from InboxToTask", behind a
+confirmation that says what is removed (the email's suggestions, including dismissed ones, its
+summary, saved excerpt, sender and subject), that it cannot be undone, that InboxToTask will not
+check the email again, and that the email stays in Gmail. It calls the existing source delete
+(`storage_action` with kind `source`, action `delete`; no revision). It is not offered while a
+task (open, completed or cancelled) was added from the email or changed by it, because that
+action leaves such a task in place without its email; the dialog says to move the task back
+first. With tasks present and their source emails not loaded, it is not offered either. The rule
+is checked again on freshly loaded records just before deleting. No Calendar write is involved:
+Calendar records belong to tasks, and no task can come from a deletable email.
+`dashboardModel.ts` (`sourceDeleteCheck`), `RealDashboard.tsx`, `real-dashboard.css`,
+`tests/dashboard-model.test.mjs`.
+Verified offline: `npm test` 275 and 107, `test:calendar` 45, `tsc --noEmit`, the web build,
+`git diff --check`. **Not verified:** in a browser; hosted.
+This is the first option listed under "Open gap" in the next entry, which was written before it
+was built; the email still has to be deleted from the study account's Gmail by hand. Known
+limits: a task that was cancelled, or changed by the email, cannot be moved back, so its email
+cannot be deleted here; deleting an email also clears the saved excerpt of other suggestions in
+the same thread that quote it, which then show "Evidence expired".
+**Study documents reworded the same day** (`Checkpoint 4/CP4_PLAN.md`,
+`Checkpoint 4/docs/study_materials/task_script.md`): they no longer say results are frozen,
+that automatic scanning is off, that there is one standard setup, or that a reset script is
+used. Points not yet decided are marked "To be decided" in place. The issues named in the next
+entry are not reworded yet; drafts exist and are not posted.
+
 **November 17, study decisions and one open gap (docs only).** Same branch,
 `mzheng/passive-to-task`. No code, database or hosted change.
 - **Decisions by Matthew, November 17** (decided, not done):

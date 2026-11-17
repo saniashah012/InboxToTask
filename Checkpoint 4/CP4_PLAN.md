@@ -21,7 +21,7 @@ This was a proposal for the team to confirm; the decisions below now show what w
 | Artifact and deployment | 2.0 | Clean code, a working public URL, reproducible scripts, complete docs |
 | Presentation | 2.0 | Empirical takeaways, a demo and honest reflection |
 
-**Nine of the 13 points come from the evaluation and report, and features aren't graded directly.** So engineering is limited to what the study needs, what the artifact score needs, and what must be safe to deploy. If engineering runs late, we cut features, not the study; the study runs on frozen results either way (#67).
+**Nine of the 13 points come from the evaluation and report, and features aren't graded directly.** So engineering is limited to what the study needs, what the artifact score needs, and what must be safe to deploy. If engineering runs late, we cut features, not the study; the study runs on whatever is on the live site at the study freeze either way (#67).
 
 ## 2. Decisions (status as of November 12)
 
@@ -32,7 +32,7 @@ Each row says whether it is **decided**, **done** or still **open**, with the ev
 | D1 | Evaluation track | **Decided: Track A, plus a small ablation benchmark** (study sessions #69–#72, analysis #76–#79, ablations #75) | The rubric and slides expect qualitative depth and ablations. CP2 also committed us to comparing human-only, AI-only and combined workflows |
 | D2 | IRB and consent | **Decided: informal class study without IRB review, with a consent sheet** (#60; disclosed as a limitation in #83) | The study involves people, so consent and the limitation are stated plainly |
 | D3 | Google Calendar events | **Decided: required for CP4** (was: cut, keep ICS export) | Tracked in #44–#47 and #53; the work is on `main` since November 16 (#116), off by default; its migration and functions are on hosted since November 16, switched off, so the live site does not offer Calendar; and the go/no-go decision for the study is due noon Tuesday November 17. ICS export stays as the fallback |
-| D4 | Automatic scans | **Decided, partly built:** opt-in checks when the app opens and every minute while it's open (#108, #110, tracked in #50). Scanning with the app closed (#49) is still future work, after the study | Background access with the app closed still raises the consent and token questions, so the report must say plainly which part exists |
+| D4 | Automatic scans | **Decided, partly built:** opt-in checks when the app opens and every minute while it's open (#108, #110, tracked in #50); on during study sessions (decided November 17). Scanning with the app closed (#49) is still future work, after the study | Background access with the app closed still raises the consent and token questions, so the report must say plainly which part exists |
 | D5 | Dashboard topic filter (the prototype's School/Work/… tags) | **Done: the real dashboard has no topic filter**; its only tabs are Suggestions, Active, Completed and Dismissed | Real data has no topic category (see [Section 5](#5-workstream-b-connect-the-designed-dashboard)). Adding one changes the prompt and invalidates saved results |
 | D6 | Open-source license | **Open: proposed MIT, unless the team objects** (no `LICENSE` in the repo yet) | The repo is public but has no license, so it isn't legally open source yet. All four authors must agree |
 | D7 | App location | **Decided in practice: kept in `Checkpoint 3/app`, mapped in the [CP4 index](README.md)** | Moving it would break CI, Vercel's root setting and doc links, and conflict with open branches, for little gain |
@@ -89,7 +89,7 @@ This is the design chosen under D1 (Track A plus an ablation benchmark); the stu
 | --- | --- |
 | Human-only | Participant works through the fictional inbox in Gmail and writes a task list |
 | Combined | Participant reviews InboxToTask suggestions for the other inbox |
-| AI-only | No participant: the frozen model's unreviewed output is scored against the same gold labels |
+| AI-only | No participant: the model's unreviewed output is scored against the same gold labels. To be decided: which output the AI-only baseline scores, now that results are not frozen (#76) |
 
 **Materials**
 
@@ -99,10 +99,11 @@ This is the design chosen under D1 (Track A plus an ablation benchmark); the stu
 
 **Keeping it stable and private**
 
-- **Fictional mail only.** Participants never connect their own Gmail (decided in #94). An optional, unscored exploration after the scored tasks lets them *send* a made-up email to the study inbox; it is logged and graded separately (#58, #60, #101).
-- **One standard setup for scored tasks**, given in the task script, with automatic scanning off; participants may change settings during exploration (#59).
-- **Same suggestions for everyone.** Generate results once with the frozen model and load them into study accounts, so differences reflect people and not model randomness. Report this clearly. Measure live scan latency separately.
-- Sessions run in a facilitator-controlled browser signed into dedicated fictional accounts (#55, #56), and a reset returns the accounts to the frozen results between sessions (#101).
+- **Fictional mail only.** Participants never connect their own Gmail (decided in #94). An optional, unscored exploration after the scored tasks lets them *send* a made-up email to the study inbox; it is logged and graded separately (#58, #60, #101). To be decided: whether participants may send from their own inbox, and how the records that email creates are removed.
+- **Each participant runs setup** on the study account. Settings › Connections › **Clear settings and run setup again** clears the saved scan settings and sends the account to setup; saved records are kept. It comes with PR #124 (#123), which ships before the study, so its hosted steps come before any study scan. To be decided: whether every participant enters the same scripted setup values from the task script or chooses their own (#59). Participants may change settings during exploration.
+- **Automatic checks are on during sessions** (decided November 17), and results are not frozen. After setup is saved, the first check covers the past 7 days. A saved result is reused with no model call only when the topics, earlier-email limits and the account's accepted tasks in that thread match the earlier scan; otherwise the email is analysed again, so suggestions can differ between participants. Email older than 7 days is not read again. Report this clearly. Measure live scan latency separately.
+- **Daily allowance.** Each account has 20 model requests a day, and a full re-analysis of an inbox of about 24 emails exceeds it. To be decided: whether the allowance is raised for the study accounts.
+- Sessions run in a facilitator-controlled browser signed into dedicated fictional accounts (#55, #56). There is no reset script: between sessions the runner puts the account back by hand, moving tasks back and deleting Calendar events (#101). Tasks go back with Move back, not Delete, because deleting a task permanently blocks that email from being checked again. "New" and "Unread" marks live in the browser.
 - Run a pilot session first (#68, November 18), and don't include it in the results.
 
 **Metrics**
@@ -261,7 +262,7 @@ Hosted Gmail went live on November 9 and was updated November 12, each with Matt
 
 Dates live in the CP4 working agreement (#39) and on each CP4 issue; they are not copied here, so they can't go stale.
 
-The earlier fallback (run the study on `ManualWorkspace` if the dashboard wasn't ready by November 15) is no longer needed: the designed dashboard runs on real data. If hosted Gmail misbehaves, the study still runs on frozen results (#67).
+The earlier fallback (run the study on `ManualWorkspace` if the dashboard wasn't ready by November 15) is no longer needed: the designed dashboard runs on real data. The study runs on live scans with automatic checks on, so there are no frozen results to fall back on. To be decided: what the study does if hosted Gmail misbehaves (#67).
 
 ### Owners
 

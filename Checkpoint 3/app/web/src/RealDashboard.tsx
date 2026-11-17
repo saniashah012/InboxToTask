@@ -22,8 +22,8 @@ import { deadlineLabel, deadlineMoved, draftFrom as calendarDraftFrom, eventSumm
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
   autoNextCheck, quietStop, skippedByCategories, TRANSIENT_STOPS, TROUBLE_AFTER, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
-  AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState, suggestionEdited,
-  type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
+  AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState, sourceDeleteCheck, suggestionEdited,
+  type ChangeItem, type ScanPanelState, type SourceDeleteCheck, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
 import "./storage.css"
 import "./manual-workspace.css"
@@ -35,8 +35,10 @@ type SettingsTarget = "sources" | "processing" | "connections" | "retention"
 type Failure = { message: string }
 // passive: opened from Passive communication, with the email's read state from before
 // this opening (View details marks it read), so "Turn into task" can restore it later.
+// sourceId: the stored email, set for a suggestion's or a Passive email's view so the
+// dialog can offer "Delete from InboxToTask". Task views leave it unset.
 type SourceView = { title: string; sender?: string | null; subject?: string | null; sentAt?: string | null; quote: string | null; messageId: string | null; taskId?: string; extraction?: StoredRow; summary?: string
-  passive?: { sourceId: string; wasRead: boolean } }
+  passive?: { sourceId: string; wasRead: boolean }; sourceId?: string }
 // adding: the editor was opened by Add task, for a suggestion that needs verification or
 // has no deadline. Saving it adds the task; reasons are what the scan asked the user to check.
 // context: the suggestion's email as already loaded, so the user can judge it without Gmail.
@@ -172,6 +174,9 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [menuId, setMenuId] = useState<string | null>(null)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [source, setSource] = useState<SourceView | null>(null)
+  // "Delete from InboxToTask": the email whose confirmation is open, and why it failed.
+  const [deleting, setDeleting] = useState<SourceView | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Editing | null>(null)
   const [changeId, setChangeId] = useState<string | null>(null)
   const [exportTask, setExportTask] = useState<TaskItem | null>(null)
@@ -392,6 +397,42 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     }
   }
 
+  // Deletes one stored email from InboxToTask (storage_action source/delete). The rule is
+  // checked again on freshly loaded records first, so a task added from this email in
+  // another tab since the dialog opened stops the delete. Errors stay in the dialog.
+  async function deleteSourceEmail(view: SourceView) {
+    if (!view.sourceId) return
+    const current = epoch.current, sourceId = view.sourceId
+    setBusy(true); setDeleteError(null); setFailure(null); setNotice(""); setMenuId(null)
+    try {
+      const fresh = await loadStorageSnapshot(supabase)
+      const freshLinks = await loadTaskSourceLinks(fresh.tasks.map((t) => t.id)).catch(() => null)
+      if (current !== epoch.current) return
+      const check = sourceDeleteCheck(fresh, freshLinks, sourceId)
+      if (!check.allowed) {
+        if (check.reason === "unavailable") {
+          setDeleting(null); setSource(null); setNotice("This email was already deleted from InboxToTask.")
+        } else setDeleteError(sourceDeleteHint[check.reason])
+        await reload()
+        return
+      }
+      // The source action takes no revision; a missing or already deleted email is refused.
+      await reviewStoredRecord("source", sourceId, "delete", 0)
+      if (current !== epoch.current) return
+      setDeleting(null); setSource(null)
+      setNotice("Email deleted from InboxToTask. It is still in Gmail.")
+      await reload()
+      announceChange()
+    } catch {
+      if (current === epoch.current) {
+        setDeleteError(sourceDeleteFailed)
+        await reload(); announceChange()
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runScan(mode: "initial" | "more") {
     const result = await manualScan(mode)
     if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
@@ -503,6 +544,7 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
 
   const sourceForSuggestion = (s: SuggestionItem | ChangeItem | WaitingItem, title: string): SourceView => ({
     title, sender: s.source?.sender, subject: s.source?.subject, sentAt: s.source?.sent_at, quote: s.quote, messageId: s.messageId, extraction: s.extraction,
+    sourceId: s.source?.id,
   })
   const sourceForTask = (t: TaskItem): SourceView => {
     // A task made from a Passive email has no suggestion-based link: show its origin email.
@@ -986,8 +1028,14 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         )}
       </main>
 
-      {source && <SourceModal source={source} email={email} links={links} onClose={() => setSource(null)}
-        onTurnIntoTask={source.passive && source.extraction ? () => { setCreating(source); setSource(null) } : undefined} />}
+      {source && !deleting && <SourceModal source={source} email={email} links={links} onClose={() => setSource(null)}
+        onTurnIntoTask={source.passive && source.extraction ? () => { setCreating(source); setSource(null) } : undefined}
+        deleteCheck={source.sourceId ? sourceDeleteCheck(snapshot, links, source.sourceId) : undefined}
+        onDelete={() => { setDeleteError(null); setDeleting(source) }} />}
+      {deleting && <DeleteSourceModal source={deleting} busy={busy} error={deleteError}
+        onCancel={() => { if (!busy) { setDeleting(null); setDeleteError(null) } }}
+        onReload={() => { setDeleteError(null); void reload() }}
+        onConfirm={() => void deleteSourceEmail(deleting)} />}
       {creating?.extraction && <CreateTaskFromEmail key={creating.extraction.id} timeZone={viewerZone} busy={busy}
         gmailUrl={creating.messageId ? gmailConversationUrl(email, creating.messageId) : undefined}
         email={{ subject: creating.subject ?? null, sentAt: creating.sentAt ?? null, summary: creating.summary ?? null, quote: creating.quote, extraction: creating.extraction }}
@@ -1259,7 +1307,7 @@ function PassiveSection({ userId, readVersion, items, sources, evidence, onSourc
             </div>
             <button className="email-link" onClick={() => {
               onSource({ title, sender: src?.sender, subject: src?.subject, sentAt: src?.sent_at, quote: quote?.quote ?? null, messageId: quote?.message_id ?? src?.message_id ?? null, extraction: e, summary: e.summary,
-                passive: { sourceId: e.source_id, wasRead: isRead } })
+                passive: { sourceId: e.source_id, wasRead: isRead }, sourceId: e.source_id })
               if (!isRead) mark(e.source_id, true)
             }}>View details</button>
             <button className="secondary-button row-button" onClick={() => mark(e.source_id, !isRead)}>{isRead ? "Mark as unread" : "Mark as read"}</button>
@@ -1475,8 +1523,16 @@ function WaitingSection({ items, openCount, busy, today, onSource, onToggle, onR
   )
 }
 
+// Why "Delete from InboxToTask" is not offered, or was stopped. Fixed text only.
+const sourceDeleteFailed = "The email was not deleted. Reload saved results and try again."
+const sourceDeleteHint: Record<"task" | "links-unavailable", string> = {
+  task: "A task was added from this email, or the email changed one. To delete this email from InboxToTask, first move that task out of Active or Completed (for example back to Suggestions, Dismissed or Passive communication).",
+  "links-unavailable": "InboxToTask could not check whether a task comes from this email, because source emails did not load. Reload saved results, then try again.",
+}
+
 // onTurnIntoTask: Passive communication items only; opens the Create task form.
-function SourceModal({ source, email, links, onClose, onTurnIntoTask }: { source: SourceView; email: string; links: TaskSourceLink[] | null; onClose: () => void; onTurnIntoTask?: () => void }) {
+// deleteCheck: set for a suggestion's or a Passive email's view; onDelete opens the confirmation.
+function SourceModal({ source, email, links, onClose, onTurnIntoTask, deleteCheck, onDelete }: { source: SourceView; email: string; links: TaskSourceLink[] | null; onClose: () => void; onTurnIntoTask?: () => void; deleteCheck?: SourceDeleteCheck; onDelete?: () => void }) {
   // Tasks list their linked emails; any other item shows its one email in the same layout.
   const own = source.taskId ? (links ? links.filter((l) => l.taskId === source.taskId) : null)
     : [{ taskId: "", role: "source" as const, threadId: "", messageId: source.messageId, earlierMessage: false, sender: source.sender ?? null, subject: source.subject ?? null, sentAt: source.sentAt ?? null, quote: source.quote }]
@@ -1501,10 +1557,36 @@ function SourceModal({ source, email, links, onClose, onTurnIntoTask }: { source
         <Embedded><TaskSourceEmails email={email} links={own} /></Embedded>
         {source.extraction && <Embedded><ExtractionReview extraction={source.extraction} /></Embedded>}
         <p className="form-hint">InboxToTask keeps only a short excerpt. Gmail opens the whole conversation, which can include messages your rules excluded.</p>
+        {deleteCheck && !deleteCheck.allowed && deleteCheck.reason !== "unavailable" && <p className="form-hint rd-delete-hint">{sourceDeleteHint[deleteCheck.reason]}</p>}
       </div>
       <div className="modal-actions">
+        {deleteCheck?.allowed && onDelete && <button className="danger-button rd-source-delete" onClick={onDelete} type="button">Delete from InboxToTask</button>}
         {onTurnIntoTask && <button className="secondary-button" onClick={onTurnIntoTask}>Turn into task</button>}
         <button className="primary-button" onClick={onClose}>Close</button>
+      </div>
+    </Modal>
+  )
+}
+
+// Confirms "Delete from InboxToTask". It removes stored records only; nothing in Gmail
+// or Google Calendar changes, and it is never offered while a task comes from the email.
+function DeleteSourceModal({ source, busy, error, onCancel, onConfirm, onReload }: {
+  source: SourceView; busy: boolean; error: string | null; onCancel: () => void; onConfirm: () => void; onReload: () => void
+}) {
+  return (
+    <Modal onClose={onCancel} title="Delete this email from InboxToTask?">
+      <div className="modal-copy">
+        <p className="rd-followup-task">{source.subject || "(no subject)"}{source.sender ? ` · ${source.sender}` : ""}</p>
+        <p><strong>Removed from InboxToTask:</strong> this email's suggestions (including dismissed ones), its summary and its saved excerpt, along with its sender and subject.</p>
+        <p>This cannot be undone. InboxToTask will not check this email again, even if it is still in your inbox.</p>
+        <p>The email itself stays in Gmail. Nothing in Gmail or Google Calendar is changed.</p>
+        {busy && <p role="status">Deleting…</p>}
+        {error && <div className="notice warning" role="alert"><span>{error}</span>
+          <button className="text-link" disabled={busy} onClick={onReload} type="button">Reload saved results</button></div>}
+      </div>
+      <div className="modal-actions">
+        <button className="secondary-button" disabled={busy} onClick={onCancel} type="button">Cancel</button>
+        <button className="danger-button rd-source-delete-confirm" disabled={busy || Boolean(error && error !== sourceDeleteFailed)} onClick={onConfirm} type="button">{busy ? "Deleting…" : "Delete from InboxToTask"}</button>
       </div>
     </Modal>
   )

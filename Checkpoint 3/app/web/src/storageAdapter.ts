@@ -17,6 +17,9 @@ export type ScanSettings = {
   // Keep scanning while the app is open until no backlog remains. Saved on its own
   // (saveAutoScan); scan_settings_save ignores it.
   auto_scan?: boolean
+  // Set by restartScanSetup (scan_settings_restart): the settings were cleared and
+  // the account goes through onboarding again. A save clears it.
+  setup_pending?: boolean
 }
 export async function loadScanSettings(): Promise<ScanSettings> {
   if (!supabase) throw new Error("Account connection is not configured.")
@@ -42,12 +45,26 @@ export async function saveAutoScan(enabled: boolean): Promise<ScanSettings> {
   if (error) throw new Error("The automatic scanning choice was not saved. Retry, or reload saved settings.")
   return data
 }
+// Clears saved scan settings back to a new account's and marks setup as pending.
+// Tasks, suggestions, Passive emails, Calendar records and the Google connection
+// are not touched. Needs the revision the screen shows, like a save.
+export async function restartScanSetup(revision: number): Promise<ScanSettings> {
+  if (!supabase) throw new Error("Account connection is not configured.")
+  const { data, error } = await supabase.rpc("scan_settings_restart", { p_revision: revision })
+  if (error) {
+    const stale = error.code === "PT409"
+    throw new ScanSettingsSaveError(stale, stale
+      ? "Settings changed in another window. Reload saved settings, then clear them again."
+      : "Settings could not be cleared. Check your connection and retry.")
+  }
+  return data
+}
 // Fixed text only, so screens may show the message as written.
 export class ScanSettingsSaveError extends Error {
-  constructor(readonly stale: boolean) {
-    super(stale
+  constructor(readonly stale: boolean, message?: string) {
+    super(message ?? (stale
       ? "Settings changed in another window. Reload saved settings before saving again."
-      : "Settings were not saved. Check addresses, domains, list sizes, and context limits, then retry.")
+      : "Settings were not saved. Check addresses, domains, list sizes, and context limits, then retry."))
   }
 }
 

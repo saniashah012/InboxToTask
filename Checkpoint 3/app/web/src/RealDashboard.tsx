@@ -22,7 +22,7 @@ import { deadlineLabel, deadlineMoved, draftFrom as calendarDraftFrom, eventSumm
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
   autoNextCheck, quietStop, skippedByCategories, TRANSIENT_STOPS, TROUBLE_AFTER, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
-  AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
+  AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState, suggestionEdited,
   type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
 import "./storage.css"
@@ -994,6 +994,10 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         onCancel={() => setCreating(null)}
         onSave={(fields) => saveCreatedTask(creating, fields)} />}
       {editing && <EditFieldsModal editing={editing} email={email} busy={busy} onCancel={() => setEditing(null)}
+        // Put back the values the scan found. Saved as the review values, which then
+        // match the original, so the card shows no "Edited by you" badge.
+        onRestore={() => void perform(() => reviewStoredRecord("suggestion", editing.row.id, "edit", editing.row.revision, editing.row.fields),
+          "The suggestion's original values were restored. It still needs you to add it.", () => setEditing(null))}
         onSave={(fields) => {
           const { kind, row } = editing, before = editing.fields.deadline
           if (editing.adding) {
@@ -1527,11 +1531,14 @@ function EmailContextBlock({ context, wording, email }: { context: EmailContext;
   )
 }
 
-function EditFieldsModal({ editing, email, busy, onSave, onCancel }: { editing: Editing; email: string; busy: boolean; onSave: (fields: TaskFields) => void; onCancel: () => void }) {
+function EditFieldsModal({ editing, email, busy, onSave, onRestore, onCancel }: { editing: Editing; email: string; busy: boolean; onSave: (fields: TaskFields) => void; onRestore: () => void; onCancel: () => void }) {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(editing.fields))
   const [error, setError] = useState("")
   const set = (patch: Partial<Draft>) => { setDraft((d) => ({ ...d, ...patch })); setError("") }
   const adding = Boolean(editing.adding)
+  // Only a pending suggestion's own editor offers this, and only after a real edit.
+  // "Review before adding" saves its values with the approval, so it has nothing to restore.
+  const restorable = editing.kind === "suggestion" && !adding && suggestionEdited(editing.row)
   const dateRequired = adding || editing.kind === "task"
   const ids = useId()
   // The email's own timing words; the fixed sentence for a typed date says nothing new.
@@ -1577,6 +1584,7 @@ function EditFieldsModal({ editing, email, busy, onSave, onCancel }: { editing: 
         {editing.kind === "suggestion" && !adding && <p className="form-hint">The original suggestion is kept. Your edits are saved separately and used when you add the task.</p>}
         {error && <p className="inline-validation" role="alert">{error}</p>}
         <div className="modal-actions">
+          {restorable && <button type="button" className="secondary-button" disabled={busy} onClick={onRestore}>Restore original</button>}
           <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
           <button type="submit" className="primary-button" disabled={busy}>{busy ? "Saving…" : adding ? "Add task" : "Save changes"}</button>
         </div>

@@ -30,7 +30,9 @@ Review mutations require a nonnegative revision; stale revisions fail. Approval 
 ## Saved scanning permission
 
 Owner-readable `scan_settings` are saved only through revision-checked
-`scan_settings_get` / `scan_settings_save`. Exact sender/domain inclusions combine
+`scan_settings_get` / `scan_settings_save`; `scan_settings_restart` clears them to a
+new account's and sets `setup_pending` until the next save, without touching saved
+records ([migration](migrations/20261117010000_restart_scan_setup.sql)). Exact sender/domain inclusions combine
 with OR; source exclusions and literal case-insensitive subject exclusions win.
 Domains do not include subdomains. Empty source inclusions permit nothing unless a
 topic to check is saved ([migration](migrations/20261112000000_topics_without_senders.sql)):

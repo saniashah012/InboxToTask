@@ -285,6 +285,37 @@ clears the choice), location and link in Description, the required due date, Vie
 Active, scrolls to and focuses the card), a save that fails (form and entries kept, row stays
 in Passive), and the Create task form at phone width.
 
+**November 17, later: run setup again from empty fields, and an honest "Edited by you".** Same
+branch, `mzheng/passive-to-task`. For the user study (Matthew's decision, November 17): the
+study does not use a reset script; the runner puts the account back by hand and each participant
+enters the setup fields themselves. Local only: migration `20261117010000_restart_scan_setup` is
+applied to the local database, not to hosted, and it must follow `20261117000000` there.
+- **Clear settings and run setup again** (Settings › Connections, behind a confirmation):
+  `scan_settings_restart(p_revision)` puts the saved scan settings back to a new account's
+  (no senders, topics, consent or automatic checks; paused) and sets `scan_settings.setup_pending`,
+  which routes the account to onboarding until the next save (`needsSetup` in `scanSetup.ts`).
+  The revision still goes up and in-flight work is fenced as on a save, so nothing can be scanned
+  until setup is saved. Tasks, suggestions, Passive emails, Calendar records and the Google
+  connection are not touched. `RealSettingsScreen.tsx`, `App.tsx`, `useSavedScanSettings.ts`,
+  `storageAdapter.ts`, `supabase.ts`.
+- **What this does not do:** it does not undo what a participant did to records (the runner moves
+  those back by hand), and it does not freeze results. After setup is saved again the next check
+  covers the past 7 days; where the topics, earlier-email limits or the account's accepted tasks
+  differ from the earlier scan, an email is analysed again and its newest result is what the
+  dashboard shows. Email older than 7 days is not looked at again.
+- **"Edited by you"** (`dashboardModel.ts`, also wrong on `main`): the badge showed whenever a
+  suggestion had saved review values, which adding a task and moving it back to Suggestions
+  always writes. It now shows only when those values differ from what the scan found
+  (`suggestionEdited`, `sameTaskFields`; key order ignored, every deadline field counts).
+- **Restore original** in Edit suggestion (`RealDashboard.tsx`), only on a pending suggestion
+  with a real edit: saves the scan's values back through the existing edit action, which also
+  discards a due date typed in Review before adding.
+Verified offline, on the combined tree: `npm test` 275 and 102, `test:calendar` 45, `tsc
+--noEmit`, the web build, `git diff --check`; the database tests (`supabase test db`, 99 pass)
+and the settings database test were run once when the migration was written. **Not verified:**
+anything in a browser (the dialog, the move to onboarding, the badge, Restore original); the new
+function through the HTTP API (`test:local`); hosted.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

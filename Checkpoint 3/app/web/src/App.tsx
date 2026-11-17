@@ -188,7 +188,7 @@ function App() {
             // save means this account now has saved settings.
             onReload: () => show({ kind: "setup" }, true),
             leaveLabel:
-              settings.revision === 0
+              route === "onboarding"
                 ? "Skip setup for now"
                 : "Back to dashboard without saving",
             onLeave: () => show({ kind: "workspace", notice: "" }),
@@ -209,6 +209,9 @@ function App() {
           onSaveAutoScan={saved.saveAuto}
           onReload={saved.reload}
           onRunSetup={() => show({ kind: "setup" }, true)}
+          onRestartSetup={saved.restart}
+          // The cleared settings are already stored by the hook; onboarding opens on them.
+          onRestarted={() => show({ kind: "setup" })}
           onBack={() => show({ kind: "workspace", notice: "" })}
           onSaved={(notice) => show({ kind: "workspace", notice })}
         />

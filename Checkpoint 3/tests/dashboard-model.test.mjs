@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AUTO_CHECK_INTERVAL_MS, MAX_RETRY_MS, quietStop, skippedByCategories, TRANSIENT_RETRY_MS, transientRetryDelay, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
+  AUTO_CHECK_INTERVAL_MS, MAX_RETRY_MS, quietStop, skippedByCategories, TRANSIENT_RETRY_MS, transientRetryDelay, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, sameTaskFields, scanPanelState,
 } from '../app/web/src/dashboardModel.ts';
 
 const NOW = new Date('2026-11-09T15:00:00Z');
@@ -83,6 +83,34 @@ test('suggestions show the user edit, keep evidence state and sort by deadline',
   assert.equal(soon.messageId, 'm1', 'falls back to the source message for the Gmail link');
   assert.equal(late.quote, 'Submit by Friday.');
   assert.deepEqual(late.sibling, { index: 1, of: 2 });
+});
+
+test('a suggestion is edited only when its review values differ from the scan', () => {
+  const scan = { action: 'Submit lab', requirements: ['Report', 'Data'], condition: null, deadline: due('2026-11-20', '17:00') };
+  const reordered = { deadline: { boundary: 'by', wording: 'by 2026-11-20', timeZone: 'America/Chicago', time: '17:00', date: '2026-11-20' }, condition: null, requirements: ['Report', 'Data'], action: 'Submit lab' };
+  const edited = (review) => {
+    const s = snapshot();
+    s.suggestions = [{ id: 's-x', extraction_id: 'ex-1', state: 'pending', revision: 2, evidence_id: 'ev-1', fields: scan, ...(review === undefined ? {} : { review_fields: review }), expires_at: future }];
+    return buildDashboardModel(s, links, NOW).suggestions[0].edited;
+  };
+  assert.equal(edited(undefined), false, 'no review values');
+  assert.equal(edited(null), false, 'review values cleared');
+  assert.equal(edited(structuredClone(scan)), false, 'approved or moved back untouched');
+  assert.equal(edited(reordered), false, 'saved JSON in a different key order');
+  assert.equal(edited({ ...scan, deadline: { ...scan.deadline, date: '2026-11-21', wording: 'Entered by you after reading the source email.' } }), true, 'changed deadline');
+  assert.equal(edited({ ...scan, deadline: null }), true, 'removed deadline');
+  assert.equal(edited({ ...scan, action: 'Submit lab report' }), true, 'changed action');
+  assert.equal(edited({ ...scan, requirements: ['Report'] }), true, 'removed requirement');
+  assert.equal(edited({ ...scan, requirements: ['Data', 'Report'] }), true, 'reordered requirements');
+  assert.equal(edited({ ...scan, condition: 'If the lab runs' }), true, 'added condition');
+});
+
+test('sameTaskFields treats a missing key as null and compares nested values', () => {
+  assert.equal(sameTaskFields({ action: 'A', requirements: [], deadline: null }, { action: 'A', requirements: [], condition: null, deadline: null }), true);
+  assert.equal(sameTaskFields({ action: 'A', condition: undefined }, { action: 'A', condition: null }), true);
+  assert.equal(sameTaskFields({ action: 'A', requirements: [] }, { action: 'A', requirements: null }), false, 'an empty list is not null');
+  assert.equal(sameTaskFields(fields('A', due('2026-11-20')), fields('A', due('2026-11-20', '09:00'))), false);
+  assert.equal(sameTaskFields(fields('A', due('2026-11-20')), fields('A', { ...due('2026-11-20'), timeZone: 'America/New_York' })), false);
 });
 
 test('dismissed suggestions are restorable until they expire', () => {

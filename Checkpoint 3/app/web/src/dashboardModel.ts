@@ -95,6 +95,29 @@ export function deadlineSortKey(deadline: Deadline | null | undefined): string {
   return `${deadline.date}T${deadline.time?.slice(0, 5) ?? "99:99"}`
 }
 
+// Whether two task-field documents say the same thing. Saved JSON does not keep key
+// order, so objects compare key by key; a missing key counts as null (the database
+// only accepts all four keys, and all five deadline keys, so this is a fallback).
+// Arrays keep their order: requirements are a list the user can reorder. Strings
+// compare exactly; the editor trims before saving. Every deadline key counts,
+// including wording and timeZone, because a typed date replaces the email's wording.
+export function sameTaskFields(a: unknown, b: unknown): boolean {
+  if (a === undefined) a = null
+  if (b === undefined) b = null
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return a === b
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    return a.every((v, i) => sameTaskFields(v, b[i]))
+  }
+  const x = a as Record<string, unknown>, y = b as Record<string, unknown>
+  return [...new Set([...Object.keys(x), ...Object.keys(y)])].every((k) => sameTaskFields(x[k], y[k]))
+}
+
+// A suggestion counts as edited only when its saved review values differ from what the
+// scan found. Approving, or moving a task back to Suggestions, also saves review values
+// even when nothing was changed.
+export const suggestionEdited = (row: StoredRow) => row.review_fields != null && !sameTaskFields(row.review_fields, row.fields)
+
 export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | null, now = new Date()): DashboardModel {
   const nowMs = now.getTime()
   const rows = (key: string) => snapshot[key] ?? []
@@ -122,7 +145,7 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
   const suggestion = (row: StoredRow): SuggestionItem => {
     const group = siblingIds.get(row.extraction_id) ?? []
     return {
-      row, fields: row.review_fields ?? row.fields, edited: Boolean(row.review_fields),
+      row, fields: row.review_fields ?? row.fields, edited: suggestionEdited(row),
       ...located(row),
       sibling: row.state === "pending" && group.length > 1 ? { index: group.indexOf(row.id) + 1, of: group.length } : null,
     }

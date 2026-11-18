@@ -514,6 +514,22 @@ check. The production web build is still `main` until PR #124 merges. Not yet do
 approval: the merge (not during the freeze from Thursday November 19, night; PR #124 has no
 review yet) and the signed-in live check.
 
+**November 18, evening: "reimbursement" added to the Financial starter words (branch
+`mzheng/passive-to-task`, PR #124).** Requested by Matthew so the study inboxes' reimbursement
+emails (A12, B12) are skipped when Financial is a skipped topic; before this, only A11 and B11
+matched ("financial aid"). `reimbursement` and `reimbursements` were added to
+`STARTER_BLOCKED_WORDS.financial` in `app/pipeline/private-topics.mjs`, to
+`starterBlockedWords.financial` in `app/web/src/filterPresets.ts`, and to
+`private.starter_blocked_words` in the new migration
+`20261118000000_financial_reimbursement_word.sql` (same function as `20261109200000` apart from the
+two words). Only a later selection of Financial picks up the words; a list already saved keeps its
+own. Verified offline: `tests/private-topics.test.mjs` and `tests/scan-settings.test.mjs` (32 pass;
+the latter applies every migration in PGlite and compares the SQL list with the code list) and
+`tests/onboarding-settings.test.mjs` (27 pass); run against the inbox packets on `main`, the
+Financial words now match A11, A12, B11 and B12 and no other study email. Not on hosted: the
+migration, the `gmail_scan`/`analysis_email` redeploy and the web build (with PR #124's merge) each
+still need approval.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

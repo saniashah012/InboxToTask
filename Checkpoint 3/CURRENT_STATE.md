@@ -530,6 +530,15 @@ Financial words now match A11, A12, B11 and B12 and no other study email. Not on
 migration, the `gmail_scan`/`analysis_email` redeploy and the web build (with PR #124's merge) each
 still need approval.
 
+**November 18, 5:00 PM CST: hosted migration dry run for `20261118000000` — passed.** Approved by
+Matthew ("Yes, run them"; read-only commands only). Branch `mzheng/passive-to-task` at `bacce71`.
+Nothing on hosted was changed. From `Checkpoint 3/app`: `node_modules/.bin/supabase migration list
+--remote` shows 35 migrations, 34 on both sides and only `20261118000000` local-only;
+`node_modules/.bin/supabase db push --dry-run --remote` printed "Would push these migrations:
+20261118000000_financial_reimbursement_word.sql", with no seeds or roles. Applying it, then
+`supabase:prepare` and the redeploy of `gmail_scan` and `analysis_email` (they bundle
+`private-topics.mjs`), each need their own approval.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

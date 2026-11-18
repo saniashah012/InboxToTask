@@ -550,6 +550,19 @@ that migration; `node_modules/.bin/supabase db push --remote --yes` printed "App
 keep their words. Not yet done, needing its own approval: `supabase:prepare` and the redeploy of
 `gmail_scan` and `analysis_email`, which still run the backend word list without the new words.
 
+**November 18, 5:03 PM CST: `gmail_scan` and `analysis_email` redeployed with the new Financial
+words.** Approved by Matthew ("Yes, redeploy both"). Branch `mzheng/passive-to-task`, local
+`0bcd805` (no code change since `bacce71`; the later commits are records). From `Checkpoint 3/app`:
+`npm.cmd run supabase:prepare` (no tracked file changed; every bundled pipeline file matches its
+source, and the bundled `private-topics.mjs` has "reimbursement" and "reimbursements"); `deno check`
+of both functions passed; `node_modules/.bin/supabase functions deploy gmail_scan analysis_email
+--use-api --yes` ("Deployed Functions.", exit 0). `functions list`: `gmail_scan` v7 → v8 (JWT check
+off), `analysis_email` v12 → v13 (JWT check on), both ACTIVE, updated 17:03 CST; `google_connection`
+v4, `google_callback` v4 and `calendar_event` v2 unchanged. Neither function was invoked and no scan
+was started. Hosted now matches `bacce71` for migrations and these two functions; the production web
+build is still `main` until PR #124 merges (needs approval, not during the freeze from Thursday
+November 19, night).
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

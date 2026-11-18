@@ -53,6 +53,7 @@ type Database = {
       scan_settings_get: { Args: Record<string, never>; Returns: any }
       scan_settings_save: { Args: Record<string, any>; Returns: any }
       scan_auto_scan_save: { Args: { p_enabled: boolean }; Returns: any }
+      scan_settings_restart: { Args: { p_revision: number }; Returns: any }
       google_connection_status: {
         Args: Record<string, never>
         Returns: any

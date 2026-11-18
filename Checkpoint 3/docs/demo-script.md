@@ -170,4 +170,4 @@ measure task precision and recall, deadline accuracy and cost per reviewed task.
 ## After the demo
 
 1. Set `ENABLE_GMAIL_SCAN=false` in the private functions env file and restart `functions serve`.
-2. Optional: restore the test account's daily request limit from 50 to 20.
+2. Optional: put the test account's daily request limit back to the default (50 since November 16).

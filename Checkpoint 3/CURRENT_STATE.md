@@ -51,7 +51,7 @@ Hosted now has 30 migration versions, through `20261112010000`. No secrets or fe
 
 **Decisions recorded today:** categories to check are literal word lists that narrow what reaches Gemini, and with no sender they decide which senders are checked (this supersedes the "meaningful topics, not literal terms" line in the [plan](IMPLEMENTATION_PLAN.md)); participants will not connect their own email (#94); scored study tasks use one standard setup with automatic scanning off, and an optional, logged exploration follows (#58, #59, #60, #101).
 
-**Still open:** PRs #36 and #37 are replaced by #108, and both were closed on November 12. Calendar (PR #116) is on `main` since November 16, off by default; offline checks pass, and create, update, remove and the screens were partly checked in a local browser against Google, with the cases listed under November 15 still not run live (#46). Its migration and functions are on hosted since November 16, with the backend switch `ENABLE_CALENDAR_EVENTS` set the same day; the production web build still has `VITE_CALENDAR_EVENTS_ENABLED` unset and the Google Cloud Calendar setup is not done, so the live site does not offer Calendar; the rest is left in #53; the Calendar decision is due noon Tuesday November 17. The study freeze starts Tuesday November 17 (evening).
+**Still open:** PRs #36 and #37 are replaced by #108, and both were closed on November 12. Calendar (PR #116) is on `main` since November 16, off by default; offline checks pass, and create, update, remove and the screens were partly checked in a local browser against Google, with the cases listed under November 15 still not run live (#46). Its migration and functions are on hosted since November 16, with the backend switch `ENABLE_CALENDAR_EVENTS` set the same day; the production web build still has `VITE_CALENDAR_EVENTS_ENABLED` unset and the Google Cloud Calendar setup is not done, so the live site does not offer Calendar; the rest is left in #53; the Calendar decision is due noon Tuesday November 17. The study freeze starts Thursday November 19 (night); it was moved from Tuesday November 17 (evening) at the November 16 team meeting.
 
 **Docs record (November 12, evening):** branch `mzheng/docs-nov12` (unpushed when written) brought the living docs up to date with this release and added [Checkpoint 4](<../Checkpoint 4/README.md>). A second review on branch `claude/docs-review-fable-65324d`, on top of it, then removed four statements from the CP4 plan that a public repository shouldn't carry and corrected stale lines in this file, the handoff, the implementation plan, `INSTALL.md`, the local setup guide, safety and privacy, the root README and the CP4 plan. Docs only; no code, hosted or board changes. Verified: PR merge times, issue numbers and the board against GitHub; migration names, limits and line counts against the code; relative links and anchors; `git diff --check`. Not run: the test suites (no `node_modules` in the review worktree). A later one-line correction on branch `mzheng/current-state-pr37` (unpushed when written) records that PR #37 was closed on November 12 (5:25 PM Central), where this file had said it should be closed; verified against GitHub and with `git diff --check`.
 
@@ -109,6 +109,459 @@ suggestion's and an active task's popups, and the cancellation popup (closed wit
 dismissing). Not checked: the Dismissed tab (empty), the edit-proposal popup and its blocked
 states (no such proposals existed), a task with several linked emails, phone width, and the
 live site. Escape does not close these popups (existing behavior, not changed here).
+
+**November 16: daily request default raised from 20 to 50.** Branch `mzheng/daily-requests-50`,
+requested by Matthew in chat so study and test accounts can explore without reaching the limit.
+Migration `20261116180000_daily_requests_default_50` sets the `storage_preferences.daily_requests`
+default to 50 and moves rows still at 20 to 50; a limit set by hand is kept. The 1–100 range, the
+200,000 daily tokens and the 3-per-minute provider limit are unchanged, so the token limit may now
+be reached before 50 requests on long emails (not measured). Docs that stated 20 were updated.
+Verified: `npm test` 222 + 56 pass, with a new assertion on the default that fails without the
+migration (the move of existing rows has no test); a separate review approved the change. Not run:
+pgTAP and `test:local`. Part of #48's discussion; #48's items are not changed by this.
+
+**Hosted change on November 16** (project `IS492_c3`), approved by Matthew in chat on the
+condition that tests passed and the review approved, and run by a Claude Code session:
+
+- About 3:13 PM Central: a dry run showed exactly `20261116180000` pending; it was applied with
+  `supabase db push` from this branch, before the branch was merged. The ledger shows it applied.
+  A read-only count afterwards: the column default is 50 and the one existing preference row is
+  at 50. Accounts without a row (it is created on an account's first model call) start at 50.
+
+Hosted now has 32 migration versions, through `20261116180000`. No function was redeployed and no
+secret or flag was changed. A read-only check the same afternoon matched the hosted flags against
+`true`/`false` without printing values: fixture extraction is off and Gmail scanning is on.
+If the study reset (PR #122) snapshots `storage_preferences`, take that snapshot after this
+change, or it restores the old limit.
+
+**November 17: turn a Passive email into a task.** Branch `mzheng/passive-to-task` (off `main`;
+pushed on November 17, no pull request yet, not merged). The study freeze was moved at the November 16 team meeting to start
+Thursday November 19 (night), so whether this merges before it is Matthew's decision. No hosted change: the
+migration is applied to the local database only, and nothing was deployed.
+- **Dashboard:** the Source email popup of a Passive item has **Turn into task**, which opens a
+  **Create task** form (title, due date, time, description, the summary for reference). Saving
+  makes one active task, removes the row from Passive, and shows **Task created** with **View
+  task** and **Undo**. The task's menu has **Move back to Passive**, only for tasks made this way;
+  with a Calendar event it first asks whether to keep or remove the event
+  ([Calendar behavior](docs/calendar-behavior.md)). `CreateTaskFromEmail.tsx`, `passiveTask.ts`,
+  `RealDashboard.tsx`, `dashboardModel.ts`, `readMarks.ts`.
+- **Prefill:** from details the scan now saves for a Passive email, else from a small parser over
+  the summary, excerpt and subject (for email scanned earlier). A time with no date is prefilled
+  but a date is required to save. Several dates are all listed and none is preselected.
+- **Scan contract (`gmail-v1`):** the model output gained `details` (a suggested title, every
+  date or time the email states, a location, links), and the summary instruction now leads with
+  what the email is about, then when and where. A date's wording, the location and each link must
+  appear in the email or the entry is dropped (`groundDetails` in `pipeline/core.mjs`). The prompt
+  and schema are part of the cache key, so already-scanned email is analysed again on its next
+  full 7-day check (after a settings change or a Gmail reconnect); a routine check only covers
+  mail since the last complete one. Passive read marks stay in the browser; the earlier mark is restored by Undo and Move
+  back in the same browser only.
+- **Database, migration `20261117000000_passive_to_task`:** `storage_extractions.details`
+  (cleared whenever the summary is), service-only `gmail_extraction_details`,
+  `tasks.origin_extraction_id`, and two `storage_action` branches: `create_task` on an
+  extraction (one task per email) and `return_to_passive` on a task. Deleting such a task clears
+  that email's summary and suppresses its rescan.
+
+- **A task needs a due date, and "Needs verification" opens the editor** (Matthew's decision,
+  November 17; dashboard only, the database still accepts a task with no deadline). **Add task**
+  on a suggestion that has no deadline or is marked "Needs verification" opens **Review before
+  adding**, which lists what the scan asked the user to check and adds the task on save; a due
+  date is required there, in the Create task form, and when editing an active task. "Move to
+  Active" and "Move to Completed" on such a suggestion open the same editor. Checked in a local
+  browser: the editor opens for a suggestion with no deadline and refuses to add without a date.
+  Later the same day: a task was added through the editor with a date entered and then moved
+  back to Suggestions. Not checked: the Move menu path into the editor, a dismissed suggestion.
+- **Shorter suggested titles:** the scan is asked for an imperative title of two to six words
+  with no date, time, place or sender; one over 60 characters is dropped. For email scanned
+  earlier the form reduces the summary to what it is about ("Exam", "Campus bake sale").
+
+Verified offline, rerun after every change above: `npm test` 236 and 80 pass, `npm run
+test:calendar` 45 pass, `tsc --noEmit`, the web build, `deno check` of all six functions, and
+pgTAP on the local database (93 pass);
+these use fake Gemini and Gmail responses. In a local browser against Matthew's saved records,
+with Calendar off: the button, the form prefilled from an email scanned earlier (Thursday's date
+and 3:30 PM), the two validation messages, saving, the row leaving Passive, the task card and its
+source popup, Move back to Passive and the pop-up's Undo, both restoring the Unread mark.
+Live model check (November 17, approved by Matthew): four fictional emails sent to Gemini through
+the canonical pipeline with the `gmail-v1` contract, in a throwaway script that touches no
+database. All four were Passive with the expected details: a bake sale (title, Thursday's date
+with 3:30 PM, location, link), a showcase with an RSVP (both dates, labelled), a time with no
+date (time kept, date null), and "details coming soon" (nothing). Four emails do not measure
+accuracy.
+Real Gmail scan, local (November 17, approved by Matthew): the new scan bundle was placed in the
+folder the local function runtime serves (it is mounted from another worktree), the runtime
+container restarted, and one full 7-day check run on the dedicated test mailbox. Three model calls
+(the per-batch cap; the rest stayed as backlog) saved two Passive results with details and one
+Actionable result with none; the dashboard form then opened with the model's title, date and
+time. The earlier bundle was put back and the runtime restarted afterwards. One thing seen: an
+email sent on a Thursday afternoon saying "3:30PM thursday" was dated the following Thursday.
+**Fixed the same day (Matthew's rule: a relative day counts from the day the email was sent,
+never from the day it was analysed):** the prompt now says so for weekdays and "tomorrow", and
+`relativeDayFromSent` in `pipeline/core.mjs` recomputes a details date whose wording is only a
+relative day ("Thursday", "next Friday", "tomorrow") from the sent date. A weekday is the first
+such day on or after the sent day, the sent day included; "next <weekday>" skips the sent day.
+Checked: `npm test` 237 and 80, and three fictional emails sent on a Thursday and analysed five
+days later, where the model itself returned the sent-based dates.
+**Extended later the same day to task deadlines (`gmail-v1` only; the fixture contract is
+unchanged):** the same rule now corrects a suggestion's deadline, a waiting-for promised date
+(before the follow-up check, which depends on it) and a proposed deadline change, the last only
+when the deadline is a changed field. The day is counted from the message the item's evidence
+cites. The rule is also narrower: it applies only when the wording is nothing but one relative
+day, an optional "this"/"next", a clock time and small connecting words, so "the Friday after
+Thanksgiving" or "two weeks from Friday" keeps the model's date. A weekday named on the sent
+weekday means that day only while its stated time is still ahead; otherwise the next one.
+Known limits: wording that is short while the email sets another week elsewhere ("Next week's
+schedule: quiz Thursday") is still counted from the sent day, and so is a relative day whose
+evidence cites a different message from the one it was written in. Checked: `npm test` 244 and
+80, `deno check`, and five fictional task emails against the live model (four already right;
+"before Thursday at noon", sent that Thursday at 3:23 PM, moved from the sent day to the next
+Thursday). Not checked: a real Gmail scan with this version.
+**Flag it and let the user decide in the app (Matthew's rule, November 17):** when code and the
+model disagree about a date, or code cannot be sure, the item gets a specific note and is marked
+"Needs verification"; when they agree, nothing is added.
+- **Notes** (`core.mjs`, stored with the result's warnings): a date the sent-day rule changed; a
+  date left alone because the sentence around it, the one before it or a colon heading sets
+  another week ("Next week's schedule:"); "next <weekday>" wording the rule changed; a holiday
+  phrase the calendar disagrees on; and wording that cannot be matched to one supplied email (a
+  paraphrase, or several emails say it), where the date is left as the model gave it. Each note
+  names the wording and both dates.
+- **Holidays** (`pipeline/holidays.mjs`): 14 fixed-rule US holidays, for wording that is only a
+  holiday or a weekday or day before or after one ("by the Friday after Thanksgiving"). Anything
+  else, school breaks included, keeps the model's date.
+- **Which email:** a deadline is counted from the email whose body contains its wording: the
+  cited one, else the only other supplied one.
+- **Review screen** (`RealDashboard.tsx`, `reviewNotes.ts`): Review before adding and Edit
+  suggestion show the sender, subject, the sent time with its weekday, the email's date wording
+  and the saved excerpt; Review before adding also offers each date named in a note as a
+  one-click choice and, for plain relative wording, a line saying what the sent-day rule gives.
+  Create task shows the sent time and excerpt too. Only the saved excerpt is shown; full email
+  bodies are still not stored.
+Checked: `npm test` 267 and 99, `test:calendar` 45, `tsc --noEmit`, the web build, `deno check`.
+Live model, five fictional emails sent on a Thursday and analysed five days later: the holiday
+phrase and the plain cases agreed with the rule and got no note; "Next week's schedule:" kept
+the model's next-week dates with a note for each. Real Gmail scan, local, on the dedicated test
+mailbox with this version (three model calls): two Passive results dated from the sent day and
+one Actionable result, no failures and no date notes. In a local browser, with a sample note
+placed on one suggestion and removed afterwards: the email block, the two date buttons and the
+hint. Known limits: a week cue two or more sentences away, in the subject or in an earlier
+email is not seen; cue words can match unrelated phrases ("every two weeks"), which only adds a
+note. Not checked: the review screen at phone width or by keyboard alone, hosted.
+**Later on November 17, the open items from that round:**
+- **Wider week check** (`core.mjs`): a week cue is now also looked for in the subject line of the
+  email the wording was read from, in a short heading above the wording with no colon (within 6
+  lines and one blank line), and up to 3 sentences back in the same paragraph. Past, repeating,
+  lasting and same-week phrasing ("two weeks ago", "every two weeks", "for the next two weeks",
+  "this week") and "after <Name> <does something>" are no longer cues. Other emails in the
+  thread are still not searched.
+- **Agreeing date near a cue:** when the model and the sent-day rule agree but the email sets
+  another week nearby, the date stays and a note offers the week-later reading. Found with the
+  live model: subject "Next week's schedule" over "quiz corrections Thursday" was dated in the
+  sent week by both.
+- **Review-screen hint** (`reviewNotes.ts`, `RealDashboard.tsx`): it uses the deadline's time
+  zone, and shows nothing for a weekday named on the sent weekday with a clock time, which only
+  the scan can settle.
+- **Keyboard focus in every dialog** (`designedUi.tsx`, `index.css`): focus now moves into a
+  dialog when it opens, Tab stays inside it, and focus returns to the opening control on close.
+  Before, Tab kept moving through the page behind the dialog. This is the shared `Modal`, so it
+  applies to every dashboard dialog (source email, the editors, proposed changes, the Calendar
+  event dialog and its follow-ups, follow-up reminders) and to the "Unsaved changes" dialog in
+  Settings. Onboarding has no dialogs (corrected November 17: an earlier version of this line,
+  and commit `34ad667`'s message, said it applied to onboarding too).
+- **Study reset (PR #122, #101), checked in a scratch copy, nothing changed in either branch:**
+  with this migration the reset as written refuses (`STUDY_RESET_SCHEMA_CHANGED: unknown
+  trigger … extraction_details_follow_summary`). Adding that trigger to its list of known
+  triggers is enough; a full snapshot, Passive-to-task session and reset then restored the
+  account exactly in PGlite. If the migration is applied after the snapshot, every reset
+  refuses. Its test also needs the empty `details` object once merged with this pipeline.
+- **Scan now after a Gmail reconnect:** fixed separately on branch
+  `mzheng/scan-now-after-reconnect` (off `main`, local, not pushed); see that branch's entry.
+Checked: `npm test` 274 and 99, `test:calendar` 45, `tsc --noEmit`, the web build, `deno check`.
+Live model, three fictional emails for the new cue rules (dates unchanged; this run is what
+showed the agreeing-date gap, fixed afterwards and covered by tests, not rerun live). In a local
+browser with a sample note placed on one suggestion and removed afterwards: Tab order through
+Review before adding, a date button chosen with Space, focus returning on close. At phone width
+the dialog's rows stack and it scrolls inside itself, but the Suggestions page is already wider
+than the screen (#100), which pushes the dialog partly off it. Not checked: a screen reader,
+hosted.
+- **Calendar question on Move back, checked locally with Calendar on** (Matthew signed in to the
+  dedicated test account; the web flag was set in an ignored `.env.local`): a task made from a
+  Passive email was added to Google Calendar, then Move back to Passive asked "Keep the calendar
+  event?". Cancel left the task and event in place. Remove deleted the app's record of the event
+  and moved the task back. Keep moved the task back and left the event in Google Calendar, no
+  longer shown in the app. The Passive row returned with its earlier Read mark each time. Not
+  checked: a removal that fails.
+- **Create task form:** it now has an "Open in Gmail" link under the saved excerpt, as the
+  review dialog does.
+- **Card button squeezed between about 621 and 720px wide** (`real-dashboard.css`; also on
+  `main`): the row's main button (Add task, Review change) had no column at that width, landed
+  in the 34px menu column and its label spilled out. It now sits under the card text at 720px
+  and below. Checked in a local browser at 420, 650, 700, 720 and 721px on Suggestions and
+  Active: no button clipped or outside its card.
+**Correction to the scan-contract note above:** a routine check only covers mail since the last
+complete check, so already-scanned email is analysed again only on a full 7-day check (after a
+settings change or a Gmail reconnect), not on every next scan.
+**Not verified:** the Calendar question on Move back (Calendar
+is off in the local build); `test:local` (it expects scanning switched off, and it is on
+locally); hosted.
+Second browser pass the same day, with details placed on one local email by hand and removed
+afterwards: the several-dates choice (nothing preselected, choosing fills the fields, editing
+clears the choice), location and link in Description, the required due date, View task (opens
+Active, scrolls to and focuses the card), a save that fails (form and entries kept, row stays
+in Passive), and the Create task form at phone width.
+
+**November 17, later: run setup again from empty fields, and an honest "Edited by you".** Same
+branch, `mzheng/passive-to-task`. For the user study (Matthew's decision, November 17): the
+study does not use a reset script; the runner puts the account back by hand and each participant
+enters the setup fields themselves. Local only: migration `20261117010000_restart_scan_setup` is
+applied to the local database, not to hosted, and it must follow `20261117000000` there.
+- **Clear settings and run setup again** (Settings › Connections, behind a confirmation):
+  `scan_settings_restart(p_revision)` puts the saved scan settings back to a new account's
+  (no senders, topics, consent or automatic checks; paused) and sets `scan_settings.setup_pending`,
+  which routes the account to onboarding until the next save (`needsSetup` in `scanSetup.ts`).
+  The revision still goes up and in-flight work is fenced as on a save, so nothing can be scanned
+  until setup is saved. Tasks, suggestions, Passive emails, Calendar records and the Google
+  connection are not touched. `RealSettingsScreen.tsx`, `App.tsx`, `useSavedScanSettings.ts`,
+  `storageAdapter.ts`, `supabase.ts`.
+- **What this does not do:** it does not undo what a participant did to records (the runner moves
+  those back by hand), and it does not freeze results. After setup is saved again the next check
+  covers the past 7 days; where the topics, earlier-email limits or the account's accepted tasks
+  differ from the earlier scan, an email is analysed again and its newest result is what the
+  dashboard shows. Email older than 7 days is not looked at again.
+- **"Edited by you"** (`dashboardModel.ts`, also wrong on `main`): the badge showed whenever a
+  suggestion had saved review values, which adding a task and moving it back to Suggestions
+  always writes. It now shows only when those values differ from what the scan found
+  (`suggestionEdited`, `sameTaskFields`; key order ignored, every deadline field counts).
+- **Restore original** in Edit suggestion (`RealDashboard.tsx`), only on a pending suggestion
+  with a real edit: saves the scan's values back through the existing edit action, which also
+  discards a due date typed in Review before adding.
+Verified offline, on the combined tree: `npm test` 275 and 102, `test:calendar` 45, `tsc
+--noEmit`, the web build, `git diff --check`; the database tests (`supabase test db`, 99 pass)
+and the settings database test were run once when the migration was written. **Not verified:**
+anything in a browser (the dialog, the move to onboarding, the badge, Restore original); the new
+function through the HTTP API (`test:local`); hosted.
+
+**November 17, later: Delete from InboxToTask in the Source email dialog.** Same branch,
+`mzheng/passive-to-task`; web only, no new migration. For the study: an email a participant sends
+to the study account must be removed before the next participant, and leaving it in Dismissed
+would show it to them. The Source email dialog of a suggestion (also a dismissed one, a proposed
+change or a waiting-for item) and of a Passive email now has "Delete from InboxToTask", behind a
+confirmation that says what is removed (the email's suggestions, including dismissed ones, its
+summary, saved excerpt, sender and subject), that it cannot be undone, that InboxToTask will not
+check the email again, and that the email stays in Gmail. It calls the existing source delete
+(`storage_action` with kind `source`, action `delete`; no revision). It is not offered while a
+task (open, completed or cancelled) was added from the email or changed by it, because that
+action leaves such a task in place without its email; the dialog says to move the task back
+first. With tasks present and their source emails not loaded, it is not offered either. The rule
+is checked again on freshly loaded records just before deleting. No Calendar write is involved:
+Calendar records belong to tasks, and no task can come from a deletable email.
+`dashboardModel.ts` (`sourceDeleteCheck`), `RealDashboard.tsx`, `real-dashboard.css`,
+`tests/dashboard-model.test.mjs`.
+Verified offline: `npm test` 275 and 107, `test:calendar` 45, `tsc --noEmit`, the web build,
+`git diff --check`. **Not verified:** in a browser; hosted.
+This is the first option listed under "Open gap" in the next entry, which was written before it
+was built; the email still has to be deleted from the study account's Gmail by hand. Known
+limits: a task that was cancelled, or changed by the email, cannot be moved back, so its email
+cannot be deleted here; deleting an email also clears the saved excerpt of other suggestions in
+the same thread that quote it, which then show "Evidence expired".
+**Study documents reworded the same day** (`Checkpoint 4/CP4_PLAN.md`,
+`Checkpoint 4/docs/study_materials/task_script.md`): they no longer say results are frozen,
+that automatic scanning is off, that there is one standard setup, or that a reset script is
+used. Points not yet decided are marked "To be decided" in place. The issues named in the next
+entry are not reworded yet; drafts exist and are not posted.
+
+**November 17, study decisions and one open gap (docs only).** Same branch,
+`mzheng/passive-to-task`. No code, database or hosted change.
+- **Decisions by Matthew, November 17** (decided, not done):
+  - PR #124 ships for the study. Applying both migrations to hosted
+    (`20261117000000_passive_to_task`, then `20261117010000_restart_scan_setup`), redeploying
+    `gmail_scan` and `analysis_email`, and the merge must happen before the freeze scan (#67) and
+    the freeze on Thursday November 19 (night). None has happened; each needs his approval.
+  - Automatic checks are on during study sessions (decided with Sania). This replaces the earlier
+    assumption that results are scanned once and frozen with automatic checks off, which #67, #62,
+    #63, #64, #58, #54, #101, #76 and `Checkpoint 4/CP4_PLAN.md` still state; none is reworded yet.
+  - No reset script: the runner puts the account back by hand and each participant goes through
+    setup (previous entry).
+- **What automatic checks during sessions mean, from reading the code (not run on hosted):**
+  - After setup is saved, the first check covers the past 7 days and starts when the dashboard
+    opens. A saved result is reused, with no model call, only when the topics to check, the
+    earlier-email limits and the tasks offered as context match the earlier scan; otherwise the
+    email is analysed again.
+  - The per-account allowance is 50 model requests a day (`storage_preferences.daily_requests`,
+    default 50 since migration `20261116180000`, on hosted since November 16; this line said 20
+    until corrected later on November 17), a batch makes at most 3 model calls, and the model
+    limit is 3 calls a minute across all accounts. A study inbox is about 24 emails (#62–#64), so
+    one full re-analysis fits in a day's allowance.
+  - Email sent more than 7 days before a session is not read again. Send dates for inboxes A and B
+    are not set.
+  - Still to decide: whether every participant enters the same scripted setup values; whether to
+    raise the daily allowance for the two study accounts; whether the Scan now fix (branch
+    `mzheng/scan-now-after-reconnect`) ships before the freeze; what the AI-only baseline in #76
+    scores.
+- **Open gap: email a participant sends in during exploration.** If exploration has participants
+  send email from their own inbox to the study account, each such email leaves the email in the
+  study account's Gmail; a suggestion or Passive entry with its sender, subject and saved excerpt;
+  and possibly a task and a Calendar event. These must be removed before the next participant, and
+  they would be a real person's email, unlike the fictional inboxes.
+  - Today the designed dashboard and Settings have no permanent delete. A task can be moved back
+    (to Suggestions, Dismissed or Passive, which removes the task); a suggestion can be dismissed
+    (it stays in Dismissed and can be restored); a Passive entry cannot be removed.
+  - The backend already has a delete for a source email (`storage_action`, kind `source`, action
+    `delete`). It clears the sender, subject, summary and excerpt, removes pending, dismissed and
+    rejected suggestions and Waiting For entries, and stops that email being scanned again. It
+    does not remove a task already made from the email, a Calendar event or the Gmail message. No
+    designed screen calls it. Found by reading the code, not in a browser.
+  - Options, not decided: a delete control on a source email using that action (no migration);
+    exploration uses a prepared fictional email the runner sends; or sending email is left out of
+    exploration. The protocol and consent wording (#58) should cover whichever is chosen. Matthew
+    is to look at this on the evening of November 18.
+
+**November 17, 12:45 CST: branch pushed; runner wording in the CP4 plan.** Same branch,
+`mzheng/passive-to-task`. Matthew approved the push ("Yes, push"). Origin went from `c22a118` to
+`967a6c0` (`8df183a`, `380adca`, `967a6c0`) with a plain push, so PR #124 now includes Clear
+settings and run setup again, the "Edited by you" fix, Restore original and Delete from
+InboxToTask. CI on PR #124 was still running when this was written. The PR and issue text was not
+changed. This commit adds one line to `Checkpoint 4/CP4_PLAN.md`: the runner, not the participant,
+uses Clear settings and run setup again between sessions. Read from the code, not seen in a
+browser: automatic checks keep running while the runner puts the account back, until Clear
+settings removes consent. The scan panel's Stop link pauses them for that page only. After Clear
+settings the account opens at setup, which also offers "Skip setup for now". Nothing on hosted;
+the four new controls are still not browser-checked. Docs only; `git diff --check`.
+
+**November 17, afternoon: study setup and reset decisions in the CP4 plan and task script.** Same
+branch. Matthew decided: every participant enters the same scripted setup values (#59) and no one
+changes settings during a session, exploration included ("there should not be any reanalyzing of
+emails"); each participant gets a new Guest or private browser window; the exploration email is a
+new email, not a reply, and participants do not act on proposed changes. `CP4_PLAN.md` and
+`task_script.md` (before arrival, Sections 4, 7 and 10, the last now including removing the
+exploration email with Delete from InboxToTask and then in Gmail) now say so; the allowance line now applies only to each
+account's first check after PR #124's function deploy (that check fits in the 50-a-day default), and the AI-only baseline question is whether
+it scores the shared saved analysis. Read from the code, not run: a saved analysis is reused with no
+model call when the content, analysis settings (topics, context limits, prompt, schema, model
+settings) and the open tasks sent as thread context all match (`gmail-processor.mjs`,
+`20261106000000_gmail_scan_hardening.sql`); so a different setup value, a task left active at the
+next setup, or a function deploy that changes the prompt makes email be analysed again. Nothing on
+hosted. Docs only; `git diff --check`.
+
+**November 17, 1:37–1:38 PM CST: hosted migration dry run for PR #124 — did not pass.** Approved
+by Matthew ("Yes, run them"; read-only commands only). Branch `mzheng/passive-to-task` at
+`bcf8e0f`. Nothing on hosted was changed.
+- `npx.cmd supabase migration list --linked` (from `Checkpoint 3/app`): hosted has every migration
+  on this branch up to `20261113000000`, the two new ones (`20261117000000`, `20261117010000`)
+  are pending, and hosted also has `20261116180000`, which is not on this branch.
+- `npx.cmd supabase db push --dry-run` targets the local stack in CLI 3.1 unless `--remote` is
+  passed; it failed to connect to the stopped local stack and touched nothing. With `--remote` it
+  stopped with `DbPushMissingLocalError: Remote migration versions not found in local migrations
+  directory` and suggested `migration repair --status reverted 20261116180000`, which was not run
+  (it would rewrite hosted's migration history).
+- `20261116180000_daily_requests_default_50` is commit `a7bad46` ("Raise the default daily model
+  request limit from 20 to 50"), dated November 16, on local branches `mzheng/daily-requests-50`
+  and `mzheng/passive-read-in-db`; neither is on GitHub and it is not on `main`. Its commit says it
+  was applied to hosted on November 16. So the hosted default is 50 requests a day (rows that were
+  at 20 moved to 50), not the 20 stated in the "study decisions" entry above; that line and the
+  drafted PR #124 and #123 text need correcting.
+- Next, Matthew's decision: bring `20261116180000` onto this branch (or onto `main` first) so the
+  local migrations match hosted, then dry-run again. The pass condition stays: exactly
+  `20261117000000` then `20261117010000` pending.
+
+**November 17, after the failed dry run: `20261116180000` brought onto this branch.** Matthew chose
+to cherry-pick `a7bad46` into PR #124 ("Cherry-pick into #124"). The migration and its doc and
+test changes are now on `mzheng/passive-to-task`, so the local migrations match hosted again. The
+allowance lines in this file and `CP4_PLAN.md` now say 50. Hosted is unchanged; the dry run is to be
+run again, with the same pass condition.
+
+**November 18, 4:17 PM CST: hosted migration dry run for PR #124 — passed.** Approved by Matthew
+("Yes, run them"; read-only commands only). Branch `mzheng/passive-to-task` at `29089e7`. Nothing on
+hosted was changed. From `Checkpoint 3/app`: `npx.cmd supabase migration list --linked` shows
+`20261116180000` on both sides and only `20261117000000` and `20261117010000` local-only;
+`npx.cmd supabase db push --dry-run --remote` printed "Would push these migrations:
+20261117000000_passive_to_task.sql, 20261117010000_restart_scan_setup.sql", with no seeds or roles.
+Applying them is the next step and needs its own approval. Pre-deploy checks on `bcf8e0f` (same
+code; `29089e7` added the cherry-picked migration and docs, and the lead session reran `npm test`
+275 and 107 on it): `npm test` 275 and 107, `test:calendar` 45, `tsc --noEmit`, the web build and
+`deno check` of all six functions pass; `supabase:prepare` not yet run.
+
+**November 18, 4:19 PM CST: both PR #124 migrations applied to hosted.** Approved by Matthew ("Yes,
+apply both"). Branch `mzheng/passive-to-task`; no migration file changed since the passing dry run
+(`29089e7`; local `3f0d144` adds only that record). From `Checkpoint 3/app`: the dry run again
+listed exactly `20261117000000_passive_to_task.sql` then `20261117010000_restart_scan_setup.sql`;
+`npx.cmd supabase db push --remote` without `--yes` refused in agent mode and changed nothing;
+`npx.cmd supabase db push --remote --yes` printed "Applying migration
+20261117000000_passive_to_task.sql..." and "Applying migration
+20261117010000_restart_scan_setup.sql..." and finished (exit 0). Checked afterwards:
+`migration list --linked` shows all 34 migrations on both sides; a catalog-only query
+(`supabase db query --remote --read-only`, no table rows read) found
+`storage_extractions.details` (jsonb, nullable), `tasks.origin_extraction_id` (uuid, nullable),
+`scan_settings.setup_pending` (boolean, not null, default false),
+`public.`/`private.scan_settings_restart(p_revision bigint)` and `public.gmail_extraction_details`.
+Production still runs the `main` web build and the earlier `gmail_scan` and `analysis_email` until
+the redeploy and merge; per the line-by-line comparison it should keep working, but the live site
+was not checked after the apply. Not yet done, each needing its own approval: `supabase:prepare`
+and the redeploy of `gmail_scan` and `analysis_email`, the merge of PR #124 (not during the freeze
+from Thursday November 19, night), and the signed-in live check. PR #124 has no review yet.
+
+**November 18, 4:25 PM CST: `gmail_scan` and `analysis_email` redeployed to hosted for PR #124.**
+Approved by Matthew ("Yes, redeploy both"). Branch `mzheng/passive-to-task`, local `53a5ea8` (code
+identical to origin `29089e7`). From `Checkpoint 3/app`: `npm.cmd run supabase:prepare` rebuilt the
+ignored bundle (no tracked file changed; every bundled pipeline file matches its source);
+`deno check` of both functions passed; then `node_modules/.bin/supabase functions deploy gmail_scan
+analysis_email --use-api --yes` ("Deployed Functions.", exit 0; JWT settings from `config.toml`,
+unchanged). `functions list` before and after: `gmail_scan` v6 → v7 (JWT check off),
+`analysis_email` v11 → v12 (JWT check on), both ACTIVE, updated 16:25 CST; `google_connection` v4,
+`google_callback` v4 and `calendar_event` v2 unchanged (November 16). Neither function was invoked
+and no scan was started. From now on hosted scans use the new prompt, the sent-day rules and save
+Passive details; already-scanned email is analysed again only on each account's next full 7-day
+check. The production web build is still `main` until PR #124 merges. Not yet done, each needing
+approval: the merge (not during the freeze from Thursday November 19, night; PR #124 has no
+review yet) and the signed-in live check.
+
+**November 18, evening: "reimbursement" added to the Financial starter words (branch
+`mzheng/passive-to-task`, PR #124).** Requested by Matthew so the study inboxes' reimbursement
+emails (A12, B12) are skipped when Financial is a skipped topic; before this, only A11 and B11
+matched ("financial aid"). `reimbursement` and `reimbursements` were added to
+`STARTER_BLOCKED_WORDS.financial` in `app/pipeline/private-topics.mjs`, to
+`starterBlockedWords.financial` in `app/web/src/filterPresets.ts`, and to
+`private.starter_blocked_words` in the new migration
+`20261118000000_financial_reimbursement_word.sql` (same function as `20261109200000` apart from the
+two words). Only a later selection of Financial picks up the words; a list already saved keeps its
+own. Verified offline: `tests/private-topics.test.mjs` and `tests/scan-settings.test.mjs` (32 pass;
+the latter applies every migration in PGlite and compares the SQL list with the code list) and
+`tests/onboarding-settings.test.mjs` (27 pass); run against the inbox packets on `main`, the
+Financial words now match A11, A12, B11 and B12 and no other study email. Not on hosted: the
+migration, the `gmail_scan`/`analysis_email` redeploy and the web build (with PR #124's merge) each
+still need approval.
+
+**November 18, 5:00 PM CST: hosted migration dry run for `20261118000000` — passed.** Approved by
+Matthew ("Yes, run them"; read-only commands only). Branch `mzheng/passive-to-task` at `bacce71`.
+Nothing on hosted was changed. From `Checkpoint 3/app`: `node_modules/.bin/supabase migration list
+--remote` shows 35 migrations, 34 on both sides and only `20261118000000` local-only;
+`node_modules/.bin/supabase db push --dry-run --remote` printed "Would push these migrations:
+20261118000000_financial_reimbursement_word.sql", with no seeds or roles. Applying it, then
+`supabase:prepare` and the redeploy of `gmail_scan` and `analysis_email` (they bundle
+`private-topics.mjs`), each need their own approval.
+
+**November 18, 5:02 PM CST: `20261118000000_financial_reimbursement_word` applied to hosted.**
+Approved by Matthew ("Yes, apply it"). Branch `mzheng/passive-to-task`, local `6a2e9ba` (no file
+under `supabase/` changed since `bacce71`). From `Checkpoint 3/app`: the dry run again listed only
+that migration; `node_modules/.bin/supabase db push --remote --yes` printed "Applying migration
+20261118000000_financial_reimbursement_word.sql..." and finished (exit 0). Checked afterwards:
+`migration list --remote` shows all 35 on both sides; a catalog-only read-only query found
+"reimbursement" and "reimbursements" in the hosted `private.starter_blocked_words` definition
+(calling the function is not allowed for the read-only role, as intended). Lists already saved
+keep their words. Not yet done, needing its own approval: `supabase:prepare` and the redeploy of
+`gmail_scan` and `analysis_email`, which still run the backend word list without the new words.
+
+**November 18, 5:03 PM CST: `gmail_scan` and `analysis_email` redeployed with the new Financial
+words.** Approved by Matthew ("Yes, redeploy both"). Branch `mzheng/passive-to-task`, local
+`0bcd805` (no code change since `bacce71`; the later commits are records). From `Checkpoint 3/app`:
+`npm.cmd run supabase:prepare` (no tracked file changed; every bundled pipeline file matches its
+source, and the bundled `private-topics.mjs` has "reimbursement" and "reimbursements"); `deno check`
+of both functions passed; `node_modules/.bin/supabase functions deploy gmail_scan analysis_email
+--use-api --yes` ("Deployed Functions.", exit 0). `functions list`: `gmail_scan` v7 → v8 (JWT check
+off), `analysis_email` v12 → v13 (JWT check on), both ACTIVE, updated 17:03 CST; `google_connection`
+v4, `google_callback` v4 and `calendar_event` v2 unchanged. Neither function was invoked and no scan
+was started. Hosted now matches `bacce71` for migrations and these two functions; the production web
+build is still `main` until PR #124 merges (needs approval, not during the freeze from Thursday
+November 19, night).
 
 ## Gmail phases
 
@@ -449,7 +902,7 @@ The app does not fetch or display email bodies on demand.
   Stored local Gmail connections were cleared, so local accounts must reconnect. The hosted key's
   status is not recorded here, because this repository is public.
 - `GOOGLE_RETURN_URL` in the private local file points at the product root.
-- The demo's raised daily request limit (50) was lost when the local database was rebuilt on November 12; local accounts are back to the default 20. Hosted defaults are unchanged.
+- The demo's raised daily request limit (50) was lost when the local database was rebuilt on November 12; local accounts were back to the default 20. Since migration `20261116180000` (November 16) the default is 50.
 
 ## Latest evidence and next action
 

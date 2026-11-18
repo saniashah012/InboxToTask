@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { loadScanSettings, saveAutoScan, saveScanSettings, type ScanSettings } from "./storageAdapter"
+import { loadScanSettings, restartScanSetup, saveAutoScan, saveScanSettings, type ScanSettings } from "./storageAdapter"
 
 type SettingsRecord = {
   userId: string
@@ -61,6 +61,17 @@ export function useSavedScanSettings(userId: string | null) {
     return saved
   }, [])
 
+  // Clears saved settings so the account runs setup again; resolves only after the
+  // backend confirms, and stores the cleared settings for the same account only.
+  const restart = useCallback(async (revision: number) => {
+    const owner = currentUser.current
+    const saved = await restartScanSetup(revision)
+    if (owner && currentUser.current === owner) {
+      setRecord({ userId: owner, status: "ready", settings: saved, refreshing: false })
+    }
+    return saved
+  }, [])
+
   const current = record && record.userId === userId ? record : null
   return {
     status: userId ? current?.status ?? "loading" : "idle",
@@ -69,5 +80,6 @@ export function useSavedScanSettings(userId: string | null) {
     reload,
     save,
     saveAuto,
+    restart,
   } as const
 }

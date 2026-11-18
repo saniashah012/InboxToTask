@@ -161,6 +161,7 @@ test('PostgreSQL storage migrations, transactions, privileges and lifecycle', as
       assert.equal(await scalar('select confirmed_reminder_at is null from public.storage_followups where id=$1',[followup.id]),true);
     });
     await t.test('budgets are reserved atomically and do not silently consume deferred work',async()=>{
+      assert.equal(await scalar('select daily_requests from public.storage_preferences where user_id=$1',[A]),50);
       await query('update public.storage_preferences set daily_requests=1 where user_id=$1',[A]);
       const before=await scalar('select requests from private.storage_usage where user_id=$1',[A]);
       assert.equal((await claim(A,6,'E06')).state,'budget_deferred');
@@ -225,6 +226,133 @@ test('PostgreSQL storage migrations, transactions, privileges and lifecycle', as
       const u=(await query('select * from public.storage_suggestions where id=$1',[update]))[0];
       assert.equal(u.state,'deleted'); assert.equal(u.approved_task_id,null); assert.equal(u.target_task_id,null);
       assert.equal(await scalar('select state from public.storage_suggestions where id=$1',[row.id]),'pending');
+    });
+    // "Turn into task" on Passive communication.
+    const passive=async(user,n,message)=>{
+      const data=output(user===A?'student@example.org':'b@example.org');
+      data.result.category='Passive'; data.result.tasks=[]; data.result.summary='Fictional open house notice.';
+      return finish(user,await claim(user,n,message),data);
+    };
+    const details={title:'Attend the open house',location:'Room 101',links:['https://example.org/rsvp'],
+      dates:[{label:'Open house',date:'2026-11-20',time:'18:00',timeZone:'America/Chicago',wording:'November 20 at 6 pm',boundary:'on'}]};
+    const saveDetails=(user,id,doc=details)=>as('service_role',user,()=>rpc('gmail_extraction_details',[user,id,doc]));
+    const detailsOf=(id)=>scalar('select details from public.storage_extractions where id=$1',[id]);
+    const empty={title:null,dates:[],location:null,links:[]}; let noticeExt, deletedExt, cleanedExt;
+    await t.test('Passive details are service-only, validated, written once and cleared with the summary',async()=>{
+      const ext=noticeExt=(await passive(A,30,'E07')).extractionId;
+      for (const role of ['authenticated','anon']) {
+        await as(role,A,()=>assert.rejects(rpc('gmail_extraction_details',[A,ext,details]),{code:'42501'}));
+      }
+      for (const doc of ['[]','"text"',{title:null,dates:[],location:null},{...empty,extra:1},{...empty,dates:{}},{...empty,links:'https://example.org'},
+        {...empty,dates:Array(7).fill(details.dates[0])},{...empty,links:Array(6).fill('https://example.org/rsvp')},{...empty,title:'x'.repeat(8000)}]) {
+        await assert.rejects(saveDetails(A,ext,doc),{code:'22023'},JSON.stringify(doc).slice(0,60));
+      }
+      await assert.rejects(saveDetails(A,ext,null),{code:'22023'});
+      assert.equal(await detailsOf(ext),null);
+      await saveDetails(B,ext); assert.equal(await detailsOf(ext),null,'another user id writes nothing');
+      await saveDetails(A,receipt.extractionId); assert.equal(await detailsOf(receipt.extractionId),null,'Actionable extractions take no details');
+      await saveDetails(A,ext); assert.deepEqual(await detailsOf(ext),details);
+      await saveDetails(A,ext,{...details,title:'A later title'}); assert.deepEqual(await detailsOf(ext),details,'existing details are kept');
+      assert.deepEqual((await as('authenticated',A,()=>query('select details from public.storage_extractions where id=$1',[ext])))[0].details,details);
+      assert.equal((await as('authenticated',B,()=>query('select details from public.storage_extractions where id=$1',[ext]))).length,0);
+      await as('authenticated',A,()=>assert.rejects(query('update public.storage_extractions set details=null where id=$1',[ext]),{code:'42501'}));
+      // Details follow the summary: source deletion and digest expiry both clear them.
+      const deleted=await passive(A,31,'E08'); await saveDetails(A,deleted.extractionId);
+      await action('source',deleted.sourceId,'delete'); deletedExt=deleted.extractionId;
+      assert.equal(await detailsOf(deleted.extractionId),null);
+      const expired=(await passive(A,32,'E09')).extractionId; await saveDetails(A,expired);
+      await query("update public.storage_extractions set digest_expires_at=now()-interval '1 second' where id=$1",[expired]);
+      await as('service_role',A,()=>rpc('storage_cleanup',[]));
+      assert.equal(await scalar('select summary is null and details is null from public.storage_extractions where id=$1',[expired]),true);
+      await saveDetails(A,expired); assert.equal(await detailsOf(expired),null,'no details without a summary'); cleanedExt=expired;
+    });
+    await t.test('details entries of the wrong type are rejected',async()=>{
+      const fresh=(await passive(B,34,'E01')).extractionId;
+      try {
+        await assert.rejects(saveDetails(B,fresh,{title:5,dates:[1],location:{},links:[7]}),{code:'22023'});
+      } finally { await query('update public.storage_extractions set details=null where id=$1',[fresh]); }
+    });
+    await t.test('a Passive email becomes one task, returns to Passive, and can become a task again',async()=>{
+      const first=await passive(A,33,'E11'); const ext=first.extractionId; await saveDetails(A,ext);
+      await action('extraction',ext,'create_task',0,fields,B).then(()=>assert.fail('cross-user create'),e=>assert.equal(e.code,'42501'));
+      const made=await action('extraction',ext,'create_task',0,fields);
+      assert.equal(made.reused,false); assert.equal(made.revision,0);
+      const task=(await query('select * from public.tasks where id=$1',[made.taskId]))[0];
+      assert.equal(task.status,'approved'); assert.equal(task.source_email_id,'E11'); assert.equal(task.origin_extraction_id,ext);
+      assert.equal(task.origin_suggestion_id,null); assert.equal(task.title,fields.action); assert.deepEqual(task.accepted_fields,fields);
+      assert.equal((await as('authenticated',A,()=>query('select * from public.tasks where id=$1',[made.taskId]))).length,1);
+      // One task per email: a repeat, or a request against a later analysis of the same email, reuses it.
+      const again=await action('extraction',ext,'create_task',0,{...fields,action:'Another title'});
+      assert.deepEqual(again,{taskId:made.taskId,reused:true});
+      const later=(await finish(A,await claim(A,133,'E11'),(()=>{const d=output();d.result.category='Passive';d.result.tasks=[];return d;})())).extractionId;
+      assert.notEqual(later,ext);
+      assert.deepEqual(await action('extraction',later,'create_task',0,fields),{taskId:made.taskId,reused:true});
+      assert.equal(await scalar('select count(*) from public.tasks where origin_extraction_id in ($1,$2)',[ext,later]),1);
+      // Undo: the task row goes and the email is Passive again, details intact.
+      await action('task',made.taskId,'return_to_passive',0,null,B).then(()=>assert.fail('cross-user return'),e=>assert.equal(e.code,'42501'));
+      await assert.rejects(action('task',made.taskId,'return_to_passive',5),{code:'PT409'});
+      assert.deepEqual(await action('task',made.taskId,'return_to_passive',0),{id:made.taskId,removed:true,extractionId:ext});
+      assert.equal(await scalar('select count(*) from public.tasks where id=$1',[made.taskId]),0);
+      assert.equal(await scalar('select summary from public.storage_extractions where id=$1',[ext]),'Fictional open house notice.');
+      assert.deepEqual(await detailsOf(ext),details);
+      // It can be turned into a task again, and a completed one can return too.
+      const remade=await action('extraction',ext,'create_task',0,fields);
+      assert.equal(remade.reused,false); assert.notEqual(remade.taskId,made.taskId);
+      await action('task',remade.taskId,'complete',0);
+      assert.equal((await action('task',remade.taskId,'return_to_passive',1)).removed,true);
+      // Not once the digest has expired.
+      const third=(await action('extraction',ext,'create_task',0,fields)).taskId;
+      await query("update public.storage_extractions set digest_expires_at=now()-interval '1 second' where id=$1",[ext]);
+      await assert.rejects(action('task',third,'return_to_passive',0),{code:'22023'});
+      assert.equal(await scalar('select count(*) from public.tasks where id=$1',[third]),1);
+      await query("update public.storage_extractions set digest_expires_at=now()+interval '30 days' where id=$1",[ext]);
+    });
+    await t.test('Turn into task rejects non-Passive, hidden, irrelevant, expired, deleted and invalid input',async()=>{
+      // Actionable; no summary (the cleaned-up digest); deleted source. The last two come from the details test.
+      for (const id of [receipt.extractionId,cleanedExt,deletedExt]) {
+        await assert.rejects(action('extraction',id,'create_task',0,fields),{code:'22023',message:'INVALID_TRANSITION'});
+      }
+      for (const [bad,good] of [["topic_relevance='irrelevant'","topic_relevance='relevant'"],
+        ["digest_expires_at=now()-interval '1 second'","digest_expires_at=now()+interval '30 days'"]]) {
+        await query(`update public.storage_extractions set ${bad} where id=$1`,[noticeExt]);
+        await assert.rejects(action('extraction',noticeExt,'create_task',0,fields),{code:'22023',message:'INVALID_TRANSITION'},bad);
+        await query(`update public.storage_extractions set ${good} where id=$1`,[noticeExt]);
+      }
+      for (const doc of [null,{action:'Missing fields'},{...fields,owner:'spoofed'},{...fields,deadline:{...fields.deadline,date:'2026-02-30'}}]) {
+        await assert.rejects(action('extraction',noticeExt,'create_task',0,doc),{code:'22023',message:'INVALID_FIELDS'});
+      }
+      await assert.rejects(action('extraction','99999999-9999-4999-8999-999999999999','create_task',0,fields),{code:'42501'});
+      await assert.rejects(action('extraction',noticeExt,'approve',0,fields),{code:'22023',message:'INVALID_ACTION'});
+      const ids=[receipt.extractionId,cleanedExt,deletedExt,noticeExt];
+      assert.equal(await scalar(`select count(*) from public.tasks where origin_extraction_id in (${ids.map((_,i)=>`$${i+1}`).join(',')})`,ids),0);
+    });
+    await t.test('only Passive-origin tasks return to Passive; deleting one suppresses its email',async()=>{
+      const saved=await finish(A,await claim(A,41,'E15'));
+      const row=(await query('select * from public.storage_suggestions where extraction_id=$1',[saved.extractionId]))[0];
+      const fromSuggestion=(await action('suggestion',row.id,'approve',0)).taskId;
+      await assert.rejects(action('task',fromSuggestion,'return_to_passive',0),{code:'22023'});
+      const manual=await scalar("insert into public.tasks(user_id,title,status,accepted_fields) values($1,'Manual',$2,$3) returning id",[A,'approved',fields]);
+      await assert.rejects(action('task',manual,'return_to_passive',0),{code:'22023'});
+      const notice=await passive(A,42,'E14'); await saveDetails(A,notice.extractionId);
+      const made=(await action('extraction',notice.extractionId,'create_task',0,fields)).taskId;
+      await action('task',made,'delete',0);
+      assert.equal((await as('authenticated',A,()=>query('select * from public.tasks where id=$1',[made]))).length,0);
+      assert.equal(await scalar('select summary is null and details is null from public.storage_extractions where id=$1',[notice.extractionId]),true);
+      assert.equal((await claim(A,42,'E14')).state,'suppressed');
+      assert.equal((await claim(A,142,'E14')).state,'suppressed');
+      await assert.rejects(action('extraction',notice.extractionId,'create_task',0,fields),{code:'22023'});
+      await assert.rejects(action('task',made,'return_to_passive',1),{code:'42501'});
+    });
+    await t.test('browser roles cannot write tasks or point a task at another user\'s email',async()=>{
+      const ext=noticeExt;
+      for (const role of ['authenticated','anon']) {
+        await as(role,A,()=>assert.rejects(query("insert into public.tasks(user_id,title,status,origin_extraction_id) values($1,'Forged','approved',$2)",[A,ext]),{code:'42501'}));
+        await as(role,A,()=>assert.rejects(query('update public.tasks set origin_extraction_id=$1 where user_id=$2',[ext,A]),{code:'42501'}));
+      }
+      for (const privilege of ['INSERT','UPDATE']) {
+        assert.equal(await scalar("select has_column_privilege('authenticated','public.tasks','origin_extraction_id',$1)",[privilege]),false);
+      }
+      await assert.rejects(query("insert into public.tasks(user_id,title,status,origin_extraction_id) values($1,'Cross-user','approved',$2)",[B,ext]),{code:'23503'});
     });
     await t.test('incoming updates are proposals, idempotent, and reject stale acceptance',async()=>{
       const lease=await claim(B,11,'E11'); const saved=await finish(B,lease);

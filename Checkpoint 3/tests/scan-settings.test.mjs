@@ -304,6 +304,57 @@ test('saved scanning settings: permissions, validation, revisions, and stale-wor
       // Another account's choice is untouched.
       assert.equal((await get(B)).auto_scan,false);
     });
+    await t.test('clearing settings returns to first-run setup, fences work and keeps records',async()=>{
+      const restart=(revision,user=A)=>as('authenticated',user,()=>scalar('select public.scan_settings_restart($1)',[revision]));
+      const scan=(action,data={})=>as('service_role',A,()=>scalar('select public.gmail_scan_service($1,$2,$3)',[A,action,data]));
+      const fresh=await get(B);
+      await save((await get()).revision,rules,context,true,false,'gmail-scan-v1');
+      await as('authenticated',A,()=>scalar('select public.scan_auto_scan_save(true)'));
+      await q("update private.gmail_scan_work set lease=null,lease_until=null,last_started=now()-interval '2 minutes' where user_id=$1",[A]);
+      const claim=await scan('claim',{mode:'initial'});assert.equal(claim.state,'claimed');
+      await scan('finish',{lease:claim.lease,continuation:{pending:['gmail1'],next:null},result:{modelCalls:0}});
+      const meta={namespace:'fixture',messageId:'E02',threadId:'thread-E02',subject:'Fictional',sender:'teacher@example.org',sentAt:'2026-10-05T12:00:00Z',model:'test-model'};
+      const job=await as('service_role',A,()=>scalar('select public.storage_claim($1,$2,$3,$4,$5)',[A,'c'.repeat(64),'b'.repeat(64),meta,1000]));
+      assert.equal(job.state,'claimed');
+      const before=await get();
+      const generation=await scalar('select generation from public.storage_preferences where user_id=$1',[A]);
+      const tasks=await scalar('select count(*) from public.tasks where user_id=$1',[A]);
+      const connection=await q('select state,email,generation from private.google_connections where user_id=$1',[A]);
+      assert.equal(before.setup_pending,false);
+      // Stale, invalid, anonymous and signed-out requests change nothing.
+      await assert.rejects(restart(before.revision-1),{code:'PT409'});
+      await assert.rejects(restart(null),{code:'22023'});
+      await as('anon',A,()=>assert.rejects(q('select public.scan_settings_restart($1)',[before.revision])));
+      await as('authenticated',null,()=>assert.rejects(q('select public.scan_settings_restart($1)',[before.revision]),{code:'42501'}));
+      assert.equal((await get()).revision,before.revision);
+      const cleared=await restart(before.revision);
+      // Back to a brand-new account's settings, at a higher revision, marked for setup.
+      assert.equal(cleared.revision,before.revision+1);assert.equal(cleared.setup_pending,true);
+      assert.equal(cleared.consent,false);assert.equal(cleared.consent_at,null);assert.equal(cleared.disclosure_version,null);
+      assert.equal(cleared.paused,true);assert.equal(cleared.auto_scan,false);assert.equal(cleared.requires_review,false);
+      assert.deepEqual(cleared.rules,fresh.rules);assert.deepEqual(cleared.context_limits,fresh.context_limits);
+      assert.deepEqual(cleared.semantic_preferences,{include:[],exclude:[],blockedWords:{},includeWords:{}});
+      assert.deepEqual(await get(),cleared);
+      // Fenced like a save: in-flight storage work, unfinished scan work and new scans.
+      assert.equal(await scalar('select generation from public.storage_preferences where user_id=$1',[A]),generation+1);
+      assert.equal(await scalar('select state from private.storage_jobs where id=$1',[job.jobId]),'cancelled');
+      await as('service_role',A,()=>assert.rejects(q('select public.storage_finish($1,$2,$3,$4,$5)',[A,job.jobId,job.leaseToken,{},meta]),{code:'PT409'}));
+      assert.equal(await scalar('select continuation from private.gmail_scan_work where user_id=$1',[A]),null);
+      await q("update private.gmail_scan_work set last_started=now()-interval '2 minutes' where user_id=$1",[A]);
+      await assert.rejects(scan('claim',{mode:'initial'}),{code:'PT409'});
+      // Records, the Google connection and storage enablement are untouched.
+      assert.equal(await scalar('select count(*) from public.tasks where user_id=$1',[A]),tasks);
+      assert.deepEqual(await q('select state,email,generation from private.google_connections where user_id=$1',[A]),connection);
+      assert.equal(await scalar('select enabled from public.storage_preferences where user_id=$1',[A]),true);
+      assert.equal((await get(B)).revision,fresh.revision);
+      // The old revision is now stale; saving setup again clears the mark.
+      await assert.rejects(save(before.revision,rules,context,true,false,'gmail-scan-v1'),{code:'PT409'});
+      const setUp=await save(cleared.revision,rules,context,true,false,'gmail-scan-v1');
+      assert.equal(setUp.setup_pending,false);assert.equal(setUp.revision,cleared.revision+1);assert.equal(setUp.consent,true);
+      // Another account cannot clear this one: the RPC only acts on the caller.
+      await restart((await get(B)).revision,B);
+      assert.equal((await get()).setup_pending,false);assert.equal((await get(B)).setup_pending,true);
+    });
     await t.test('account deletion removes saved privacy settings',async()=>{
       await q('delete from auth.users where id=$1',[A]);assert.equal(await scalar('select count(*) from public.scan_settings where user_id=$1',[A]),0);
     });

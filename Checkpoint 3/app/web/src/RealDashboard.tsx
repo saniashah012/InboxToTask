@@ -1,14 +1,17 @@
 // Sania's designed dashboard, fed by saved records for a signed-in account.
 // Backend calls are the ones ManualWorkspace already uses; nothing here is simulated.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react"
 import inboxToTaskLogo from "./assets/inbox-to-task-logo.png"
 import { Icon, Modal } from "./designedUi"
 import { supabase } from "./supabase"
 import { googleConnectionStatus, loadStorageSnapshot, reviewStoredRecord, type Deadline, type ScanSettings, type Snapshot, type StoredRow, type TaskFields } from "./storageAdapter"
 import { isScanBusy, manualScan, manualScanStatus, ScanRequestError, resolveTaskChange, reviewTaskChange, scanStopMessage, type ScanStatus } from "./manualScanAdapter"
 import ManualChangeResolver, { canonical, draftFrom, fieldsFromDraft, type Draft } from "./ManualChangeResolver"
-import { loadTaskSourceLinks, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
-import { loadRead, saveRead } from "./readMarks"
+import { gmailConversationUrl, loadTaskSourceLinks, TaskSourceEmails, type TaskSourceLink } from "./SourceEmails"
+import { dateChoicesFromNotes, sentDayHint, sentLabel, shortDateLabel } from "./reviewNotes"
+import { USER_ENTERED_WORDING } from "./passiveTask"
+import { loadRead, rememberPriorRead, restorePriorRead, saveRead } from "./readMarks"
+import CreateTaskFromEmail from "./CreateTaskFromEmail"
 import { changeKey, countAdded, NOTHING_ADDED, scanSummary, suggestionKey } from "./newItems"
 import { useNewItems } from "./useNewItems"
 import ExtractionReview from "./ExtractionReview"
@@ -19,8 +22,8 @@ import { deadlineLabel, deadlineMoved, draftFrom as calendarDraftFrom, eventSumm
 import { settingsHaveScanSource, type GmailState } from "./scanSetup"
 import {
   autoNextCheck, quietStop, skippedByCategories, TRANSIENT_STOPS, TROUBLE_AFTER, BATCH_LIMIT_STOPS, checkedAgo, checkedNoNewEmail, batchMadeProgress, DAILY_LIMIT_STOP,
-  AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState,
-  type ChangeItem, type ScanPanelState, type SuggestionItem, type TaskItem, type WaitingItem,
+  AUTO_CHECK_INTERVAL_MS, buildDashboardModel, canScan, deadlineDisplay, emptySnapshot, fieldText, localDate, scanPanelState, sourceDeleteCheck, suggestionEdited,
+  type ChangeItem, type ScanPanelState, type SourceDeleteCheck, type SuggestionItem, type TaskItem, type WaitingItem,
 } from "./dashboardModel"
 import "./storage.css"
 import "./manual-workspace.css"
@@ -30,14 +33,25 @@ import "./calendar-cards.css"
 type View = "suggestions" | "active" | "completed" | "dismissed"
 type SettingsTarget = "sources" | "processing" | "connections" | "retention"
 type Failure = { message: string }
-type SourceView = { title: string; sender?: string | null; subject?: string | null; sentAt?: string | null; quote: string | null; messageId: string | null; taskId?: string; extraction?: StoredRow; summary?: string }
-type Editing = { kind: "suggestion" | "task"; row: StoredRow; fields: TaskFields }
+// passive: opened from Passive communication, with the email's read state from before
+// this opening (View details marks it read), so "Turn into task" can restore it later.
+// sourceId: the stored email, set for a suggestion's or a Passive email's view so the
+// dialog can offer "Delete from InboxToTask". Task views leave it unset.
+type SourceView = { title: string; sender?: string | null; subject?: string | null; sentAt?: string | null; quote: string | null; messageId: string | null; taskId?: string; extraction?: StoredRow; summary?: string
+  passive?: { sourceId: string; wasRead: boolean }; sourceId?: string }
+// adding: the editor was opened by Add task, for a suggestion that needs verification or
+// has no deadline. Saving it adds the task; reasons are what the scan asked the user to check.
+// context: the suggestion's email as already loaded, so the user can judge it without Gmail.
+type EmailContext = { sender: string | null; subject: string | null; sentAt: string | null; quote: string | null; messageId: string | null }
+type Editing = { kind: "suggestion" | "task"; row: StoredRow; fields: TaskFields; adding?: boolean; reasons?: string[]; context?: EmailContext }
 type Category = "suggestions" | "active" | "completed" | "dismissed"
 // A question shown after a task change when the task has a Google Calendar event.
 type CalendarFollowUp =
   | { kind: "deadline"; task: TaskItem; deadline: Deadline; draft: CalendarEventStatus["draft"] }
   | { kind: "cancelled"; task: TaskItem }
   | { kind: "delete"; task: TaskItem; from: Category; to: Category; suggestionId: string }
+  // Move back to Passive removes the task, so its event is kept or removed first.
+  | { kind: "passive"; task: TaskItem }
 // Stored states in which the task has an event the user can manage.
 const hasCalendarEvent = (status?: CalendarEventStatus) => Boolean(status && ["succeeded", "updating", "removing"].includes(status.state))
 // With Calendar events on, the follow-ups say what happens to the event; without, the old ending stays.
@@ -160,6 +174,9 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const [menuId, setMenuId] = useState<string | null>(null)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [source, setSource] = useState<SourceView | null>(null)
+  // "Delete from InboxToTask": the email whose confirmation is open, and why it failed.
+  const [deleting, setDeleting] = useState<SourceView | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Editing | null>(null)
   const [changeId, setChangeId] = useState<string | null>(null)
   const [exportTask, setExportTask] = useState<TaskItem | null>(null)
@@ -179,7 +196,14 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   // Runs when this tab is shown again (see the visibility and focus handler below).
   const onReturn = useRef<() => void>(() => {})
   const [reminderFor, setReminderFor] = useState<StoredRow | null>(null)
-  const [toast, setToast] = useState<{ kind: "dismissed" | "completed" | "moved"; id: string; from?: Category; to?: Category; note?: string } | null>(null)
+  // "created": a task made from a Passive email (id is the task; revision as saved).
+  const [toast, setToast] = useState<{ kind: "dismissed" | "completed" | "moved" | "created"; id: string; from?: Category; to?: Category; note?: string; revision?: number } | null>(null)
+  // "Turn into task": the Passive email whose Create task form is open.
+  const [creating, setCreating] = useState<SourceView | null>(null)
+  // Bumped when a read mark is restored outside the Passive list, so the list rereads them.
+  const [readVersion, setReadVersion] = useState(0)
+  // The task card "View task" brings into view and outlines for a moment.
+  const [jumpTo, setJumpTo] = useState<string | null>(null)
   const [activityOpen, setActivityOpen] = useState(false)
   // With automatic checks on, the status bar starts as one slim line; the choice to
   // expand it is remembered in this browser for this account.
@@ -373,6 +397,42 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     }
   }
 
+  // Deletes one stored email from InboxToTask (storage_action source/delete). The rule is
+  // checked again on freshly loaded records first, so a task added from this email in
+  // another tab since the dialog opened stops the delete. Errors stay in the dialog.
+  async function deleteSourceEmail(view: SourceView) {
+    if (!view.sourceId) return
+    const current = epoch.current, sourceId = view.sourceId
+    setBusy(true); setDeleteError(null); setFailure(null); setNotice(""); setMenuId(null)
+    try {
+      const fresh = await loadStorageSnapshot(supabase)
+      const freshLinks = await loadTaskSourceLinks(fresh.tasks.map((t) => t.id)).catch(() => null)
+      if (current !== epoch.current) return
+      const check = sourceDeleteCheck(fresh, freshLinks, sourceId)
+      if (!check.allowed) {
+        if (check.reason === "unavailable") {
+          setDeleting(null); setSource(null); setNotice("This email was already deleted from InboxToTask.")
+        } else setDeleteError(sourceDeleteHint[check.reason])
+        await reload()
+        return
+      }
+      // The source action takes no revision; a missing or already deleted email is refused.
+      await reviewStoredRecord("source", sourceId, "delete", 0)
+      if (current !== epoch.current) return
+      setDeleting(null); setSource(null)
+      setNotice("Email deleted from InboxToTask. It is still in Gmail.")
+      await reload()
+      announceChange()
+    } catch {
+      if (current === epoch.current) {
+        setDeleteError(sourceDeleteFailed)
+        await reload(); announceChange()
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runScan(mode: "initial" | "more") {
     const result = await manualScan(mode)
     if (result.executionMode !== "GMAIL_PERSISTENT_MANUAL") throw new Error("The backend is in retrieval-only mode. No suggestions were extracted or saved.")
@@ -484,11 +544,20 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
 
   const sourceForSuggestion = (s: SuggestionItem | ChangeItem | WaitingItem, title: string): SourceView => ({
     title, sender: s.source?.sender, subject: s.source?.subject, sentAt: s.source?.sent_at, quote: s.quote, messageId: s.messageId, extraction: s.extraction,
+    sourceId: s.source?.id,
   })
-  const sourceForTask = (t: TaskItem): SourceView => ({
-    title: t.fields.action, sender: t.primary?.sender, subject: t.primary?.subject, sentAt: t.primary?.sentAt,
-    quote: null, messageId: t.primary?.messageId ?? null, taskId: t.row.id,
-  })
+  const sourceForTask = (t: TaskItem): SourceView => {
+    // A task made from a Passive email has no suggestion-based link: show its origin email.
+    const p = t.fromPassive
+    if (p && !t.primary) return {
+      title: t.fields.action, sender: p.source?.sender, subject: p.source?.subject, sentAt: p.source?.sent_at,
+      quote: p.quote, messageId: p.messageId, extraction: p.extraction, summary: p.summary ?? undefined,
+    }
+    return {
+      title: t.fields.action, sender: t.primary?.sender, subject: t.primary?.subject, sentAt: t.primary?.sentAt,
+      quote: null, messageId: t.primary?.messageId ?? null, taskId: t.row.id,
+    }
+  }
 
   // Where an item is now, found by its suggestion ID (tasks keep it as origin_suggestion_id).
   const locate = (suggestionId: string): { cat: Category; row: StoredRow } | null => {
@@ -519,7 +588,21 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     void perform(() => runMove(from, row, to), `Moved to ${categoryLabel[to]}.`, () => { setNotice(""); setToast({ kind: "moved", id: suggestionId, from, to, note }) })
   // Moving a task back to Suggestions or Dismissed deletes it, so a task with a Calendar
   // event first asks what should happen to the event.
+  // A task is never added to Active without a deadline, and a suggestion marked "Needs
+  // verification" is never added unread: Add task opens the editor for these instead.
+  const mustReview = (s: SuggestionItem) => !s.fields.deadline || Boolean(s.extraction?.needs_review)
+  const contextOf = (s: SuggestionItem): EmailContext => ({
+    sender: s.source?.sender ?? null, subject: s.source?.subject ?? null, sentAt: s.source?.sent_at ?? null, quote: s.quote, messageId: s.messageId,
+  })
+  const reviewToAdd = (s: SuggestionItem) => setEditing({
+    kind: "suggestion", row: s.row, fields: s.fields, adding: true, context: contextOf(s),
+    reasons: Array.isArray(s.extraction?.warnings) ? s.extraction.warnings.filter((w: unknown): w is string => typeof w === "string") : [],
+  })
   const move = (from: Category, row: StoredRow, to: Category, suggestionId: string) => {
+    if ((from === "suggestions" || from === "dismissed") && (to === "active" || to === "completed")) {
+      const item = [...model.suggestions, ...model.dismissed].find((s) => s.row.id === row.id)
+      if (item && mustReview(item)) return reviewToAdd(item)
+    }
     const deletes = (from === "active" || from === "completed") && (to === "suggestions" || to === "dismissed")
     const task = deletes && calendarEventsEnabled && hasCalendarEvent(calendarStatuses[row.id])
       ? [...model.active, ...model.closed].find((t) => t.row.id === row.id) : undefined
@@ -618,6 +701,61 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     else setFailure((f) => f && { message: `${f.message} The task was not moved.` })
   }
 
+  // ---- "Turn into task" for Passive communication ----
+  // Saves the Create task form. The backend keeps one task per email, so a repeat
+  // returns the first task. Resolves to a fixed error for the form, or null.
+  async function saveCreatedTask(view: SourceView, fields: TaskFields): Promise<string | null> {
+    const extraction = view.extraction
+    if (!extraction) return "This email can no longer become a task."
+    const current = epoch.current
+    setBusy(true); setFailure(null); setNotice(""); setMenuId(null)
+    try {
+      const saved = await reviewStoredRecord("extraction", extraction.id, "create_task", 0, fields) as { taskId: string; reused?: boolean; revision?: number }
+      if (current !== epoch.current) return null
+      // The read state from before View details, for Undo and Move back to Passive.
+      if (view.passive) rememberPriorRead(userId, saved.taskId, view.passive)
+      setCreating(null)
+      await reload()
+      announceChange()
+      if (current === epoch.current) setToast({ kind: "created", id: saved.taskId, revision: Number(saved.revision ?? 0), note: saved.reused ? "reused" : undefined })
+      return null
+    } catch (err) {
+      return current === epoch.current ? `The task was not created. ${(err as Error).message}` : null
+    } finally {
+      setBusy(false)
+    }
+  }
+  // Removes the task and shows the email under Passive again, with its earlier read mark
+  // when this browser recorded one. Never touches Google Calendar.
+  const returnToPassive = (taskId: string, revision: number, message: string) =>
+    perform(() => reviewStoredRecord("task", taskId, "return_to_passive", revision), message, () => {
+      if (restorePriorRead(userId, taskId)) setReadVersion((v) => v + 1)
+    })
+  // Move back to Passive from a task's actions. A task with a Google Calendar event first
+  // asks whether to keep or remove the event.
+  const moveBackToPassive = (task: TaskItem) => {
+    if (calendarEventsEnabled && hasCalendarEvent(calendarStatuses[task.row.id])) setCalendarFollowUp({ kind: "passive", task })
+    else void returnToPassive(task.row.id, Number(task.row.revision), "Moved back to Passive communication.")
+  }
+  // Same removal as the delete follow-up: the task moves only once the event's removal is confirmed.
+  async function passiveWithEvent(task: TaskItem, removeIt: boolean) {
+    if (!removeIt) {
+      setCalendarFollowUp(null)
+      return void returnToPassive(task.row.id, Number(task.row.revision), "Moved back to Passive communication. The event stays in Google Calendar; InboxToTask will no longer manage it.")
+    }
+    const removed = await runCalendar(task, () => removeEvent(task.row.id))
+    if (removed) void returnToPassive(task.row.id, Number(task.row.revision), "Moved back to Passive communication. Its calendar event was removed.")
+    else if (removed === false) setFailure({ message: `${calendarMessage("")} The task was not moved.` })
+    else setFailure((f) => f && { message: `${f.message} The task was not moved.` })
+  }
+  // "View task" in the Task created pop-up: opens the task's list and brings its card into view.
+  const viewTask = (taskId: string) => {
+    const closed = model.closed.some((t) => t.row.id === taskId)
+    setActiveTab("tasks"); setView(closed ? "completed" : "active"); setMenuId(null); setJumpTo(taskId)
+  }
+  const passiveMoveItem = (t: TaskItem) => t.fromPassive?.canReturn
+    ? <button onClick={() => { setMenuId(null); moveBackToPassive(t) }}>Move back to Passive</button> : null
+
   // The card's Calendar line; nothing at all when the task has no event (never a permission status).
   const calendarLine = (taskId: string) => {
     const status = calendarStatuses[taskId]
@@ -660,6 +798,18 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
     return () => window.clearTimeout(timer)
     // scan is recreated each render; the timer only needs the latest status.
   }, [autoReady, status, quietRetries])
+
+  // After "View task": scroll the card into view, move focus to it and outline it for 3 s.
+  useEffect(() => {
+    if (!jumpTo || activeTab !== "tasks") return
+    const card = document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(jumpTo)}"]`)
+    if (!card) return
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    card.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" })
+    card.focus({ preventScroll: true })
+    const timer = window.setTimeout(() => setJumpTo(null), 3000)
+    return () => window.clearTimeout(timer)
+  }, [jumpTo, activeTab, view])
 
   return (
     <div className="app-shell">
@@ -771,8 +921,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                             onMenu={() => setMenuId((c) => (c === s.row.id ? null : s.row.id))}
                             onSource={() => { seen(); setSource(sourceForSuggestion(s, s.fields.action)) }}
                             primary={<button className="primary-button row-button" disabled={busy || !s.quote} title={s.quote ? undefined : "The supporting excerpt expired, so this suggestion can only be dismissed."}
-                              onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added.") }}>Add task</button>}
-                            menu={<><button onClick={() => { setMenuId(null); seen(); setEditing({ kind: "suggestion", row: s.row, fields: s.fields }) }}>Edit before adding</button>
+                              onClick={() => { seen(); if (mustReview(s)) reviewToAdd(s); else void perform(() => reviewStoredRecord("suggestion", s.row.id, "approve", s.row.revision), "Task added.") }}>Add task</button>}
+                            menu={<><button onClick={() => { setMenuId(null); seen(); setEditing({ kind: "suggestion", row: s.row, fields: s.fields, context: contextOf(s) }) }}>Edit before adding</button>
                               {moveItems("suggestions", s.row, s.row.id, Boolean(s.quote), seen)}
                               <button className="danger-action" onClick={() => { seen(); void perform(() => reviewStoredRecord("suggestion", s.row.id, "dismiss", s.row.revision), "Suggestion dismissed.", () => { setNotice(""); setToast({ kind: "dismissed", id: s.row.id }) }) }}>Dismiss suggestion</button></>}
                           />)
@@ -816,15 +966,16 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
 
                   {view === "active" && <>
                     {model.active.length > 0 && <div className="task-list">{model.active.map((t) => (
-                      <RealTaskRow key={t.row.id} kind="active" fields={t.fields} today={today} busy={busy}
-                        context={t.primary?.sender ?? ""} menuOpen={menuId === t.row.id} calendarLine={calendarLine(t.row.id)}
+                      <RealTaskRow key={t.row.id} kind="active" fields={t.fields} today={today} busy={busy} taskId={t.row.id} highlight={jumpTo === t.row.id}
+                        context={t.primary?.sender ?? t.fromPassive?.source?.sender ?? ""} menuOpen={menuId === t.row.id} calendarLine={calendarLine(t.row.id)}
                         badges={t.pendingChanges > 0 ? <><span className="updated-badge">Change proposed</span><button className="review-change-link" onClick={() => setChangeId(model.changes.find((c) => c.row.target_task_id === t.row.id)?.row.id ?? null)}>Review change</button></> : null}
                         onComplete={() => void perform(() => reviewStoredRecord("task", t.row.id, "complete", t.row.revision), "Task completed.", () => { setNotice(""); setToast({ kind: "completed", id: t.row.id }) })}
                         onMenu={() => setMenuId((c) => (c === t.row.id ? null : t.row.id))}
                         onSource={() => setSource(sourceForTask(t))}
                         primary={<button className="calendar-button" disabled={busy} onClick={() => openCalendar(t)}><Icon name="calendar" size={16} />{!calendarEventsEnabled ? "Export calendar file" : managesEvent(t.row.id) ? "Manage event" : "Add to calendar"}</button>}
                         menu={<><button onClick={() => { setMenuId(null); setEditing({ kind: "task", row: t.row, fields: t.fields }) }}>Edit task</button>
-                          {moveItems("active", t.row, t.row.origin_suggestion_id)}</>}
+                          {moveItems("active", t.row, t.row.origin_suggestion_id)}
+                          {passiveMoveItem(t)}</>}
                       />))}</div>}
                     <WaitingSection items={model.waiting} openCount={openWaiting} busy={busy} today={today}
                       onSource={(w) => setSource(sourceForSuggestion(w, w.row.action))}
@@ -834,11 +985,13 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                   </>}
 
                   {view === "completed" && <>
-                    {model.closed.length > 0 && <div className="task-list">{model.closed.map((t) => (
-                      <RealTaskRow key={t.row.id} kind={t.cancelled ? "cancelled" : "completed"} fields={t.fields} today={today} busy={busy}
-                        context={t.primary?.sender ?? ""} menuOpen={menuId === t.row.id} calendarLine={calendarLine(t.row.id)}
+                    {model.closed.length > 0 && <div className="task-list">{model.closed.map((t) => {
+                      const moves = t.cancelled ? null : moveItems("completed", t.row, t.row.origin_suggestion_id), back = t.cancelled ? null : passiveMoveItem(t)
+                      return (
+                      <RealTaskRow key={t.row.id} kind={t.cancelled ? "cancelled" : "completed"} fields={t.fields} today={today} busy={busy} taskId={t.row.id} highlight={jumpTo === t.row.id}
+                        context={t.primary?.sender ?? t.fromPassive?.source?.sender ?? ""} menuOpen={menuId === t.row.id} calendarLine={calendarLine(t.row.id)}
                         onMenu={t.cancelled ? undefined : () => setMenuId((c) => (c === t.row.id ? null : t.row.id))}
-                        menu={t.cancelled ? undefined : moveItems("completed", t.row, t.row.origin_suggestion_id) ?? undefined}
+                        menu={moves || back ? <>{moves}{back}</> : undefined}
                         onComplete={t.cancelled ? undefined : () => void perform(() => reviewStoredRecord("task", t.row.id, "undo", t.row.revision), "Completion undone. The task is open again.")}
                         onSource={() => setSource(sourceForTask(t))}
                         primary={(() => {
@@ -847,7 +1000,8 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
                             ? <div className="rd-cal-closed">{state}<button className="calendar-button rd-cal-manage" disabled={busy} onClick={() => openCalendar(t)}><Icon name="calendar" size={14} />Manage event</button></div>
                             : state
                         })()}
-                      />))}</div>}
+                      />)
+                    })}</div>}
                     {!model.closed.length && <EmptyState title="No completed tasks" detail="Completed tasks are kept for 30 days, then removed." />}
                   </>}
 
@@ -868,16 +1022,41 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
           </div>
         ) : (
           loading ? <div className="empty-state" role="status"><span className="spinner" aria-hidden="true" /><h3>Loading summaries…</h3></div>
-            : model.information.length ? <PassiveSection key={`info-${userId}`} userId={userId} items={model.information} sources={snapshot.sources} evidence={snapshot.evidence} onSource={setSource}
+            : model.information.length ? <PassiveSection key={`info-${userId}`} userId={userId} readVersion={readVersion} items={model.information} sources={snapshot.sources} evidence={snapshot.evidence} onSource={setSource}
               isNew={(e) => marks.isNew("passive", e.created_at)} since={marks.lastVisit("passive")} />
               : <EmptyState title="No informational summaries" detail="Summaries of permitted emails that don’t need action appear here after a manual check." />
         )}
       </main>
 
-      {source && <SourceModal source={source} email={email} links={links} onClose={() => setSource(null)} />}
-      {editing && <EditFieldsModal editing={editing} busy={busy} onCancel={() => setEditing(null)}
+      {source && !deleting && <SourceModal source={source} email={email} links={links} onClose={() => setSource(null)}
+        onTurnIntoTask={source.passive && source.extraction ? () => { setCreating(source); setSource(null) } : undefined}
+        deleteCheck={source.sourceId ? sourceDeleteCheck(snapshot, links, source.sourceId) : undefined}
+        onDelete={() => { setDeleteError(null); setDeleting(source) }} />}
+      {deleting && <DeleteSourceModal source={deleting} busy={busy} error={deleteError}
+        onCancel={() => { if (!busy) { setDeleting(null); setDeleteError(null) } }}
+        onReload={() => { setDeleteError(null); void reload() }}
+        onConfirm={() => void deleteSourceEmail(deleting)} />}
+      {creating?.extraction && <CreateTaskFromEmail key={creating.extraction.id} timeZone={viewerZone} busy={busy}
+        gmailUrl={creating.messageId ? gmailConversationUrl(email, creating.messageId) : undefined}
+        email={{ subject: creating.subject ?? null, sentAt: creating.sentAt ?? null, summary: creating.summary ?? null, quote: creating.quote, extraction: creating.extraction }}
+        onCancel={() => setCreating(null)}
+        onSave={(fields) => saveCreatedTask(creating, fields)} />}
+      {editing && <EditFieldsModal editing={editing} email={email} busy={busy} onCancel={() => setEditing(null)}
+        // Put back the values the scan found. Saved as the review values, which then
+        // match the original, so the card shows no "Edited by you" badge.
+        onRestore={() => void perform(() => reviewStoredRecord("suggestion", editing.row.id, "edit", editing.row.revision, editing.row.fields),
+          "The suggestion's original values were restored. It still needs you to add it.", () => setEditing(null))}
         onSave={(fields) => {
           const { kind, row } = editing, before = editing.fields.deadline
+          if (editing.adding) {
+            // Add task from the editor: the reviewed values are saved with the approval.
+            // A dismissed suggestion is restored first, as Move to Active does.
+            return void perform(async () => {
+              let rev = Number(row.revision)
+              if (row.state !== "pending") { await reviewStoredRecord("suggestion", row.id, "restore", rev); rev += 1 }
+              return reviewStoredRecord("suggestion", row.id, "approve", rev, fields)
+            }, "Task added.", () => setEditing(null))
+          }
           void perform(() => reviewStoredRecord(kind, row.id, "edit", row.revision, fields),
             kind === "suggestion" ? "Your edits were saved. The suggestion still needs you to add it." : `Task updated.${noCalendarWrite}`, () => setEditing(null))
             .then((saved) => { if (saved && kind === "task") followUpAfterChange(row.id, before, false) })
@@ -910,8 +1089,13 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         onRemove={() => {
           if (calendarFollowUp.kind === "cancelled") void removeAfterCancel(calendarFollowUp.task)
           else if (calendarFollowUp.kind === "delete") void deleteWithEvent(calendarFollowUp, true)
+          else if (calendarFollowUp.kind === "passive") void passiveWithEvent(calendarFollowUp.task, true)
         }}
-        onKeep={() => { if (calendarFollowUp.kind === "delete") void deleteWithEvent(calendarFollowUp, false); else setCalendarFollowUp(null) }} />}
+        onKeep={() => {
+          if (calendarFollowUp.kind === "delete") void deleteWithEvent(calendarFollowUp, false)
+          else if (calendarFollowUp.kind === "passive") void passiveWithEvent(calendarFollowUp.task, false)
+          else setCalendarFollowUp(null)
+        }} />}
       {reminderFor && <ReminderModal followup={reminderFor} busy={busy} onCancel={() => setReminderFor(null)}
         onSave={(iso) => void perform(() => reviewStoredRecord("followup", reminderFor.id, "remind", reminderFor.revision, { reminderAt: iso }), "Dashboard reminder saved. No email or notification is sent.", () => setReminderFor(null))} />}
 
@@ -928,6 +1112,22 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         const dismissedRow = toast.kind === "dismissed" ? model.dismissed.find((s) => s.row.id === toast.id)?.row : undefined
         const completedRow = toast.kind === "completed" ? model.closed.find((t) => t.row.id === toast.id)?.row : undefined
         const row = dismissedRow ?? completedRow
+        if (toast.kind === "created") {
+          // A task made from a Passive email. A repeat save returned the email's existing task: no Undo.
+          const task = [...model.active, ...model.closed].find((t) => t.row.id === toast.id)
+          const reused = toast.note === "reused"
+          return (
+            <FadeAway aria-live="polite" className="undo-toast" key={`created-${toast.id}`} onDone={() => setToast(null)}>
+              <span>{reused ? "This email is already a task" : "Task created"}</span>
+              {task && <button onClick={() => viewTask(toast.id)}>View task</button>}
+              {!reused && <button disabled={busy} onClick={() => {
+                setToast(null)
+                void returnToPassive(toast.id, Number(task?.row.revision ?? toast.revision ?? 0), "Undone. The email is back in Passive communication.")
+              }}>Undo</button>}
+              <button aria-label="Close" className="toast-close" onClick={() => setToast(null)}><Icon name="close" size={16} /></button>
+            </FadeAway>
+          )
+        }
         return (
           <FadeAway aria-live="polite" className="undo-toast" key={`${toast.kind}-${toast.id}`} onDone={() => setToast(null)}>
             <span>{toast.kind === "moved" ? `Moved to ${categoryLabel[toast.to ?? "suggestions"]}` : toast.kind === "dismissed" ? "Suggestion dismissed" : "Task completed"}{toast.note && `. ${toast.note}`}</span>
@@ -957,8 +1157,11 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
   return <div className="empty-state"><div className="empty-state-mark"><Icon name="check" /></div><h3>{title}</h3><p>{detail}</p></div>
 }
 
-function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onMenu, onSource, onComplete, primary, menu, isNew, unread, calendarLine }: {
+function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onMenu, onSource, onComplete, primary, menu, isNew, unread, calendarLine, taskId, highlight }: {
   kind: "suggestion" | "active" | "completed" | "cancelled" | "dismissed"
+  // Task cards only: lets "View task" find, focus and outline the card.
+  taskId?: string
+  highlight?: boolean
   isNew?: boolean
   unread?: boolean
   fields: TaskFields
@@ -978,7 +1181,8 @@ function RealTaskRow({ kind, fields, today, busy, context, badges, menuOpen, onM
   const done = kind === "completed" || kind === "cancelled"
   const caption = [fields.condition && `Condition: ${fields.condition}`, ...fields.requirements].filter(Boolean).join(" · ")
   return (
-    <article className={`task-row ${done ? "is-complete" : ""} ${kind === "suggestion" || kind === "dismissed" ? "is-suggestion" : ""} ${unread === undefined ? "" : unread ? "rd-unread" : "rd-seen"}`}>
+    <article className={`task-row ${done ? "is-complete" : ""} ${kind === "suggestion" || kind === "dismissed" ? "is-suggestion" : ""} ${unread === undefined ? "" : unread ? "rd-unread" : "rd-seen"}${highlight ? " rd-jump-target" : ""}`}
+      data-task-id={taskId} tabIndex={taskId ? -1 : undefined} aria-label={taskId ? fields.action : undefined}>
       {(kind === "active" || kind === "completed") && onComplete && (
         <button aria-label={kind === "completed" ? `Undo completion of ${fields.action}` : `Complete ${fields.action}`} aria-pressed={kind === "completed"} className="checkbox" disabled={busy} onClick={onComplete}>
           {kind === "completed" && <Icon name="check" size={15} />}
@@ -1041,8 +1245,10 @@ function ConfidenceBadge({ category, value }: { category: string; value: number 
 
 // Passive communication: informational emails as cards in the Tasks style, with
 // Unread/Read tabs. Read marks stay in this browser (same storage as before).
-function PassiveSection({ userId, items, sources, evidence, onSource, isNew, since }: {
+function PassiveSection({ userId, readVersion, items, sources, evidence, onSource, isNew, since }: {
   userId: string
+  // Changes when the dashboard restored a read mark (Undo, Move back to Passive).
+  readVersion: number
   items: StoredRow[]
   sources: StoredRow[]
   evidence: StoredRow[]
@@ -1051,6 +1257,12 @@ function PassiveSection({ userId, items, sources, evidence, onSource, isNew, sin
   since: string | null
 }) {
   const [read, setRead] = useState(() => loadRead(userId))
+  // Every change here is saved at once, so the stored marks are current: reread them after a restore.
+  const firstRead = useRef(true)
+  useEffect(() => {
+    if (firstRead.current) { firstRead.current = false; return }
+    setRead(loadRead(userId))
+  }, [userId, readVersion])
   const [view, setView] = useState<"unread" | "read">("unread")
   const mark = (sourceId: string, isRead: boolean) => {
     const next = new Set(read)
@@ -1094,7 +1306,8 @@ function PassiveSection({ userId, items, sources, evidence, onSource, isNew, sin
               {src?.sent_at && <div className="task-meta"><span className="date">Received {friendlyTime(src.sent_at)}</span></div>}
             </div>
             <button className="email-link" onClick={() => {
-              onSource({ title, sender: src?.sender, subject: src?.subject, sentAt: src?.sent_at, quote: quote?.quote ?? null, messageId: quote?.message_id ?? src?.message_id ?? null, extraction: e, summary: e.summary })
+              onSource({ title, sender: src?.sender, subject: src?.subject, sentAt: src?.sent_at, quote: quote?.quote ?? null, messageId: quote?.message_id ?? src?.message_id ?? null, extraction: e, summary: e.summary,
+                passive: { sourceId: e.source_id, wasRead: isRead }, sourceId: e.source_id })
               if (!isRead) mark(e.source_id, true)
             }}>View details</button>
             <button className="secondary-button row-button" onClick={() => mark(e.source_id, !isRead)}>{isRead ? "Mark as unread" : "Mark as read"}</button>
@@ -1310,7 +1523,16 @@ function WaitingSection({ items, openCount, busy, today, onSource, onToggle, onR
   )
 }
 
-function SourceModal({ source, email, links, onClose }: { source: SourceView; email: string; links: TaskSourceLink[] | null; onClose: () => void }) {
+// Why "Delete from InboxToTask" is not offered, or was stopped. Fixed text only.
+const sourceDeleteFailed = "The email was not deleted. Reload saved results and try again."
+const sourceDeleteHint: Record<"task" | "links-unavailable", string> = {
+  task: "A task was added from this email, or the email changed one. To delete this email from InboxToTask, first move that task out of Active or Completed (for example back to Suggestions, Dismissed or Passive communication).",
+  "links-unavailable": "InboxToTask could not check whether a task comes from this email, because source emails did not load. Reload saved results, then try again.",
+}
+
+// onTurnIntoTask: Passive communication items only; opens the Create task form.
+// deleteCheck: set for a suggestion's or a Passive email's view; onDelete opens the confirmation.
+function SourceModal({ source, email, links, onClose, onTurnIntoTask, deleteCheck, onDelete }: { source: SourceView; email: string; links: TaskSourceLink[] | null; onClose: () => void; onTurnIntoTask?: () => void; deleteCheck?: SourceDeleteCheck; onDelete?: () => void }) {
   // Tasks list their linked emails; any other item shows its one email in the same layout.
   const own = source.taskId ? (links ? links.filter((l) => l.taskId === source.taskId) : null)
     : [{ taskId: "", role: "source" as const, threadId: "", messageId: source.messageId, earlierMessage: false, sender: source.sender ?? null, subject: source.subject ?? null, sentAt: source.sentAt ?? null, quote: source.quote }]
@@ -1335,37 +1557,118 @@ function SourceModal({ source, email, links, onClose }: { source: SourceView; em
         <Embedded><TaskSourceEmails email={email} links={own} /></Embedded>
         {source.extraction && <Embedded><ExtractionReview extraction={source.extraction} /></Embedded>}
         <p className="form-hint">InboxToTask keeps only a short excerpt. Gmail opens the whole conversation, which can include messages your rules excluded.</p>
+        {deleteCheck && !deleteCheck.allowed && deleteCheck.reason !== "unavailable" && <p className="form-hint rd-delete-hint">{sourceDeleteHint[deleteCheck.reason]}</p>}
       </div>
-      <div className="modal-actions"><button className="primary-button" onClick={onClose}>Close</button></div>
+      <div className="modal-actions">
+        {deleteCheck?.allowed && onDelete && <button className="danger-button rd-source-delete" onClick={onDelete} type="button">Delete from InboxToTask</button>}
+        {onTurnIntoTask && <button className="secondary-button" onClick={onTurnIntoTask}>Turn into task</button>}
+        <button className="primary-button" onClick={onClose}>Close</button>
+      </div>
     </Modal>
   )
 }
 
-function EditFieldsModal({ editing, busy, onSave, onCancel }: { editing: Editing; busy: boolean; onSave: (fields: TaskFields) => void; onCancel: () => void }) {
+// Confirms "Delete from InboxToTask". It removes stored records only; nothing in Gmail
+// or Google Calendar changes, and it is never offered while a task comes from the email.
+function DeleteSourceModal({ source, busy, error, onCancel, onConfirm, onReload }: {
+  source: SourceView; busy: boolean; error: string | null; onCancel: () => void; onConfirm: () => void; onReload: () => void
+}) {
+  return (
+    <Modal onClose={onCancel} title="Delete this email from InboxToTask?">
+      <div className="modal-copy">
+        <p className="rd-followup-task">{source.subject || "(no subject)"}{source.sender ? ` · ${source.sender}` : ""}</p>
+        <p><strong>Removed from InboxToTask:</strong> this email's suggestions (including dismissed ones), its summary and its saved excerpt, along with its sender and subject.</p>
+        <p>This cannot be undone. InboxToTask will not check this email again, even if it is still in your inbox.</p>
+        <p>The email itself stays in Gmail. Nothing in Gmail or Google Calendar is changed.</p>
+        {busy && <p role="status">Deleting…</p>}
+        {error && <div className="notice warning" role="alert"><span>{error}</span>
+          <button className="text-link" disabled={busy} onClick={onReload} type="button">Reload saved results</button></div>}
+      </div>
+      <div className="modal-actions">
+        <button className="secondary-button" disabled={busy} onClick={onCancel} type="button">Cancel</button>
+        <button className="danger-button rd-source-delete-confirm" disabled={busy || Boolean(error && error !== sourceDeleteFailed)} onClick={onConfirm} type="button">{busy ? "Deleting…" : "Delete from InboxToTask"}</button>
+      </div>
+    </Modal>
+  )
+}
+
+// "From the email" in the suggestion editors: sender, subject, sent time with its weekday,
+// the saved excerpt and the deadline's original wording. Text only; nothing is fetched.
+function EmailContextBlock({ context, wording, email }: { context: EmailContext; wording: string | null; email: string }) {
+  const id = useId()
+  return (
+    <div className="rd-email-context" role="group" aria-labelledby={`${id}-head`}>
+      <span id={`${id}-head`}>From the email</span>
+      <dl>
+        <div><dt>From</dt><dd>{context.sender ?? "Unavailable"}</dd></div>
+        <div><dt>Subject</dt><dd>{context.subject || "(no subject)"}</dd></div>
+        <div><dt>Sent</dt><dd>{sentLabel(context.sentAt, viewerZone) ?? "Unavailable"}</dd></div>
+        {wording && <div><dt>Date wording</dt><dd>“{wording}”</dd></div>}
+      </dl>
+      <span id={`${id}-quote`} className="rd-email-context-label">Saved excerpt</span>
+      {context.quote ? <blockquote aria-labelledby={`${id}-quote`}>{context.quote}</blockquote> : <p>The saved excerpt has expired.</p>}
+      {context.messageId && <a className="rd-quiet-link" href={gmailConversationUrl(email, context.messageId)} target="_blank" rel="noopener noreferrer">
+        Open in Gmail<span className="visually-hidden"> (opens in a new tab)</span></a>}
+    </div>
+  )
+}
+
+function EditFieldsModal({ editing, email, busy, onSave, onRestore, onCancel }: { editing: Editing; email: string; busy: boolean; onSave: (fields: TaskFields) => void; onRestore: () => void; onCancel: () => void }) {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(editing.fields))
   const [error, setError] = useState("")
   const set = (patch: Partial<Draft>) => { setDraft((d) => ({ ...d, ...patch })); setError("") }
+  const adding = Boolean(editing.adding)
+  // Only a pending suggestion's own editor offers this, and only after a real edit.
+  // "Review before adding" saves its values with the approval, so it has nothing to restore.
+  const restorable = editing.kind === "suggestion" && !adding && suggestionEdited(editing.row)
+  const dateRequired = adding || editing.kind === "task"
+  const ids = useId()
+  // The email's own timing words; the fixed sentence for a typed date says nothing new.
+  const original = editing.fields.deadline?.wording
+  const wording = original && original !== USER_ENTERED_WORDING ? original : null
+  const choices = useMemo(() => (adding ? dateChoicesFromNotes(editing.reasons ?? []) : []), [adding, editing.reasons])
+  // The sent day is taken in the deadline's own time zone, as the scan does.
+  const hint = editing.context ? sentDayHint(wording, editing.context.sentAt, editing.fields.deadline?.timeZone || viewerZone) : null
   const submit = () => {
     if (!draft.action.trim()) return setError("Enter the task action.")
+    // Nothing reaches Active tasks without a deadline.
+    if (adding && !draft.date) return setError("Add a due date before adding this task.")
+    if (editing.kind === "task" && !draft.date) return setError("An active task needs a due date.")
     const fields = fieldsFromDraft(draft, editing.fields)
-    if (canonical(fields) === canonical(editing.fields)) return setError("Change at least one value, or cancel.")
+    if (!adding && canonical(fields) === canonical(editing.fields)) return setError("Change at least one value, or cancel.")
     onSave(fields)
   }
   return (
-    <Modal onClose={onCancel} title={editing.kind === "suggestion" ? "Edit suggestion" : "Edit task"}>
+    <Modal className="rd-edit-modal" onClose={onCancel} title={adding ? "Review before adding" : editing.kind === "suggestion" ? "Edit suggestion" : "Edit task"}
+      subtitle={adding ? "Check these values, then add the task. A task needs a due date." : undefined}>
       <form className="form-stack" onSubmit={(e) => { e.preventDefault(); submit() }}>
+        {editing.context && <EmailContextBlock context={editing.context} wording={wording} email={email} />}
+        {adding && editing.reasons && editing.reasons.length > 0 && <div className="rd-review-reasons" role="group" aria-label="What to check">
+          <span>What to check</span>
+          <ul>{editing.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+        </div>}
+        {choices.length > 0 && <div className="rd-date-buttons" role="group" aria-labelledby={`${ids}-dates`}>
+          <span id={`${ids}-dates`}>Dates mentioned</span>
+          <div>{choices.map((c) => (
+            <button type="button" key={c.date} className="secondary-button" aria-pressed={draft.date === c.date} disabled={busy}
+              aria-label={`Use ${c.label} as the deadline date`} onClick={() => set({ date: c.date })}>Use {shortDateLabel(c.label)}</button>
+          ))}</div>
+        </div>}
         <label><span>Action</span><input value={draft.action} maxLength={350} disabled={busy} onChange={(e) => set({ action: e.target.value })} /></label>
-        <label><span>Deadline date (optional)</span><input type="date" value={draft.date} disabled={busy} onChange={(e) => set({ date: e.target.value })} /></label>
+        <label><span>{dateRequired ? "Deadline date" : "Deadline date (optional)"}</span><input type="date" aria-required={dateRequired} value={draft.date} disabled={busy}
+          aria-describedby={hint ? `${ids}-hint` : undefined} onChange={(e) => set({ date: e.target.value })} /></label>
+        {hint && <p className="form-hint" id={`${ids}-hint`}>{hint}</p>}
         <label><span>Time (optional; leave empty for date only)</span><input type="time" value={draft.time} disabled={busy || !draft.date} onChange={(e) => set({ time: e.target.value })} /></label>
         <label><span>Timing</span><select value={draft.boundary} disabled={busy || !draft.date} onChange={(e) => set({ boundary: e.target.value as Deadline["boundary"] })}>
           <option value="by">By</option><option value="before">Before</option><option value="on">On</option><option value="unspecified">Unspecified</option></select></label>
         <label><span>Condition (optional)</span><input value={draft.condition} maxLength={350} disabled={busy} onChange={(e) => set({ condition: e.target.value })} /></label>
         <label><span>Requirements (one per line)</span><textarea value={draft.requirements} disabled={busy} onChange={(e) => set({ requirements: e.target.value })} /></label>
-        {editing.kind === "suggestion" && <p className="form-hint">The original suggestion is kept. Your edits are saved separately and used when you add the task.</p>}
+        {editing.kind === "suggestion" && !adding && <p className="form-hint">The original suggestion is kept. Your edits are saved separately and used when you add the task.</p>}
         {error && <p className="inline-validation" role="alert">{error}</p>}
         <div className="modal-actions">
+          {restorable && <button type="button" className="secondary-button" disabled={busy} onClick={onRestore}>Restore original</button>}
           <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="primary-button" disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
+          <button type="submit" className="primary-button" disabled={busy}>{busy ? "Saving…" : adding ? "Add task" : "Save changes"}</button>
         </div>
       </form>
     </Modal>
@@ -1450,6 +1753,20 @@ function CalendarFollowUpModal({ followUp, busy, fallback, onClose, onMove, onRe
       <div className="modal-actions rd-followup-actions">
         <button className="secondary-button" disabled={busy} onClick={onKeep}>Keep</button>
         <button className="primary-button" disabled={busy} onClick={onRemove}>{busy ? "Removing…" : "Remove"}</button>
+      </div>
+    </Modal>
+  )
+  if (followUp.kind === "passive") return (
+    <Modal onClose={onClose} title="Keep the calendar event?">
+      <div className="rd-followup-body">
+        <p>This task has an event in your Google Calendar. <strong>Keep or remove the event before moving the task back to Passive communication?</strong></p>
+        <p className="rd-followup-task">{title}</p>
+        <p className="form-hint">If you keep it, the event stays in Google Calendar and InboxToTask will no longer manage it.</p>
+      </div>
+      <div className="modal-actions rd-followup-actions">
+        <button className="secondary-button" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="secondary-button" disabled={busy} onClick={onKeep}>Keep event and move back</button>
+        <button className="primary-button" disabled={busy} onClick={onRemove}>{busy ? "Removing…" : "Remove event and move back"}</button>
       </div>
     </Modal>
   )

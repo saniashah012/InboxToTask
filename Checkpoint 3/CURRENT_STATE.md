@@ -469,6 +469,17 @@ test changes are now on `mzheng/passive-to-task`, so the local migrations match 
 allowance lines in this file and `CP4_PLAN.md` now say 50. Hosted is unchanged; the dry run is to be
 run again, with the same pass condition.
 
+**November 18, 4:17 PM CST: hosted migration dry run for PR #124 — passed.** Approved by Matthew
+("Yes, run them"; read-only commands only). Branch `mzheng/passive-to-task` at `29089e7`. Nothing on
+hosted was changed. From `Checkpoint 3/app`: `npx.cmd supabase migration list --linked` shows
+`20261116180000` on both sides and only `20261117000000` and `20261117010000` local-only;
+`npx.cmd supabase db push --dry-run --remote` printed "Would push these migrations:
+20261117000000_passive_to_task.sql, 20261117010000_restart_scan_setup.sql", with no seeds or roles.
+Applying them is the next step and needs its own approval. Pre-deploy checks on `bcf8e0f` (same
+code; `29089e7` added the cherry-picked migration and docs, and the lead session reran `npm test`
+275 and 107 on it): `npm test` 275 and 107, `test:calendar` 45, `tsc --noEmit`, the web build and
+`deno check` of all six functions pass; `supabase:prepare` not yet run.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

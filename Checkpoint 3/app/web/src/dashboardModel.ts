@@ -38,12 +38,25 @@ export type ChangeItem = {
   messageId: string | null
 }
 
+// A task the user created from a Passive email ("Turn into task"). Such tasks have no
+// suggestion-based source link, so their source view comes from the origin analysis.
+// canReturn: the summary can still be shown, so the task can move back to Passive.
+export type PassiveOrigin = {
+  extraction: StoredRow
+  source?: StoredRow
+  quote: string | null
+  messageId: string | null
+  summary: string | null
+  canReturn: boolean
+}
+
 export type TaskItem = {
   row: StoredRow
   fields: TaskFields
   cancelled: boolean
   primary?: SourceLink
   pendingChanges: number
+  fromPassive?: PassiveOrigin
 }
 
 export type WaitingItem = {
@@ -82,6 +95,29 @@ export function deadlineSortKey(deadline: Deadline | null | undefined): string {
   return `${deadline.date}T${deadline.time?.slice(0, 5) ?? "99:99"}`
 }
 
+// Whether two task-field documents say the same thing. Saved JSON does not keep key
+// order, so objects compare key by key; a missing key counts as null (the database
+// only accepts all four keys, and all five deadline keys, so this is a fallback).
+// Arrays keep their order: requirements are a list the user can reorder. Strings
+// compare exactly; the editor trims before saving. Every deadline key counts,
+// including wording and timeZone, because a typed date replaces the email's wording.
+export function sameTaskFields(a: unknown, b: unknown): boolean {
+  if (a === undefined) a = null
+  if (b === undefined) b = null
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return a === b
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    return a.every((v, i) => sameTaskFields(v, b[i]))
+  }
+  const x = a as Record<string, unknown>, y = b as Record<string, unknown>
+  return [...new Set([...Object.keys(x), ...Object.keys(y)])].every((k) => sameTaskFields(x[k], y[k]))
+}
+
+// A suggestion counts as edited only when its saved review values differ from what the
+// scan found. Approving, or moving a task back to Suggestions, also saves review values
+// even when nothing was changed.
+export const suggestionEdited = (row: StoredRow) => row.review_fields != null && !sameTaskFields(row.review_fields, row.fields)
+
 export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | null, now = new Date()): DashboardModel {
   const nowMs = now.getTime()
   const rows = (key: string) => snapshot[key] ?? []
@@ -109,7 +145,7 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
   const suggestion = (row: StoredRow): SuggestionItem => {
     const group = siblingIds.get(row.extraction_id) ?? []
     return {
-      row, fields: row.review_fields ?? row.fields, edited: Boolean(row.review_fields),
+      row, fields: row.review_fields ?? row.fields, edited: suggestionEdited(row),
       ...located(row),
       sibling: row.state === "pending" && group.length > 1 ? { index: group.indexOf(row.id) + 1, of: group.length } : null,
     }
@@ -132,10 +168,25 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
     const own = (links ?? []).filter(l => l.taskId === taskId)
     return own.find(l => l.role === "created") ?? own[0]
   }
-  const taskItem = (row: StoredRow): TaskItem => ({
-    row, fields: row.accepted_fields, cancelled: Boolean(row.cancelled_at),
-    primary: primary(row.id), pendingChanges: pendingByTask.get(row.id) ?? 0,
-  })
+  const passiveOrigin = (row: StoredRow): PassiveOrigin | undefined => {
+    const extraction = row.origin_extraction_id ? extractions.get(row.origin_extraction_id) : undefined
+    if (!extraction) return undefined
+    const source = sources.get(extraction.source_id)
+    const quote = rows("evidence").find(q => q.extraction_id === extraction.id && typeof q.quote === "string" && q.quote)
+    const summary = typeof extraction.summary === "string" && extraction.summary ? extraction.summary : null
+    return {
+      extraction, source, quote: quote?.quote ?? null, messageId: quote?.message_id ?? source?.message_id ?? null,
+      summary, canReturn: Boolean(summary) && time(extraction.digest_expires_at) > nowMs,
+    }
+  }
+  const taskItem = (row: StoredRow): TaskItem => {
+    const fromPassive = passiveOrigin(row)
+    return {
+      row, fields: row.accepted_fields, cancelled: Boolean(row.cancelled_at),
+      primary: primary(row.id), pendingChanges: pendingByTask.get(row.id) ?? 0,
+      ...(fromPassive ? { fromPassive } : {}),
+    }
+  }
   const active = tasks.filter(t => t.status === "approved" && !t.cancelled_at).map(taskItem).sort(byDeadline)
   const closed = tasks.filter(t => t.status === "completed" || t.cancelled_at).map(taskItem)
     .sort((a, b) => time(b.row.completed_at ?? b.row.updated_at ?? b.row.created_at) - time(a.row.completed_at ?? a.row.updated_at ?? a.row.created_at))
@@ -154,7 +205,11 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
   }
   // Passive communication is informational email only: the newest analysis must be
   // Passive (no owner obligation). Actionable emails' tasks appear under Tasks instead.
-  const information = [...latest.values()].filter(e => e.category === "Passive" && e.summary && e.topic_relevance !== "irrelevant" && time(e.digest_expires_at) > nowMs)
+  // An email the user turned into a task stays out while that task exists. Matched on the
+  // source, because a rescan of the same email creates a newer analysis.
+  const becameTask = new Set(tasks.map(t => t.origin_extraction_id && extractions.get(t.origin_extraction_id)?.source_id).filter(Boolean))
+  const information = [...latest.values()].filter(e => e.category === "Passive" && e.summary && e.topic_relevance !== "irrelevant" && time(e.digest_expires_at) > nowMs
+    && !becameTask.has(e.source_id))
 
   return {
     suggestions: pending.map(suggestion).sort(byDeadline),
@@ -164,6 +219,43 @@ export function buildDashboardModel(snapshot: Snapshot, links: SourceLink[] | nu
     unresolvedChanges: changeItems.filter(c => !c.row.target_task_id),
     active, closed, waiting, information,
   }
+}
+
+// When the Source email dialog offers "Delete from InboxToTask" (storage_action with
+// kind "source" and action "delete"). That action removes the email's summary, saved
+// excerpts, suggestions that are not tasks and waiting-for items, and InboxToTask never
+// checks the email again. It leaves any task made from the email in place, without its
+// email, so the control is offered only when no task (open, completed or cancelled)
+// was created or changed from this email. Tasks have to be moved back first. Judged
+// from what the dashboard loaded; the dashboard checks again on fresh records just
+// before deleting.
+// - "unavailable": not a Gmail email that is still stored (already deleted, or unknown).
+// - "task": a task was added from this email, or the email changed one.
+// - "links-unavailable": tasks exist but their source emails could not be loaded, so
+//   it cannot be confirmed that none comes from this email.
+export type SourceDeleteCheck = { allowed: true } | { allowed: false; reason: "unavailable" | "task" | "links-unavailable" }
+type LinkLike = Pick<SourceLink, "taskId" | "threadId" | "messageId"> & { earlierMessage?: boolean }
+
+export function sourceDeleteCheck(snapshot: Snapshot, links: LinkLike[] | null, sourceId: string | null | undefined): SourceDeleteCheck {
+  const rows = (key: string) => snapshot[key] ?? []
+  const source = sourceId ? rows("sources").find((s) => s.id === sourceId) : undefined
+  if (!source || source.namespace !== "gmail" || source.deleted_at) return { allowed: false, reason: "unavailable" }
+  const own = new Set(rows("extractions").filter((e) => e.source_id === sourceId).map((e) => e.id))
+  const fromThisEmail = new Set(rows("suggestions").filter((s) => own.has(s.extraction_id)).map((s) => s.id))
+  const live = rows("tasks").filter((t) => !t.deleted_at)
+  const liveIds = new Set(live.map((t) => t.id))
+  const task = live.some((t) => own.has(t.origin_extraction_id) || fromThisEmail.has(t.origin_suggestion_id))
+    || rows("suggestions").some((s) => own.has(s.extraction_id) && liveIds.has(s.approved_task_id))
+    || rows("changes").some((c) => own.has(c.extraction_id) && c.state === "approved" && liveIds.has(c.target_task_id))
+  if (task) return { allowed: false, reason: "task" }
+  if (!live.length) return { allowed: true }
+  if (links === null) return { allowed: false, reason: "links-unavailable" }
+  // Links outlive expired suggestions and approved changes. A link names the message
+  // its excerpt quotes, which can be an earlier message in the thread, so a link to an
+  // earlier message in this email's thread counts too.
+  const linked = links.some((l) => liveIds.has(l.taskId)
+    && (l.messageId === source.message_id || (Boolean(l.earlierMessage) && Boolean(source.thread_id) && l.threadId === source.thread_id)))
+  return linked ? { allowed: false, reason: "task" } : { allowed: true }
 }
 
 const dayMs = 86_400_000

@@ -83,6 +83,18 @@ test('routing: a never-saved account onboards, saved accounts use the workspace,
   assert.equal(signedInRoute({ ...fresh(), revision: 4, requires_review: true }), 'review-legacy');
 });
 
+test('routing: cleared settings (setup_pending) onboard again at any revision; a save returns to the workspace', () => {
+  assert.equal(signedInRoute({ ...fresh(), revision: 7, setup_pending: true }), 'onboarding');
+  assert.equal(signedInRoute({ ...fresh(), revision: 8, setup_pending: false }), 'workspace');
+  assert.equal(signedInRoute({ ...fresh(), revision: 0, setup_pending: false }), 'onboarding');
+  // Legacy phrase rules still need their review form first.
+  assert.equal(signedInRoute({ ...fresh(), revision: 7, setup_pending: true, requires_review: true }), 'review-legacy');
+  // Cleared settings fill onboarding with nothing chosen.
+  const cleared = preferencesFromSettings({ ...fresh(), revision: 7, setup_pending: true });
+  for (const key of ['includedTypes', 'selectedSenders', 'selectedDomains', 'excludedTypes', 'excludedSenders', 'excludedDomains', 'excludedSubjects'])
+    assert.deepEqual(cleared[key], [], key);
+});
+
 test('topics are saved only as semantic preferences, never as access keywords', () => {
   const next = settingsWithPreferences(fresh(), {
     includedTypes: ['School', 'Research'], excludedTypes: ['Health'],

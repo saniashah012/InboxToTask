@@ -154,7 +154,7 @@ try {
     modelCalls++;const evidence={messageId:payload.currentMessage.id,quote:payload.currentMessage.body};
     const target=payload.existingTaskContext[0],isUpdate=payload.currentMessage.id==='fictional-update';
     return {attempts:1,usage:{totalTokens:10},latencyMs:1,value:{category:'Actionable',confidence:90,summary:'Fictional.',explanation:'Fictional.',evidence,waitingFor:[],suggestedFollowUps:[],uncertainties:[],
-      topicRelevance:{decision:'relevant',reason:'No topic limits.'},
+      details:{title:null,dates:[],location:null,links:[]},topicRelevance:{decision:'relevant',reason:'No topic limits.'},
       tasks:isUpdate?[]:[{action:'Submit fictional report',requirements:[],condition:null,deadline:null,owner:owner.email,evidence,topicRelevance:'relevant'}],
       taskChanges:isUpdate?[{topicRelevance:'relevant',kind:'edit',targetTaskId:target.id,expectedRevision:target.revision,changedFields:['deadline'],
         fields:{...target.acceptedFields,deadline:{date:'2026-11-09',time:null,timeZone:'America/Chicago',wording:'now due November 9',boundary:'on'}},reason:'Fictional revision.',evidence}]:[]}};
@@ -186,7 +186,7 @@ try {
   const ambiguousGenerate=async({payload})=>{
     modelCalls++;const evidence={messageId:payload.currentMessage.id,quote:payload.currentMessage.body};
     return {attempts:1,usage:{totalTokens:10},latencyMs:1,value:{category:'Passive',confidence:60,summary:'Fictional.',explanation:'Fictional.',evidence,waitingFor:[],suggestedFollowUps:[],uncertainties:['Which task is this?'],tasks:[],
-      topicRelevance:{decision:'relevant',reason:'No topic limits.'},taskChanges:[{topicRelevance:'relevant',kind:'edit',targetTaskId:null,expectedRevision:null,changedFields:['deadline'],fields:null,reason:'Fictional ambiguous reference.',evidence}]}};
+      details:{title:null,dates:[],location:null,links:[]},topicRelevance:{decision:'relevant',reason:'No topic limits.'},taskChanges:[{topicRelevance:'relevant',kind:'edit',targetTaskId:null,expectedRevision:null,changedFields:['deadline'],fields:null,reason:'Fictional ambiguous reference.',evidence}]}};
   };
   await createGmailProcessor({rpc:transport,user:owner,work,systemPrompt:'Fictional injected model.',generate:ambiguousGenerate,
     settings:{contextLimits:gmailLimits,model:'local-gmail-test',version:'local',maxOutputTokens:8192,maxAttempts:1,timeoutMs:60000}})(email('fictional-ambiguous',0.5,'That deliverable is pushed back.'));

@@ -226,12 +226,18 @@ export function settingsHaveScanSource(settings: ScanSettings) {
   })
 }
 
-// Signed-in routing: a first save (revision 0) goes through the designed onboarding.
+// Signed-in routing: a first save (revision 0) goes through the designed onboarding,
+// and so does an account whose settings were cleared to run setup again
+// (setup_pending; the revision keeps increasing so old work stays fenced).
 // Legacy phrase rules need the workspace review form, which is the only screen
 // that can send p_reviewed.
 export function signedInRoute(settings: ScanSettings): "onboarding" | "review-legacy" | "workspace" {
   if (settings.requires_review) return "review-legacy"
-  return settings.revision === 0 ? "onboarding" : "workspace"
+  return needsSetup(settings) ? "onboarding" : "workspace"
+}
+
+export function needsSetup(settings: Pick<ScanSettings, "revision" | "setup_pending">): boolean {
+  return settings.revision === 0 || settings.setup_pending === true
 }
 
 export type GmailState = "disconnected" | "connected" | "reconnect_required" | "disconnecting" | "unknown"

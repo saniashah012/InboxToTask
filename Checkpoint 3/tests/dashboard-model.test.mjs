@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AUTO_CHECK_INTERVAL_MS, MAX_RETRY_MS, quietStop, skippedByCategories, TRANSIENT_RETRY_MS, transientRetryDelay, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, scanPanelState,
+  AUTO_CHECK_INTERVAL_MS, MAX_RETRY_MS, quietStop, skippedByCategories, TRANSIENT_RETRY_MS, transientRetryDelay, autoContinueDelay, autoNextCheck, batchMadeProgress, buildDashboardModel, checkedAgo, checkedNoNewEmail, canScan, deadlineDisplay, deadlineSortKey, emptySnapshot, fieldText, sameTaskFields, scanPanelState, sourceDeleteCheck,
 } from '../app/web/src/dashboardModel.ts';
 
 const NOW = new Date('2026-11-09T15:00:00Z');
@@ -85,6 +85,34 @@ test('suggestions show the user edit, keep evidence state and sort by deadline',
   assert.deepEqual(late.sibling, { index: 1, of: 2 });
 });
 
+test('a suggestion is edited only when its review values differ from the scan', () => {
+  const scan = { action: 'Submit lab', requirements: ['Report', 'Data'], condition: null, deadline: due('2026-11-20', '17:00') };
+  const reordered = { deadline: { boundary: 'by', wording: 'by 2026-11-20', timeZone: 'America/Chicago', time: '17:00', date: '2026-11-20' }, condition: null, requirements: ['Report', 'Data'], action: 'Submit lab' };
+  const edited = (review) => {
+    const s = snapshot();
+    s.suggestions = [{ id: 's-x', extraction_id: 'ex-1', state: 'pending', revision: 2, evidence_id: 'ev-1', fields: scan, ...(review === undefined ? {} : { review_fields: review }), expires_at: future }];
+    return buildDashboardModel(s, links, NOW).suggestions[0].edited;
+  };
+  assert.equal(edited(undefined), false, 'no review values');
+  assert.equal(edited(null), false, 'review values cleared');
+  assert.equal(edited(structuredClone(scan)), false, 'approved or moved back untouched');
+  assert.equal(edited(reordered), false, 'saved JSON in a different key order');
+  assert.equal(edited({ ...scan, deadline: { ...scan.deadline, date: '2026-11-21', wording: 'Entered by you after reading the source email.' } }), true, 'changed deadline');
+  assert.equal(edited({ ...scan, deadline: null }), true, 'removed deadline');
+  assert.equal(edited({ ...scan, action: 'Submit lab report' }), true, 'changed action');
+  assert.equal(edited({ ...scan, requirements: ['Report'] }), true, 'removed requirement');
+  assert.equal(edited({ ...scan, requirements: ['Data', 'Report'] }), true, 'reordered requirements');
+  assert.equal(edited({ ...scan, condition: 'If the lab runs' }), true, 'added condition');
+});
+
+test('sameTaskFields treats a missing key as null and compares nested values', () => {
+  assert.equal(sameTaskFields({ action: 'A', requirements: [], deadline: null }, { action: 'A', requirements: [], condition: null, deadline: null }), true);
+  assert.equal(sameTaskFields({ action: 'A', condition: undefined }, { action: 'A', condition: null }), true);
+  assert.equal(sameTaskFields({ action: 'A', requirements: [] }, { action: 'A', requirements: null }), false, 'an empty list is not null');
+  assert.equal(sameTaskFields(fields('A', due('2026-11-20')), fields('A', due('2026-11-20', '09:00'))), false);
+  assert.equal(sameTaskFields(fields('A', due('2026-11-20')), fields('A', { ...due('2026-11-20'), timeZone: 'America/New_York' })), false);
+});
+
 test('dismissed suggestions are restorable until they expire', () => {
   const m = buildDashboardModel(snapshot(), links, NOW);
   assert.deepEqual(m.dismissed.map(s => s.row.id), ['s-dismissed']);
@@ -122,10 +150,128 @@ test('passive communication shows only informational emails, newest analysis onc
   assert.deepEqual(m.information.map(e => e.summary), ['Newer summary']);
 });
 
+// "Turn into task": a Passive email with a live task created from it.
+function withPassiveTask(task) {
+  const s = snapshot();
+  s.evidence.push({ id: 'ev-info', extraction_id: 'ex-info-b', quote: 'The library closes early on Friday.', message_id: 'm3' });
+  s.tasks.push({ id: 't-passive', status: 'approved', revision: 0, accepted_fields: fields('Return books', due('2026-11-14')), origin_extraction_id: 'ex-info-b', created_at: '2026-11-09T12:00:00Z', ...task });
+  return s;
+}
+
+test('a Passive email with a live task created from it leaves Passive communication', () => {
+  assert.deepEqual(buildDashboardModel(withPassiveTask(), links, NOW).information, []);
+  assert.deepEqual(buildDashboardModel(withPassiveTask({ status: 'completed', completed_at: '2026-11-09T13:00:00Z' }), links, NOW).information, [], 'completed tasks keep it out too');
+});
+
+test('the task hides the email even when it points at an older analysis of the same email', () => {
+  // A rescan made ex-info-b after the task was created from ex-info.
+  assert.deepEqual(buildDashboardModel(withPassiveTask({ origin_extraction_id: 'ex-info' }), links, NOW).information, []);
+});
+
+test('the email comes back to Passive when its task is deleted or gone', () => {
+  assert.deepEqual(buildDashboardModel(withPassiveTask({ deleted_at: '2026-11-09T14:00:00Z' }), links, NOW).information.map(e => e.summary), ['Newer summary']);
+  const gone = withPassiveTask();
+  gone.tasks = gone.tasks.filter(t => t.id !== 't-passive');
+  assert.deepEqual(buildDashboardModel(gone, links, NOW).information.map(e => e.summary), ['Newer summary']);
+});
+
+test('only tasks created from a Passive email carry fromPassive, with their source view', () => {
+  const m = buildDashboardModel(withPassiveTask(), links, NOW);
+  const task = m.active.find(t => t.row.id === 't-passive');
+  assert.equal(task.primary, undefined, 'no suggestion-based source link');
+  assert.equal(task.fromPassive.extraction.id, 'ex-info-b');
+  assert.equal(task.fromPassive.source.subject, 'Library hours');
+  assert.equal(task.fromPassive.quote, 'The library closes early on Friday.');
+  assert.equal(task.fromPassive.messageId, 'm3');
+  assert.equal(task.fromPassive.summary, 'Newer summary');
+  assert.equal(task.fromPassive.canReturn, true);
+  // Ordinary tasks are unchanged.
+  for (const t of [...m.active, ...m.closed].filter(t => t.row.id !== 't-passive')) assert.equal('fromPassive' in t, false, t.row.id);
+  assert.deepEqual(m.active.map(t => t.row.id), ['t-open', 't-passive', 't-nodate']);
+});
+
+test('a task whose Passive summary is gone or expired cannot move back', () => {
+  const cleared = withPassiveTask();
+  cleared.extractions.find(e => e.id === 'ex-info-b').summary = null;
+  assert.equal(buildDashboardModel(cleared, links, NOW).active.find(t => t.row.id === 't-passive').fromPassive.canReturn, false);
+  const expired = withPassiveTask();
+  expired.extractions.find(e => e.id === 'ex-info-b').digest_expires_at = past;
+  assert.equal(buildDashboardModel(expired, links, NOW).active.find(t => t.row.id === 't-passive').fromPassive.canReturn, false);
+  const missing = withPassiveTask({ origin_extraction_id: 'ex-gone' });
+  assert.equal(buildDashboardModel(missing, links, NOW).active.find(t => t.row.id === 't-passive').fromPassive, undefined);
+});
+
 test('a failed source-link lookup still shows tasks', () => {
   const m = buildDashboardModel(snapshot(), null, NOW);
   assert.equal(m.active.length, 2);
   assert.equal(m.active[0].primary, undefined);
+});
+
+// "Delete from InboxToTask" in the Source email dialog.
+const allowed = { allowed: true };
+const blocked = (reason) => ({ allowed: false, reason });
+
+test('delete from InboxToTask is offered for an email no task comes from', () => {
+  assert.deepEqual(sourceDeleteCheck(snapshot(), links, 'src-info'), allowed);
+  // A pending proposal from the email does not block: deleting it only drops the proposal.
+  const proposing = snapshot();
+  proposing.changes.push({ id: 'c-info', extraction_id: 'ex-info-b', state: 'pending', kind: 'edit', target_task_id: 't-open', expires_at: future });
+  assert.deepEqual(sourceDeleteCheck(proposing, links, 'src-info'), allowed);
+  // No tasks at all: nothing to check, even when source links did not load.
+  const noTasks = snapshot();
+  noTasks.tasks = [];
+  assert.deepEqual(sourceDeleteCheck(noTasks, null, 'src-1'), allowed);
+});
+
+test('delete from InboxToTask is not offered for an email that is gone or not from Gmail', () => {
+  for (const id of ['src-2', 'src-fx', 'src-unknown', null, undefined]) assert.deepEqual(sourceDeleteCheck(snapshot(), links, id), blocked('unavailable'), String(id));
+});
+
+test('delete from InboxToTask is not offered while a task was added from the email', () => {
+  // Suggestion task, found through its source link.
+  assert.deepEqual(sourceDeleteCheck(snapshot(), links, 'src-1'), blocked('task'));
+  // "Turn into task" from a Passive email, active or completed, and from an older analysis.
+  assert.deepEqual(sourceDeleteCheck(withPassiveTask(), [], 'src-info'), blocked('task'));
+  assert.deepEqual(sourceDeleteCheck(withPassiveTask({ status: 'completed' }), [], 'src-info'), blocked('task'));
+  assert.deepEqual(sourceDeleteCheck(withPassiveTask({ origin_extraction_id: 'ex-info' }), [], 'src-info'), blocked('task'));
+  // Once that task is deleted (moved back), the email can be deleted.
+  assert.deepEqual(sourceDeleteCheck(withPassiveTask({ deleted_at: '2026-11-09T14:00:00Z' }), [], 'src-info'), allowed);
+});
+
+test('a task counts through its suggestion, an approved change, or a link to an earlier message', () => {
+  const base = () => {
+    const s = snapshot();
+    s.sources.push({ id: 'src-x', namespace: 'gmail', message_id: 'm-x', thread_id: 'th-x', sender: 'club@example.edu', subject: 'Signup' });
+    s.extractions.push({ id: 'ex-x', source_id: 'src-x', category: 'Actionable', created_at: '2026-11-09T11:00:00Z', digest_expires_at: future });
+    return s;
+  };
+  assert.deepEqual(sourceDeleteCheck(base(), [], 'src-x'), allowed);
+  const approved = base();
+  approved.suggestions.push({ id: 's-x', extraction_id: 'ex-x', state: 'approved', approved_task_id: 't-nodate', revision: 1, fields: fields('Sign up'), expires_at: future });
+  assert.deepEqual(sourceDeleteCheck(approved, [], 'src-x'), blocked('task'));
+  const origin = base();
+  origin.suggestions.push({ id: 's-x', extraction_id: 'ex-x', state: 'approved', revision: 1, fields: fields('Sign up'), expires_at: future });
+  origin.tasks.push({ id: 't-x', status: 'completed', revision: 0, origin_suggestion_id: 's-x', accepted_fields: fields('Sign up') });
+  assert.deepEqual(sourceDeleteCheck(origin, [], 'src-x'), blocked('task'));
+  const changed = base();
+  changed.changes.push({ id: 'c-x', extraction_id: 'ex-x', state: 'approved', kind: 'edit', target_task_id: 't-open', expires_at: future });
+  assert.deepEqual(sourceDeleteCheck(changed, [], 'src-x'), blocked('task'));
+  // A cancelled task still exists, so it blocks too.
+  const cancelled = base();
+  cancelled.changes.push({ id: 'c-x', extraction_id: 'ex-x', state: 'approved', kind: 'cancel', target_task_id: 't-cancelled', expires_at: future });
+  assert.deepEqual(sourceDeleteCheck(cancelled, [], 'src-x'), blocked('task'));
+  // The suggestion expired and is no longer loaded: the source link still shows it.
+  const link = (over) => [{ taskId: 't-nodate', role: 'created', threadId: 'th-other', messageId: 'm-other', earlierMessage: false, ...over }];
+  assert.deepEqual(sourceDeleteCheck(base(), link({ messageId: 'm-x' }), 'src-x'), blocked('task'));
+  assert.deepEqual(sourceDeleteCheck(base(), link({ threadId: 'th-x', messageId: 'm-older', earlierMessage: true }), 'src-x'), blocked('task'));
+  assert.deepEqual(sourceDeleteCheck(base(), link({ threadId: 'th-x', messageId: 'm-later' }), 'src-x'), allowed, 'another message in the thread with its own link');
+  assert.deepEqual(sourceDeleteCheck(base(), link({ taskId: 't-deleted', messageId: 'm-x' }), 'src-x'), allowed, 'links of deleted tasks do not count');
+});
+
+test('delete from InboxToTask waits for source links when tasks exist', () => {
+  assert.deepEqual(sourceDeleteCheck(snapshot(), null, 'src-info'), blocked('links-unavailable'));
+  // A task found from the saved records is reported as such even without links.
+  assert.deepEqual(sourceDeleteCheck(withPassiveTask(), null, 'src-info'), blocked('task'));
 });
 
 test('date-only deadlines never get an invented time', () => {

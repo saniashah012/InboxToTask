@@ -52,11 +52,11 @@ A fictional newsletter contained an instruction aimed at the AI. The result was 
 
 ## Budgets, rate limits and cooldowns
 
-These are project-set trial values, not tuned or validated capacity. A handoff finding noted that two calls per batch and 20 requests per day are too low for real use; the per-batch cap is now three, matching the shared per-minute limit.
+These are project-set trial values, not tuned or validated capacity. A handoff finding noted that two calls per batch and 20 requests per day are too low for real use; the per-batch cap is now three, matching the shared per-minute limit, and the daily default is 50 since November 16.
 
 | Control | Value | Enforced in |
 | --- | --- | --- |
-| Model requests per user per UTC day | 20 by default. The test account's local limit is 50 for the demo (reported) | Database claim |
+| Model requests per user per UTC day | 50 by default since November 16 (20 before) | Database claim |
 | Tokens per user per UTC day | 200,000 reported or reserved | Database claim |
 | Model calls per batch | 3 | Processor |
 | Shared requests per model per minute | 3 | Database claim |

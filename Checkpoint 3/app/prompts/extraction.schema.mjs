@@ -36,9 +36,28 @@ const extractionSchema = object({
 });
 export default extractionSchema;
 
+// What a Passive email offers for a task the user may create from it. A date entry
+// keeps the deadline shape, except that date may be null when only a time is stated:
+// the model never supplies a date the email does not give.
+const statedDate = object({
+  label: text(80),
+  date: nullable({ type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }),
+  time: nullable({ type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
+  timeZone: text(80),
+  wording: text(250),
+  boundary: { type: 'string', enum: ['by', 'before', 'on', 'unspecified'] },
+});
+export const detailsSchema = object({
+  title: nullable(text(120)),
+  dates: list(statedDate, 6),
+  location: nullable(text(250)),
+  links: list(text(500), 5),
+});
+
 // Gmail's versioned contract leaves the fixture endpoint's schema unchanged.
 export const gmailSchema = object({
   ...extractionSchema.properties,
+  details: detailsSchema,
   ...Object.fromEntries(['tasks','waitingFor','suggestedFollowUps'].map(key=>[key,list(object({
     ...extractionSchema.properties[key].items.properties,
     topicRelevance:{type:'string',enum:['relevant','irrelevant','uncertain']},

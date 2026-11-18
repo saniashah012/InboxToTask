@@ -160,7 +160,7 @@ This is the primary CP3 workflow. Demonstrating fixtures, a simulated preview, o
 8. If an email seems to change a task but does not make clear which one or what the new values are, the app applies nothing and asks **Which task changed?** It shows the saved sender, subject, date and excerpt with a link to the full email in Gmail. The user chooses the task and enters the values, or dismisses the item. Full bodies are not stored, so the complete message stays in Gmail.
 9. Under **Information**, each saved summary has an **Executive summary** label, its subject, sender and date when available, and **Open conversation in Gmail**. **Mark as read** collapses an item; **View summary** and **Mark as unread** bring it back. Read state is kept only in this browser and persists across re-extraction. The summary wording is the existing saved text, with no prompt change. This tab was built and type-checked (`370873b`) but has no visual confirmation.
 
-Budgets per account: 20 model requests and 200,000 tokens per UTC day, both project-set trial values. Failed attempts keep their conservative token reservation ([accounting](observability.md#token-usage-and-cost)).
+Budgets per account: 50 model requests (20 before November 16) and 200,000 tokens per UTC day, both project-set trial values. Failed attempts keep their conservative token reservation ([accounting](observability.md#token-usage-and-cost)).
 
 ### Live test cases
 

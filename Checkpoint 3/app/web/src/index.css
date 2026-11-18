@@ -934,6 +934,11 @@ button:disabled {
   box-shadow: 0 28px 70px rgba(20, 32, 27, 0.24);
 }
 
+/* The dialog itself takes focus when it opens; the ring belongs on its controls. */
+.modal:focus {
+  outline: none;
+}
+
 .modal-wide {
   width: min(100%, 650px);
 }

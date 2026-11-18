@@ -9,6 +9,8 @@ select ok(not has_table_privilege('anon','public.scan_settings','SELECT'),'anony
 select ok(not has_table_privilege('authenticated','public.scan_settings','INSERT'),'browser direct settings inserts denied');
 select ok(not has_table_privilege('authenticated','public.scan_settings','UPDATE'),'browser direct settings updates denied');
 select ok(not has_function_privilege('anon','public.scan_settings_get()','EXECUTE'),'anonymous settings RPC denied');
+select ok(not has_function_privilege('anon','public.scan_settings_restart(bigint)','EXECUTE'),'anonymous settings clear denied');
+select ok(has_function_privilege('authenticated','public.scan_settings_restart(bigint)','EXECUTE'),'signed-in owners can clear their own settings');
 insert into auth.users(id,email) values
  ('55555555-5555-4555-8555-555555555555','scan-a@example.test'),
  ('66666666-6666-4666-8666-666666666666','scan-b@example.test');
@@ -27,6 +29,10 @@ select throws_ok($q$select public.scan_settings_save(0,
  '{"allow":{"labels":[],"senders":[],"domains":[]},"block":{"labels":[],"senders":[],"domains":[]}}',
  '{"maxMessages":0,"maxAgeDays":30,"maxMessageChars":12000,"maxTotalChars":24000}',false,true,null,'{"include":[" School ","school"],"exclude":[]}')$q$,
  'PT409','STALE_SCAN_SETTINGS','stale saves rejected');
+select throws_ok($q$select public.scan_settings_restart(0)$q$,'PT409','STALE_SCAN_SETTINGS','stale clears rejected');
+select is(public.scan_settings_restart(1)->>'setup_pending','true','owner can clear settings back to setup');
+select is(public.scan_settings_get()->'rules'->'allow'->'senders','[]'::jsonb,'clearing removes permitted senders');
+select is(public.scan_settings_get()->>'revision','2','clearing keeps the revision increasing');
 select set_config('request.jwt.claims','{"sub":"66666666-6666-4666-8666-666666666666","role":"authenticated"}',true);
 select is((select count(*) from public.scan_settings),0::bigint,'second user cannot read owner settings');
 select is(public.scan_settings_get()->>'revision','0','second account receives its own empty defaults');

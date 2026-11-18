@@ -30,7 +30,9 @@ Review mutations require a nonnegative revision; stale revisions fail. Approval 
 ## Saved scanning permission
 
 Owner-readable `scan_settings` are saved only through revision-checked
-`scan_settings_get` / `scan_settings_save`. Exact sender/domain inclusions combine
+`scan_settings_get` / `scan_settings_save`; `scan_settings_restart` clears them to a
+new account's and sets `setup_pending` until the next save, without touching saved
+records ([migration](migrations/20261117010000_restart_scan_setup.sql)). Exact sender/domain inclusions combine
 with OR; source exclusions and literal case-insensitive subject exclusions win.
 Domains do not include subdomains. Empty source inclusions permit nothing unless a
 topic to check is saved ([migration](migrations/20261112000000_topics_without_senders.sql)):
@@ -119,10 +121,11 @@ it is unnecessary for this contract and must not be applied.
 
 ## Trial limits and lifecycle
 
-- Per-user defaults: 20 requests and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.
+- Per-user defaults: 50 requests (20 before migration `20261116180000`, which moved rows still at 20 to 50) and 200,000 reserved/reported tokens per day. Shared default: three requests per model per minute.
 - At most one live job per user, 90-second leases, three attempts per extraction identity, and a 60-second failure retry delay. There is no automatic retry dispatcher.
 - Token reservation estimates are conservative byte-based estimates, not exact provider tokenization. Unknown usage keeps the reservation. Reservations are reconciled when usage is reported.
 - Evidence, digest summaries, unapproved suggestions, and waiting items default to 30 days. Completed tasks become eligible for deletion after 30 days; undo cancels eligibility. A task created from a suggestion can return to Suggestions or Dismissed (task actions `return_to_suggestions` and `return_to_dismissed`, migration `20261109120000`) while that suggestion is unexpired; the suggestion keeps the task's current values, including any accepted incoming update, and the task row, its source links and its pending change proposals are removed. Incoming-update suggestions for that task, pending or already accepted, become `deleted` with their task references cleared, as the 30-day task cleanup does; nothing records that an update was once accepted. Attempt diagnostics expire after 14 days.
+- A Passive extraction can become a task (migration `20261117000000`): `storage_action` kind `extraction`, action `create_task`, with complete task fields, creates one approved task per email and records it in `tasks.origin_extraction_id`; a repeat request, or one against another analysis of the same email, returns the first task. Task action `return_to_passive` removes that task row while the extraction's summary is still retained, so the email shows under Passive again. Deleting such a task clears that source's summaries and records suppressions, as deleting a suggestion-based task does. `storage_extractions.details` holds what the scan offers for such a task (title, stated dates, location, links); it is written once by the service-only `gmail_extraction_details` and is cleared whenever the summary is cleared (source deletion, digest expiry, an irrelevant topic).
 - Source deletion removes extracted content and hides the source. For a Gmail source it also clears quotes of that message held in other sources' evidence, where it was cited as an earlier thread message (migration `20261109220000`); approved tasks remain independently accepted values. Task/source deletion records suppressions so stale work cannot recreate deleted results, including a new configuration against the same source.
 - Minimal source identifiers and suppressions remain until account deletion. Finalize this retention choice before real-email processing.
 - Processing pause increments a generation and cancels current jobs. Late commits cannot override pause/deletion or newer leases.

@@ -35,6 +35,12 @@
 /* The email details above already end in a divider, so the history list adds none. */
 .rd-modal-body .manual-timeline { margin-top:0; padding-top:0; border-top:0; }
 .rd-modal-body .form-hint { margin:-6px 0 0; font-size:12px; }
+.rd-modal-body .form-hint.rd-delete-hint { margin:0; }
+/* "Delete from InboxToTask": destructive, so it sits apart on the left of the actions,
+   at the same size as the buttons beside it. */
+.modal-actions .danger-button { font-size:11px; }
+.modal-actions .rd-source-delete { margin-right:auto; }
+.modal-copy .notice.warning { margin:12px 0 0; }
 /* The Gmail button lines up with the dialog's left edge, not the indented entry text.
    It sits above the timeline's connecting line when there are several emails. */
 .rd-modal-body .manual-timeline li > p.gmail-open { position:relative; margin-left:-22px; }
@@ -127,6 +133,10 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 @media (max-width: 720px) {
   .app-shell .task-row:not(.rd-info-row) > .email-link { grid-column:2; justify-self:start; }
   .app-shell .task-row.is-suggestion:not(.rd-info-row) > .email-link { grid-column:1; }
+  /* The row's main button goes under the text too. Left to auto-placement it landed in the
+     34px menu column and was squeezed until its label spilled out. */
+  .app-shell .task-row:not(.rd-info-row) > .row-button { grid-column:2; justify-self:start; white-space:nowrap; }
+  .app-shell .task-row.is-suggestion:not(.rd-info-row) > .row-button { grid-column:1; }
   .app-shell .task-row > .menu-wrap { grid-row:1; grid-column:-2; }
 }
 @media (min-width: 721px) {
@@ -167,3 +177,53 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 .rd-embedded .calendar-note p { margin:0 0 6px; }
 .rd-embedded .calendar-note p:last-child { margin:0; }
 .rd-embedded .calendar-open { align-self:center; color:var(--green); font-weight:600; }
+/* A line under a dialog's title (Modal subtitle). */
+.modal-subtitle { margin:6px 0 0; color:var(--muted); font-size:12px; }
+/* "Turn into task": a narrow Create task dialog, one column of fields. */
+.modal.rd-create-modal { width:min(100%, 460px); max-height:calc(100vh - 48px); overflow-y:auto; }
+.rd-create-modal .form-stack textarea { width:100%; min-height:72px; border:1px solid #ced8d3; border-radius:9px; padding:9px 11px; background:white; color:var(--ink); font-size:12px; line-height:1.5; resize:vertical; box-sizing:border-box; }
+.rd-create-modal .form-stack textarea:focus { border-color:var(--green); }
+.rd-create-modal .form-stack .modal-actions { padding:4px 0 0; border-top:0; }
+.rd-create-source { display:grid; gap:6px; padding:10px 12px; border-radius:9px; background:var(--canvas); }
+.rd-create-source > span { font-size:11px; font-weight:600; }
+.rd-create-source > p { margin:0; color:var(--muted); font-size:12px; line-height:1.5; }
+.rd-review-reasons { display:grid; gap:6px; padding:10px 12px; border-radius:9px; background:var(--canvas); }
+.rd-review-reasons > span { font-size:11px; font-weight:600; }
+.rd-review-reasons ul { margin:0; padding-left:18px; color:var(--muted); font-size:12px; line-height:1.5; }
+/* Several dates in the email: one radio option each, with the email's own wording. */
+.rd-date-choices { display:grid; gap:6px; margin:0; padding:0; border:0; min-width:0; }
+.rd-date-choices > legend { margin-bottom:6px; padding:0; font-size:11px; font-weight:600; }
+.form-stack .rd-date-choice { display:flex; align-items:flex-start; gap:8px; padding:8px 10px; border:1px solid var(--soft-line); border-radius:9px; cursor:pointer; }
+.form-stack .rd-date-choice:has(input:checked) { border-color:var(--green); background:var(--green-soft); }
+.form-stack .rd-date-choice > input { flex:none; width:16px; height:16px; margin:2px 0 0; padding:0; accent-color:var(--green); }
+.form-stack .rd-date-choice > span { display:grid; gap:2px; font-size:12px; font-weight:400; }
+.rd-date-choice strong { font-size:12px; }
+.rd-date-when { color:var(--ink); }
+.rd-date-wording { color:var(--muted); font-style:italic; overflow-wrap:anywhere; }
+/* Review before adding / Edit suggestion: the email's details, so the user can judge
+   the dates without opening Gmail. The dialog scrolls inside when it is taller than the window. */
+.modal.rd-edit-modal { max-height:calc(100vh - 48px); overflow-y:auto; }
+.rd-email-context { display:grid; gap:6px; padding:10px 12px; border-radius:9px; background:var(--canvas); min-width:0; }
+.rd-email-context > span { font-size:11px; font-weight:600; }
+.rd-email-context dl { display:grid; gap:4px; margin:0; font-size:12px; }
+.rd-email-context dl > div { display:grid; grid-template-columns:84px minmax(0,1fr); gap:8px; }
+.rd-email-context dt { color:var(--muted); }
+.rd-email-context dd { margin:0; overflow-wrap:anywhere; }
+.rd-email-context > .rd-email-context-label { margin-top:4px; color:var(--muted); font-weight:400; }
+.rd-email-context blockquote { margin:0; padding-left:12px; border-left:2px solid #b7d3c7; color:#4d5c56; font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+.rd-email-context > p { margin:0; color:var(--muted); font-size:12px; }
+.rd-quiet-link { justify-self:start; color:var(--muted); font-size:11px; text-decoration:underline; }
+.rd-quiet-link:hover { color:var(--green); }
+.rd-quiet-link:focus-visible { outline:2px solid var(--green); outline-offset:2px; border-radius:2px; }
+@media (max-width: 420px) { .rd-email-context dl > div { grid-template-columns:1fr; gap:0; } }
+/* Dates named in the notes: one button each; the one in the date field is pressed and ticked. */
+.rd-date-buttons { display:grid; gap:6px; }
+.rd-date-buttons > span { font-size:11px; font-weight:600; }
+.rd-date-buttons > div { display:flex; flex-wrap:wrap; gap:6px; }
+.rd-date-buttons button { min-height:32px; padding:0 12px; border-radius:9px; font-size:12px; cursor:pointer; }
+.rd-date-buttons button[aria-pressed="true"] { border-color:var(--green); background:var(--green-soft); font-weight:700; }
+.rd-date-buttons button[aria-pressed="true"]::before { content:"\2713\00a0"; }
+.rd-date-buttons button:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.rd-create-source blockquote { margin:0; padding-left:12px; border-left:2px solid #b7d3c7; color:#4d5c56; font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+/* "View task" after creating a task: the card it jumps to is outlined for a moment. */
+.app-shell .task-row.rd-jump-target { outline:3px solid var(--green); outline-offset:2px; box-shadow:0 0 0 6px var(--green-soft); }

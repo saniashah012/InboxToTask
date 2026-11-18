@@ -20,7 +20,7 @@ export const starterBlockedWords: Readonly<Record<string, readonly string[]>> = 
     "bank statement", "bank statements", "account number", "routing number", "credit card", "debit card",
     "credit score", "credit report", "loan", "loans", "mortgage", "tax return", "tax returns", "w-2", "1099",
     "paycheck", "pay stub", "pay stubs", "payroll", "wire transfer", "overdraft", "balance due",
-    "billing statement", "financial aid", "venmo", "zelle", "paypal",
+    "billing statement", "financial aid", "venmo", "zelle", "paypal", "reimbursement", "reimbursements",
   ],
   health: [
     "diagnosis", "diagnoses", "diagnosed", "prescription", "prescriptions", "pharmacy", "medication",

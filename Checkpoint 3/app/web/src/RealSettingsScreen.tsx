@@ -37,6 +37,8 @@ export default function RealSettingsScreen({
   onSaveAutoScan,
   onReload,
   onRunSetup,
+  onRestartSetup,
+  onRestarted,
   onBack,
   onSaved,
 }: {
@@ -48,6 +50,10 @@ export default function RealSettingsScreen({
   onSaveAutoScan: (enabled: boolean) => Promise<ScanSettings>
   onReload: () => void
   onRunSetup: () => void
+  // Clears saved scan settings (scan_settings_restart) at the shown revision;
+  // onRestarted then opens onboarding on the cleared settings.
+  onRestartSetup: (revision: number) => Promise<ScanSettings>
+  onRestarted: () => void
   onBack: () => void
   // Back to the dashboard with a message saying what the save changed.
   onSaved: (notice: string) => void
@@ -81,6 +87,23 @@ export default function RealSettingsScreen({
     // revision, and must not discard unsaved edits to the other fields.
   }, [settings.revision])
   const gmail = useGmailState(true, section)
+
+  // "Clear settings and run setup again": asks first, and has its own busy and
+  // error state so a failure shows inside the dialog.
+  const [confirmingRestart, setConfirmingRestart] = useState(false)
+  const restartState = useSettingsSave()
+  const restart = async () => {
+    if (restartState.saving) return
+    await restartState.run(() => onRestartSetup(settings.revision), () => {
+      setConfirmingRestart(false)
+      onRestarted()
+    })
+  }
+  const closeRestart = () => {
+    if (restartState.saving) return
+    restartState.setSaveError(null)
+    setConfirmingRestart(false)
+  }
 
   const draft = { ...settingsWithPreferences(settings, preferences, context), consent, paused }
   const dirty = !sameSavedFields(draft, settings)
@@ -309,6 +332,24 @@ export default function RealSettingsScreen({
                   Run setup again
                 </button>
               </div>
+              <div className="danger-zone">
+                <div>
+                  <strong>Start setup from empty fields</strong>
+                  <span>
+                    Clears your saved senders, domains, topics, consent and automatic checks, then opens
+                    setup with nothing filled in. Your tasks, suggestions, Passive emails, Calendar events
+                    and Google connection stay as they are.
+                  </span>
+                </div>
+                <button
+                  className="danger-button"
+                  disabled={saving || refreshing}
+                  onClick={() => { restartState.setSaveError(null); setConfirmingRestart(true) }}
+                  type="button"
+                >
+                  Clear settings and run setup again
+                </button>
+              </div>
             </>
           )}
           {section === "retention" && (
@@ -335,6 +376,42 @@ export default function RealSettingsScreen({
             <button className="secondary-button" disabled={saving} onClick={() => { setLeaving(false); onBack() }} type="button">Discard</button>
             <button className="primary-button" disabled={saving || Boolean(contextError)} onClick={() => { setLeaving(false); void save() }} type="button">
               Save
+            </button>
+          </div>
+        </Modal>
+      )}
+      {confirmingRestart && (
+        <Modal onClose={closeRestart} title="Clear settings and run setup again?">
+          <div className="modal-copy">
+            <p>
+              <strong>Cleared:</strong> permitted and blocked senders and domains, skipped subjects,
+              topics to check and to skip with their word lists, earlier-email limits, scanning
+              consent and automatic checks. Scanning stays off until setup is saved again.
+            </p>
+            <p>
+              <strong>Kept:</strong> your tasks, suggestions (including dismissed ones), Passive
+              emails, Google Calendar events and your Google connection. No email is read and
+              nothing is deleted from Gmail.
+            </p>
+            {dirty && <p>Unsaved changes on this page are discarded too.</p>}
+            {restartState.saving && <p role="status">Clearing settings…</p>}
+            <SaveFailure
+              error={restartState.saveError}
+              onReload={() => { restartState.setSaveError(null); onReload() }}
+              reloading={refreshing}
+            />
+          </div>
+          <div className="modal-actions">
+            <button className="secondary-button" disabled={restartState.saving} onClick={closeRestart} type="button">
+              Cancel
+            </button>
+            <button
+              className="primary-button"
+              disabled={restartState.saving || refreshing}
+              onClick={() => void restart()}
+              type="button"
+            >
+              {restartState.saving ? "Clearing…" : "Clear settings"}
             </button>
           </div>
         </Modal>

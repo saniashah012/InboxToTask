@@ -469,6 +469,51 @@ test changes are now on `mzheng/passive-to-task`, so the local migrations match 
 allowance lines in this file and `CP4_PLAN.md` now say 50. Hosted is unchanged; the dry run is to be
 run again, with the same pass condition.
 
+**November 17: Scan now after a Gmail reconnect.** Branch `mzheng/scan-now-after-reconnect`
+(from `main` at `bfe32cc`; unpushed when written). Frontend only; no migration, function or
+hosted change.
+- The problem (reproduced on a local stack on November 17): when a check stopped with unfinished
+  work and Gmail was then reconnected (or the scan settings or storage generation changed), the
+  status still reported a backlog, so "Scan now", "Check now" and automatic checks asked to
+  continue it. The backend refuses to continue work from before the change, and the dashboard
+  showed "Scanning permission or saved state changed…" on every try until settings were saved.
+- The fix: the dashboard sends a refused continuation once more as a new check
+  (`requestScan` in the new `web/src/scanRequest.ts`, used by `runScan` in `RealDashboard.tsx`,
+  so manual and automatic checks take the same path). The new check passes every server check
+  again; if it is refused too, the existing message is shown, and it never retries more than
+  once. A new check after a reconnect covers the full 7 days, as before. After a manual press
+  the code sets a notice saying a new check ran instead of continuing the earlier one (not yet
+  seen in a browser; see below). Scan limits, cooldowns,
+  permission checks and what is scanned are unchanged. The status function still reports the
+  stale backlog until the next check runs (not changed, to avoid a migration).
+- Tests: `tests/scan-request.test.mjs` (7 tests, added to `npm test`) covers the retry rule; a
+  new PGlite case in `tests/scan-settings.test.mjs` shows that after a connection-generation
+  change continuing is refused, a new check right after it is claimed over 7 days and clears the
+  backlog, an up-to-date backlog still continues, and a paused or reconnect-required account
+  still refuses both modes.
+
+Verified offline: `npm test` (223 + 63 pass), `tsc --noEmit` and the web build.
+Local browser, November 17 (Matthew signed in with the dedicated test account; the stuck state
+was made by hand in the local database: a placeholder continuation, then
+`private.google_connections.generation` raised by one). Before the fix (the `mzheng/passive-to-task`
+build): Check now showed "Scanning permission or saved state changed… No new items found." and
+the database did not change. With the fix: three Check now presses and one run with no press at
+all (the dashboard's own automatic check) each got one refused continuation (409) and then a new
+check over the full 7 days that cleared the backlog, with no model calls and no error on the
+page. The automatic run showed only "Checking…" and "Checked just now"; four cooldown replies
+(429) in the console were not shown. The automatic path is the one the study uses (automatic
+checks on, Matthew's decision, November 17). The local database had the `mzheng/passive-to-task`
+migrations applied (`20261117000000` and, for the automatic run, `20261117010000`), which this
+`main`-based build does not need; nothing looked out of place. Not checked against live Gmail
+or hosted.
+**To fix later: the manual notice was never seen.** "The earlier unfinished check could no
+longer continue, so a new check ran instead." did not appear after any of the three presses;
+on the third, a page watcher caught only "A check is already running. New items will appear on
+their own." The likely cause is that an automatic check (automatic checks were on) took the
+retry first, but that is not confirmed. Next step: press Check now on a stuck account with
+automatic checks off, and if the notice still does not show, find why in `scan()` in
+`RealDashboard.tsx`.
+
 **November 18, 4:17 PM CST: hosted migration dry run for PR #124 — passed.** Approved by Matthew
 ("Yes, run them"; read-only commands only). Branch `mzheng/passive-to-task` at `29089e7`. Nothing on
 hosted was changed. From `Checkpoint 3/app`: `npx.cmd supabase migration list --linked` shows
@@ -563,55 +608,14 @@ was started. Hosted now matches `bacce71` for migrations and these two functions
 build is still `main` until PR #124 merges (needs approval, not during the freeze from Thursday
 November 19, night).
 
-**November 18: merged with `main` after PR #124.** The branch below took `main` (with #124) in a
-merge commit; the conflicts in this file, `app/package.json` (both add test files to `npm test`)
-and `RealDashboard.tsx` (#124's `deleteSourceEmail` next to this branch's `runScan` comment) kept
-both sides.
-
-**November 17: Scan now after a Gmail reconnect.** Branch `mzheng/scan-now-after-reconnect`
-(from `main` at `bfe32cc`; unpushed when written). Frontend only; no migration, function or
-hosted change.
-- The problem (reproduced on a local stack on November 17): when a check stopped with unfinished
-  work and Gmail was then reconnected (or the scan settings or storage generation changed), the
-  status still reported a backlog, so "Scan now", "Check now" and automatic checks asked to
-  continue it. The backend refuses to continue work from before the change, and the dashboard
-  showed "Scanning permission or saved state changed…" on every try until settings were saved.
-- The fix: the dashboard sends a refused continuation once more as a new check
-  (`requestScan` in the new `web/src/scanRequest.ts`, used by `runScan` in `RealDashboard.tsx`,
-  so manual and automatic checks take the same path). The new check passes every server check
-  again; if it is refused too, the existing message is shown, and it never retries more than
-  once. A new check after a reconnect covers the full 7 days, as before. After a manual press
-  the code sets a notice saying a new check ran instead of continuing the earlier one (not yet
-  seen in a browser; see below). Scan limits, cooldowns,
-  permission checks and what is scanned are unchanged. The status function still reports the
-  stale backlog until the next check runs (not changed, to avoid a migration).
-- Tests: `tests/scan-request.test.mjs` (7 tests, added to `npm test`) covers the retry rule; a
-  new PGlite case in `tests/scan-settings.test.mjs` shows that after a connection-generation
-  change continuing is refused, a new check right after it is claimed over 7 days and clears the
-  backlog, an up-to-date backlog still continues, and a paused or reconnect-required account
-  still refuses both modes.
-
-Verified offline: `npm test` (223 + 63 pass), `tsc --noEmit` and the web build.
-Local browser, November 17 (Matthew signed in with the dedicated test account; the stuck state
-was made by hand in the local database: a placeholder continuation, then
-`private.google_connections.generation` raised by one). Before the fix (the `mzheng/passive-to-task`
-build): Check now showed "Scanning permission or saved state changed… No new items found." and
-the database did not change. With the fix: three Check now presses and one run with no press at
-all (the dashboard's own automatic check) each got one refused continuation (409) and then a new
-check over the full 7 days that cleared the backlog, with no model calls and no error on the
-page. The automatic run showed only "Checking…" and "Checked just now"; four cooldown replies
-(429) in the console were not shown. The automatic path is the one the study uses (automatic
-checks on, Matthew's decision, November 17). The local database had the `mzheng/passive-to-task`
-migrations applied (`20261117000000` and, for the automatic run, `20261117010000`), which this
-`main`-based build does not need; nothing looked out of place. Not checked against live Gmail
-or hosted.
-**To fix later: the manual notice was never seen.** "The earlier unfinished check could no
-longer continue, so a new check ran instead." did not appear after any of the three presses;
-on the third, a page watcher caught only "A check is already running. New items will appear on
-their own." The likely cause is that an automatic check (automatic checks were on) took the
-retry first, but that is not confirmed. Next step: press Check now on a stuck account with
-automatic checks off, and if the notice still does not show, find why in `scan()` in
-`RealDashboard.tsx`.
+**November 18, about 5:06 PM CST: PR #124 merged to `main`; PR #125 updated.** PR #124 merged as
+`2929614` (approved by Matthew: "Push and merge #124", then "Yes, auto-merge"; it merged at once
+because its checks had passed). `main` now deploys the PR #124 web build. Matthew then approved
+updating PR #125 ("Yes, update #125"): `main` was merged into `mzheng/scan-now-after-reconnect`.
+The conflicts kept both sides: this file (every entry kept, in date order), `app/package.json`
+(`main`'s test list plus `scan-request.test.mjs`) and `RealDashboard.tsx` (#124's
+`deleteSourceEmail`, then #125's comment above `runScan`). PR #125 is not merged; that needs its
+own approval and cannot happen during the freeze (Thursday November 19, night, to Friday November 20).
 
 ## Gmail phases
 

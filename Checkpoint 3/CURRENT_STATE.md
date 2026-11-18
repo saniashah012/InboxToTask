@@ -499,6 +499,21 @@ was not checked after the apply. Not yet done, each needing its own approval: `s
 and the redeploy of `gmail_scan` and `analysis_email`, the merge of PR #124 (not during the freeze
 from Thursday November 19, night), and the signed-in live check. PR #124 has no review yet.
 
+**November 18, 4:25 PM CST: `gmail_scan` and `analysis_email` redeployed to hosted for PR #124.**
+Approved by Matthew ("Yes, redeploy both"). Branch `mzheng/passive-to-task`, local `53a5ea8` (code
+identical to origin `29089e7`). From `Checkpoint 3/app`: `npm.cmd run supabase:prepare` rebuilt the
+ignored bundle (no tracked file changed; every bundled pipeline file matches its source);
+`deno check` of both functions passed; then `node_modules/.bin/supabase functions deploy gmail_scan
+analysis_email --use-api --yes` ("Deployed Functions.", exit 0; JWT settings from `config.toml`,
+unchanged). `functions list` before and after: `gmail_scan` v6 → v7 (JWT check off),
+`analysis_email` v11 → v12 (JWT check on), both ACTIVE, updated 16:25 CST; `google_connection` v4,
+`google_callback` v4 and `calendar_event` v2 unchanged (November 16). Neither function was invoked
+and no scan was started. From now on hosted scans use the new prompt, the sent-day rules and save
+Passive details; already-scanned email is analysed again only on each account's next full 7-day
+check. The production web build is still `main` until PR #124 merges. Not yet done, each needing
+approval: the merge (not during the freeze from Thursday November 19, night; PR #124 has no
+review yet) and the signed-in live check.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

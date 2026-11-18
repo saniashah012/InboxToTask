@@ -480,6 +480,25 @@ code; `29089e7` added the cherry-picked migration and docs, and the lead session
 275 and 107 on it): `npm test` 275 and 107, `test:calendar` 45, `tsc --noEmit`, the web build and
 `deno check` of all six functions pass; `supabase:prepare` not yet run.
 
+**November 18, 4:19 PM CST: both PR #124 migrations applied to hosted.** Approved by Matthew ("Yes,
+apply both"). Branch `mzheng/passive-to-task`; no migration file changed since the passing dry run
+(`29089e7`; local `3f0d144` adds only that record). From `Checkpoint 3/app`: the dry run again
+listed exactly `20261117000000_passive_to_task.sql` then `20261117010000_restart_scan_setup.sql`;
+`npx.cmd supabase db push --remote` without `--yes` refused in agent mode and changed nothing;
+`npx.cmd supabase db push --remote --yes` printed "Applying migration
+20261117000000_passive_to_task.sql..." and "Applying migration
+20261117010000_restart_scan_setup.sql..." and finished (exit 0). Checked afterwards:
+`migration list --linked` shows all 34 migrations on both sides; a catalog-only query
+(`supabase db query --remote --read-only`, no table rows read) found
+`storage_extractions.details` (jsonb, nullable), `tasks.origin_extraction_id` (uuid, nullable),
+`scan_settings.setup_pending` (boolean, not null, default false),
+`public.`/`private.scan_settings_restart(p_revision bigint)` and `public.gmail_extraction_details`.
+Production still runs the `main` web build and the earlier `gmail_scan` and `analysis_email` until
+the redeploy and merge; per the line-by-line comparison it should keep working, but the live site
+was not checked after the apply. Not yet done, each needing its own approval: `supabase:prepare`
+and the redeploy of `gmail_scan` and `analysis_email`, the merge of PR #124 (not during the freeze
+from Thursday November 19, night), and the signed-in live check. PR #124 has no review yet.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

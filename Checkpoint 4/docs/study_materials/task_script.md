@@ -86,7 +86,7 @@
 
 ## 7. Optional exploration — after all scored tasks
 
-**Facilitator action:** Offer this only after both scored email conditions and the Calendar task are finished, and before the questionnaire. Allow approximately 5–8 minutes. Participation is optional and unscored. Ensure the approved consent covers this activity. Do not ask the participant to connect their personal inbox. If a participant chooses to send a fictional email from their own sending account, follow the approved consent and privacy procedure; never publish their address.
+**Facilitator action:** Offer this only after both scored email conditions and the Calendar task are finished, and before the questionnaire. Allow approximately 5–8 minutes. Participation is optional and unscored. Ensure the approved consent covers this activity. Do not ask the participant to connect their personal inbox. If a participant chooses to send a fictional email from their own sending account, follow the approved consent and privacy procedure; never publish their address. The provided study sender account is the team's test sender (Issue #57): open a new-message window in it for the participant, and never share its sign-in details. The participant may change any filter, word list or scanning setting, but keep them out of **Settings, Connections** (connecting or disconnecting Google, or running setup again); the between-session reset in Issue #101 depends on the Google connection staying as it was at the freeze.
 
 **Read aloud:**
 
@@ -105,7 +105,7 @@
 - If the email does not appear: “Why do you think it didn't show up?”
 - “Would you trust this with your own inbox? What would you change?”
 
-**Facilitator action:** If automatic scanning is off, the participant may select **Scan now**. If it is on, allow the documented scanning interval. After the participant's prediction and observation, explain any relevant filter reason if needed. Under the participant code, record sender **type** (not address), fictional email subject/body, current settings, prediction, processed/skipped outcome and reason, suggestion fields or no suggestion, brief reaction and result screenshot. Keep exploration outcomes separate from scored-task results. Finish logging before the between-session reset.
+**Facilitator action:** If automatic scanning is off, the participant may select **Scan now**. If it is on, allow the documented scanning interval. The first scan after a settings change rechecks the last seven days of email, so it can take longer than a minute; say so if the participant is waiting. After the participant's prediction and observation, explain any relevant filter reason if needed. Under the participant code, record sender **type** (not address), fictional email subject/body, current settings, prediction, processed/skipped outcome and reason, suggestion fields or no suggestion, brief reaction and result screenshot. Keep exploration outcomes separate from scored-task results. Finish logging, and let any scan finish, before the between-session reset ([reset.md](reset.md)).
 
 ## 8. Questionnaire hand-off
 

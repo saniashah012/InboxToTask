@@ -110,6 +110,61 @@ dismissing). Not checked: the Dismissed tab (empty), the edit-proposal popup and
 states (no such proposals existed), a task with several linked emails, phone width, and the
 live site. Escape does not close these popups (existing behavior, not changed here).
 
+**November 16, study test sender (#57), branch `mzheng/study-sender-and-reset` (unpushed when
+written; not merged or deployed):** a send script for the fictional study inboxes,
+`npm run study:send -- --inbox A [--send]` in [app/study](app/study/), and the runner's page
+[loading_inboxes.md](<../Checkpoint 4/docs/study_materials/loading_inboxes.md>). The script
+reads one Markdown file per email from `inbox_a/emails/` or `inbox_b/emails/`, sends only the
+files marked `sender: test-sender` over Gmail SMTP as the signed-in test sender, lists the rest
+as "send by hand", is a dry run unless `--send` is given, and takes addresses and the app
+password only from the environment or a Git-ignored `.env.study`. Decisions by Matthew on
+November 16: the test sender is the team's existing development test account, and the study
+uses inboxes A and B only, with no spare inbox. **Verified offline only:** `npm run test:study`
+15/15 (fake transport and a loopback fake SMTP server), and a dry run that stops with "the
+inbox email folder does not exist yet" because #62 and #63 have not added their files.
+**Not verified:** no email has been sent with the script, so the Gmail sign-in, delivery,
+threading and inbox order are untested; the email file format is not yet agreed with the
+owners of #62–#64. Nothing hosted changed.
+
+**November 16, between-session study reset (#101), same branch (unpushed when written; not
+merged, not installed on hosted):** [study_reset.sql](app/supabase/operations/study_reset.sql)
+is an operations file, not a migration. Run once as `postgres`, it creates a private
+`study_reset` schema that `anon`, `authenticated` and `service_role` cannot use.
+`take_snapshot('A')` copies a study account's rows after the freeze scan (#67) and proves they
+can be put back; `reset('<code>', 'A', <calendar cleared>)` deletes that account's app data and
+re-inserts the snapshot in one transaction, moves the storage generation and settings revision
+forward instead of back, checks a digest against the freeze and that no other account's rows
+changed, and logs `ok` or `failed`. It acts only on the two accounts listed by hand in
+`study_reset.accounts`, never calls Google, and leaves the Google connection rows alone.
+Calendar events and any exploration email are removed by hand first; the steps are in
+[reset.md](<../Checkpoint 4/docs/study_materials/reset.md>), and the "Study reset" section of
+[calendar-behavior.md](docs/calendar-behavior.md) now describes this in place of a backend
+script that deletes events in Google. Matthew confirmed removing Calendar events by hand on
+November 16. Restoring the daily scan allowance on reset (one switch in the file) is an
+assumption he has not yet confirmed.
+**Verified offline only:** `npm run test:study-reset` 11/11 in PGlite (restore after a session
+driven through the app's RPCs, every refusal, rollback on a forced failure, the role lockout,
+re-running the file); `npm test` 237/237 and 56/56; `git diff --check`. **Not verified:**
+nothing has run on hosted Postgres, so table ownership, access to `auth.users` and the role
+lockout there are untested, and the two rehearsals #101 requires have not happened. A reset
+refuses if a Google connect or permission prompt was started on the account after the freeze,
+so permissions must be granted before it. Nothing hosted changed.
+
+**November 16, study documents aligned with the day's decisions (#57, #58, #62–#64, #101), same
+branch:** docs only. A copy-ready
+[inbox_template](<../Checkpoint 4/docs/study_materials/inbox_template/README.md>) gives the
+writers the email file format, four example emails, notes on writing each type of email and a
+proposed answer key layout; the send script's dry run accepts its examples.
+`loading_inboxes.md` now says the answer key numbers the test sender like the other senders,
+and reserves ids `01`–`29` for the main inbox and `30` onward for the edge cases. Section 7 of
+`task_script.md` (the optional exploration) keeps participants free to change any filter, word
+list or scanning setting and to send a made-up email, keeps them out of Settings, Connections,
+says the provided sender is the test sender through a new-message window the facilitator opens,
+and warns that the first scan after a settings change takes longer. Matthew confirmed on
+November 16 that the provided study sender account is the test sender. The answer key layout is
+a proposal for the owners of #62 and #63. Verified: the dry run against the template, relative
+links, and `git diff --check`. No code changed and no test was rerun.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

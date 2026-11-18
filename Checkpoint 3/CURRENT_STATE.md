@@ -539,6 +539,17 @@ Nothing on hosted was changed. From `Checkpoint 3/app`: `node_modules/.bin/supab
 `supabase:prepare` and the redeploy of `gmail_scan` and `analysis_email` (they bundle
 `private-topics.mjs`), each need their own approval.
 
+**November 18, 5:02 PM CST: `20261118000000_financial_reimbursement_word` applied to hosted.**
+Approved by Matthew ("Yes, apply it"). Branch `mzheng/passive-to-task`, local `6a2e9ba` (no file
+under `supabase/` changed since `bacce71`). From `Checkpoint 3/app`: the dry run again listed only
+that migration; `node_modules/.bin/supabase db push --remote --yes` printed "Applying migration
+20261118000000_financial_reimbursement_word.sql..." and finished (exit 0). Checked afterwards:
+`migration list --remote` shows all 35 on both sides; a catalog-only read-only query found
+"reimbursement" and "reimbursements" in the hosted `private.starter_blocked_words` definition
+(calling the function is not allowed for the read-only role, as intended). Lists already saved
+keep their words. Not yet done, needing its own approval: `supabase:prepare` and the redeploy of
+`gmail_scan` and `analysis_email`, which still run the backend word list without the new words.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

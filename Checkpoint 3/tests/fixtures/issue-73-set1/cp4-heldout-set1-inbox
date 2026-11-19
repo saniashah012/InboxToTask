@@ -1,0 +1,250 @@
+{
+  "provenance": "15 original fictional held-out evaluation cases for Issue #73; not for prompt tuning. Created 2026-11-19.",
+  "user": {
+    "email": "student@example.org",
+    "timeZone": "America/Chicago"
+  },
+  "analysisTime": "2026-11-19T16:00:00-06:00",
+  "rules": {
+    "allow": {
+      "labels": [],
+      "senders": [],
+      "domains": [
+        "example.org"
+      ]
+    },
+    "block": {
+      "labels": [],
+      "senders": [],
+      "domains": [],
+      "subjectKeywords": []
+    }
+  },
+  "cases": [
+    {
+      "message": {
+        "id": "H01",
+        "threadId": "thread-H01",
+        "from": "Nora Kim <nora.kim@example.org>",
+        "sentAt": "2026-11-19T15:00:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Accessibility checklist",
+        "body": "Hi, please upload your accessibility checklist to the shared folder by November 23 at 3 pm so I can include it in the review."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H02",
+        "threadId": "thread-H02",
+        "from": "Evan Brooks <evan.brooks@example.org>",
+        "sentAt": "2026-11-19T15:08:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Research consent form",
+        "body": "Could you sign and return the research consent form by November 24? We cannot schedule your session until it arrives."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H03",
+        "threadId": "thread-H03",
+        "from": "Lina Chen <lina.chen@example.org>",
+        "sentAt": "2026-11-19T15:16:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Team poster abstract",
+        "body": "Please send me your poster abstract by November 27 at noon. I will combine the sections afterward."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H04",
+        "threadId": "thread-H04",
+        "from": "Campus Transit <campus.transit@example.org>",
+        "sentAt": "2026-11-19T15:24:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Winter bus routes",
+        "body": "The winter bus timetable will be posted on November 23. Service on Route 8 changes after 7 pm."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H05",
+        "threadId": "thread-H05",
+        "from": "Marco Silva <marco.silva@example.org>",
+        "sentAt": "2026-11-19T15:32:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Prototype notes",
+        "body": "Can you add your prototype notes to our document early next week? I need them before we finalize the plan, but we have not set a specific day."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H06",
+        "threadId": "thread-H06",
+        "from": "Aisha Rahman <aisha.rahman@example.org>",
+        "sentAt": "2026-11-19T15:40:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Interview questions",
+        "body": "Please email your interview questions sometime next Friday. Any time that day works."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H07",
+        "threadId": "thread-H07",
+        "from": "Oliver Grant <oliver.grant@example.org>",
+        "sentAt": "2026-11-19T14:00:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Lab handout",
+        "body": "Could you send the revised lab handout around the end of the month? The deadline is still flexible."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H08",
+        "threadId": "thread-H08",
+        "from": "Priya Nair <priya.nair@example.org>",
+        "sentAt": "2026-11-19T14:08:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Two things before the demo",
+        "body": "Please test the login flow by November 23 and upload the updated demo screenshots by November 25. Both are needed for the rehearsal."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H09",
+        "threadId": "thread-H09",
+        "from": "Daniel Ortiz <daniel.ortiz@example.org>",
+        "sentAt": "2026-11-19T14:16:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Workshop preparation",
+        "body": "Before the November 30 workshop, please reserve the meeting room by November 24, send the attendee list by November 26, and print the handouts by November 30."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H10",
+        "threadId": "thread-H10",
+        "from": "Sophie Turner <sophie.turner@example.org>",
+        "sentAt": "2026-11-19T14:24:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Assigned roles for study",
+        "body": "I will recruit the participants by November 25. Your part is to prepare the survey questions by November 24."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H11",
+        "threadId": "thread-H11",
+        "from": "Felix Wong <felix.wong@example.org>",
+        "sentAt": "2026-11-19T14:32:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Budget review ownership",
+        "body": "Jamie will check the budget by November 25. You only need to send Jamie the current spreadsheet by November 23."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H12",
+        "threadId": "thread-H12",
+        "from": "Hannah Reed <hannah.reed@example.org>",
+        "sentAt": "2026-11-19T14:40:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Optional practice session",
+        "body": "We are offering an optional practice session on November 26. You may register if interested; no response is required."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H13",
+        "threadId": "thread-H13",
+        "from": "Isaac Moore <isaac.moore@example.org>",
+        "sentAt": "2026-11-19T13:00:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "If the upload fails",
+        "body": "If the shared drive still shows an error on Monday, November 23, please email me a screenshot that afternoon. Otherwise, no action is needed."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H14",
+        "threadId": "thread-H14",
+        "from": "Clara Diaz <clara.diaz@example.org>",
+        "sentAt": "2026-11-19T13:08:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Review meeting moved",
+        "body": "The review meeting has moved to December 1 at 10 am. Please update the agenda by November 30; I will notify the guests myself."
+      },
+      "threadContext": []
+    },
+    {
+      "message": {
+        "id": "H15",
+        "threadId": "thread-H15",
+        "from": "Ravi Shah <ravi.shah@example.org>",
+        "sentAt": "2026-11-19T13:16:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Draft is already received",
+        "body": "Thanks for sending the revised draft yesterday. I have received it and will share comments when ready. No further changes are needed right now."
+      },
+      "threadContext": []
+    }
+  ]
+}

@@ -216,6 +216,13 @@ a.gmail-open-button:focus-visible { outline:3px solid var(--green); outline-offs
 .rd-quiet-link:hover { color:var(--green); }
 .rd-quiet-link:focus-visible { outline:2px solid var(--green); outline-offset:2px; border-radius:2px; }
 @media (max-width: 420px) { .rd-email-context dl > div { grid-template-columns:1fr; gap:0; } }
+/* Add to calendar / Manage event: the same block above the form. The form's panel is 48px
+   narrower than the dialog (32px at 600px or less) and pads its fields by 25px, so these
+   margins line the block up with the event fields. The dialog scrolls inside when it is
+   taller than the window. */
+.modal.rd-calendar-modal { max-height:calc(100vh - 48px); overflow-y:auto; }
+.rd-calendar-modal > .rd-email-context { margin:20px 73px 14px 25px; }
+@media (max-width: 600px) { .rd-calendar-modal > .rd-email-context { margin-right:57px; } }
 /* Dates named in the notes: one button each; the one in the date field is pressed and ticked. */
 .rd-date-buttons { display:grid; gap:6px; }
 .rd-date-buttons > span { font-size:11px; font-weight:600; }

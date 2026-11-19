@@ -617,6 +617,29 @@ The conflicts kept both sides: this file (every entry kept, in date order), `app
 `deleteSourceEmail`, then #125's comment above `runScan`). PR #125 is not merged; that needs its
 own approval and cannot happen during the freeze (Thursday November 19, night, to Friday November 20).
 
+**Correction, November 18:** PR #125 was merged to `main` at 5:10 PM CST as `7c8958f`, after the
+entry above was written (checked against GitHub).
+
+**November 18: the task's email in the calendar dialog.** Branch `mzheng/calendar-source-email`
+(off `main` at `7c8958f`), requested by Matthew. Frontend only; no backend, migration or hosted
+change, and no Calendar write behavior changed. The dashboard's Add to calendar, Manage event and
+Export calendar file dialog now shows the task's source email at the top in the existing "From the
+email" block (sender, subject, sent time, the deadline's wording when the email stated one, the
+saved excerpt or "The saved excerpt has expired.", and Open in Gmail). The email is the one that
+created the task, or the Passive email for a task made with Turn into task; if source emails did
+not load, the block is left out. Only text already saved is shown; nothing new is fetched or
+stored. Files: `RealDashboard.tsx`, `dashboardModel.ts` (`SourceLink` gains an optional `quote`)
+and `real-dashboard.css`; [Calendar behavior](docs/calendar-behavior.md) describes it.
+Verified offline on the uncommitted branch: `npm test` (276 and 114 pass), `npm run test:calendar`
+(45 pass), `tsc --noEmit`, the web build and `git diff --check`. Seen in a local browser on the test account
+(saved fictional records, local stack): the block in Manage event and in Add to calendar for
+suggestion-based tasks, lined up with the event fields at 1200px and 390px wide, with the dialog
+scrolling inside when taller than the window; its margins were adjusted after that check. Not
+seen: a task made with Turn into task, Export calendar file with Calendar off, an expired
+excerpt, and the live site. The local Calendar read returned 503 during the check, so Manage
+event showed the app's saved details. No test covers the new helper, which lives in the React
+component.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

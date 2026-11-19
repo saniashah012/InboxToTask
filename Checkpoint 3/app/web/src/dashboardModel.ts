@@ -14,6 +14,7 @@ export type SourceLink = {
   sender: string | null
   subject: string | null
   sentAt: string | null
+  quote?: string | null
 }
 
 export type SuggestionItem = {

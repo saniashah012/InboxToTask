@@ -597,6 +597,17 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
   const contextOf = (s: SuggestionItem): EmailContext => ({
     sender: s.source?.sender ?? null, subject: s.source?.subject ?? null, sentAt: s.source?.sent_at ?? null, quote: s.quote, messageId: s.messageId,
   })
+  // A task's email, chosen as sourceForTask does: the Passive origin when there is no
+  // suggestion-based link. Null when neither is known (for example, links failed to load).
+  const contextOfTask = (t: TaskItem): EmailContext | null => {
+    const p = t.fromPassive
+    if (p && !t.primary) return {
+      sender: p.source?.sender ?? null, subject: p.source?.subject ?? null, sentAt: p.source?.sent_at ?? null, quote: p.quote, messageId: p.messageId,
+    }
+    if (!t.primary) return null
+    return { sender: t.primary.sender, subject: t.primary.subject, sentAt: t.primary.sentAt, quote: t.primary.quote ?? null, messageId: t.primary.messageId }
+  }
+  const calendarContext = exportTask ? contextOfTask(exportTask) : null
   const reviewToAdd = (s: SuggestionItem) => setEditing({
     kind: "suggestion", row: s.row, fields: s.fields, adding: true, context: contextOf(s),
     reasons: Array.isArray(s.extraction?.warnings) ? s.extraction.warnings.filter((w: unknown): w is string => typeof w === "string") : [],
@@ -1073,7 +1084,9 @@ export default function RealDashboard({ userId, email, settings, initialNotice, 
         onDismiss={() => void perform(() => reviewTaskChange(change.row.id, change.row.revision, "dismiss"), "Proposal dismissed. The task is unchanged.", () => setChangeId(null))}
         onRebase={() => change.target && void perform(() => reviewTaskChange(change.row.id, change.row.revision, "rebase", change.target!.revision), "Proposal refreshed against the current task. Review the new comparison before approving.")} />}
       {exportTask && (
-        <Modal onClose={() => { clearCalendarDraft(userId); closeCalendar() }} title={!calendarEventsEnabled ? "Export calendar file" : managesEvent(exportTask.row.id) ? "Manage event" : "Add to calendar"} wide>
+        <Modal onClose={() => { clearCalendarDraft(userId); closeCalendar() }} title={!calendarEventsEnabled ? "Export calendar file" : managesEvent(exportTask.row.id) ? "Manage event" : "Add to calendar"} wide className="rd-calendar-modal">
+          {/* Outside Embedded, whose workspace rules would restyle the block's link and excerpt. */}
+          {calendarContext && <EmailContextBlock context={calendarContext} wording={deadlineWording(exportTask.fields)} email={email} />}
           <Embedded><TaskCalendarControl key={`${userId}-${exportTask.row.id}`} task={exportTask.row} userId={userId}
             review={exportReview ? { deadline: exportReview } : undefined}
             onCancel={closeCalendar}
@@ -1597,7 +1610,13 @@ function DeleteSourceModal({ source, busy, error, onCancel, onConfirm, onReload 
   )
 }
 
-// "From the email" in the suggestion editors: sender, subject, sent time with its weekday,
+// The email's own timing words; the fixed sentence for a typed date says nothing new.
+const deadlineWording = (fields: TaskFields): string | null => {
+  const original = fields.deadline?.wording
+  return original && original !== USER_ENTERED_WORDING ? original : null
+}
+
+// "From the email" in the suggestion editors and the calendar dialog: sender, subject, sent time with its weekday,
 // the saved excerpt and the deadline's original wording. Text only; nothing is fetched.
 function EmailContextBlock({ context, wording, email }: { context: EmailContext; wording: string | null; email: string }) {
   const id = useId()
@@ -1628,9 +1647,7 @@ function EditFieldsModal({ editing, email, busy, onSave, onRestore, onCancel }: 
   const restorable = editing.kind === "suggestion" && !adding && suggestionEdited(editing.row)
   const dateRequired = adding || editing.kind === "task"
   const ids = useId()
-  // The email's own timing words; the fixed sentence for a typed date says nothing new.
-  const original = editing.fields.deadline?.wording
-  const wording = original && original !== USER_ENTERED_WORDING ? original : null
+  const wording = deadlineWording(editing.fields)
   const choices = useMemo(() => (adding ? dateChoicesFromNotes(editing.reasons ?? []) : []), [adding, editing.reasons])
   // The sent day is taken in the deadline's own time zone, as the scan does.
   const hint = editing.context ? sentDayHint(wording, editing.context.sentAt, editing.fields.deadline?.timeZone || viewerZone) : null

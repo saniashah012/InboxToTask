@@ -640,6 +640,12 @@ excerpt, and the live site. The local Calendar read returned 503 during the chec
 event showed the app's saved details. No test covers the new helper, which lives in the React
 component.
 
+**November 18, 6:45 PM CST: PR #132 merged to `main`** as `fb6951d`, a production deployment,
+at Matthew's request ("merge this into main"). It carries the calendar-dialog change above. All
+four PR checks passed before the merge, and Vercel reported the production deployment of
+`fb6951d` complete. No hosted Supabase change. Not checked: the block on the live site. This
+record is on branch `mzheng/record-calendar-email-merge`.
+
 ## Gmail phases
 
 | Phase | Code | Verification and remaining gate |

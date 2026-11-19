@@ -1003,3 +1003,7 @@ Next (as of November 12; the Calendar item as of November 16):
 CP4 deliverables and the evaluation design are in [Checkpoint 4](<../Checkpoint 4/README.md>); the [CP4 plan](<../Checkpoint 4/CP4_PLAN.md>) was updated November 12 to the decisions above.
 
 **Known CP3 gap:** the assignment's "all proposed core features" is not met. Not built: automatic scans, real data in the designed dashboard, a Waiting For view in the workspace and account deletion. Calendar events moved to CP4. **CP4 update (November 12):** real data is in the designed dashboard and onboarding (#51), and automatic checks run while the app is open (#108, #110); scanning with the app closed and account deletion are still not built. Calendar events are on `main` since November 16 (#116), off by default; their migration and functions are on hosted, switched off, so the live site does not offer Calendar.
+
+## CP4 study protocol
+
+Branch `sania/cp4-study-protocol` adds the study protocol with the Gmail comparison, five scored tasks, Calendar instructions, questionnaires, and scoring examples. Documentation checks are recorded in the pull request.

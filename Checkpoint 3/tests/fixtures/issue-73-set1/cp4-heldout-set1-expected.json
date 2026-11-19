@@ -1,0 +1,212 @@
+{
+  "H01": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "deadlineDates": [
+      "2026-11-23"
+    ],
+    "expectedTasks": [
+      {
+        "title": "Upload accessibility checklist",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-23"
+      }
+    ]
+  },
+  "H02": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "deadlineDates": [
+      "2026-11-24"
+    ],
+    "expectedTasks": [
+      {
+        "title": "Sign and return research consent form",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-24"
+      }
+    ]
+  },
+  "H03": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "deadlineDates": [
+      "2026-11-27"
+    ],
+    "expectedTasks": [
+      {
+        "title": "Send poster abstract",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-27"
+      }
+    ]
+  },
+  "H04": {
+    "category": "Passive",
+    "taskCount": 0,
+    "expectedTasks": []
+  },
+  "H05": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "nullDeadline": true,
+    "humanReview": "Ambiguous phrase early next week; do not invent a date or time.",
+    "expectedTasks": [
+      {
+        "title": "Add prototype notes to shared document",
+        "owner": "student@example.org",
+        "deadlineDate": null
+      }
+    ]
+  },
+  "H06": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "deadlineDates": [
+      "2026-11-27"
+    ],
+    "humanReview": "Next Friday resolves to November 27 from the November 19 sent date; no time was specified.",
+    "expectedTasks": [
+      {
+        "title": "Email interview questions",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-27"
+      }
+    ]
+  },
+  "H07": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "nullDeadline": true,
+    "humanReview": "Around the end of the month is not a fixed deadline; request clarification.",
+    "expectedTasks": [
+      {
+        "title": "Send revised lab handout",
+        "owner": "student@example.org",
+        "deadlineDate": null
+      }
+    ]
+  },
+  "H08": {
+    "category": "Actionable",
+    "taskCount": 2,
+    "deadlineDates": [
+      "2026-11-23",
+      "2026-11-25"
+    ],
+    "expectedTasks": [
+      {
+        "title": "Test login flow",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-23"
+      },
+      {
+        "title": "Upload updated demo screenshots",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-25"
+      }
+    ]
+  },
+  "H09": {
+    "category": "Actionable",
+    "taskCount": 3,
+    "deadlineDates": [
+      "2026-11-24",
+      "2026-11-26",
+      "2026-11-30"
+    ],
+    "expectedTasks": [
+      {
+        "title": "Reserve meeting room",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-24"
+      },
+      {
+        "title": "Send attendee list",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-26"
+      },
+      {
+        "title": "Print workshop handouts",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-30"
+      }
+    ]
+  },
+  "H10": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "deadlineDates": [
+      "2026-11-24"
+    ],
+    "humanReview": "Recruitment belongs to the sender, not the mailbox user; do not create a user task for it.",
+    "expectedTasks": [
+      {
+        "title": "Prepare survey questions",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-24"
+      }
+    ]
+  },
+  "H11": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "deadlineDates": [
+      "2026-11-23"
+    ],
+    "humanReview": "Budget checking is assigned to Jamie; user owns only the spreadsheet handoff.",
+    "expectedTasks": [
+      {
+        "title": "Send current spreadsheet to Jamie",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-23"
+      }
+    ]
+  },
+  "H12": {
+    "category": "Passive",
+    "taskCount": 0,
+    "humanReview": "Optional event invitation is not an assigned task.",
+    "expectedTasks": []
+  },
+  "H13": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "conditional": true,
+    "nullDeadline": true,
+    "conditionTerms": [
+      "Monday",
+      "November 23",
+      "afternoon"
+    ],
+    "humanReview": "November 23 afternoon is a conditional checkpoint, not an unconditional due time.",
+    "expectedTasks": [
+      {
+        "title": "Email screenshot if shared drive error persists",
+        "owner": "student@example.org",
+        "deadlineDate": null
+      }
+    ]
+  },
+  "H14": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "deadlineDates": [
+      "2026-11-30"
+    ],
+    "humanReview": "December 1 is the meeting time, not the task deadline. Guest notifications are sender-owned.",
+    "expectedTasks": [
+      {
+        "title": "Update review agenda",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-30"
+      }
+    ]
+  },
+  "H15": {
+    "category": "Passive",
+    "taskCount": 0,
+    "humanReview": "Previous user action is complete; no new task is requested.",
+    "expectedTasks": []
+  }
+}

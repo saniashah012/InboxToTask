@@ -48,6 +48,11 @@ designed screens. It is the target, not a status report. What is built, tested a
   and end on one line; the time zone beneath as read-only text, shown for timed events only
   ("Times are in Central Time."); and a read-only destination row,
   "Calendar · Primary only", with the connected account.
+- **The task's email:** above the form, this dialog, Manage event and Export calendar file show
+  the email the task came from (the one that created it, or the Passive email for a task made with
+  Turn into task) as "From the email": sender, subject, sent time, the deadline's wording when the
+  email stated one, the saved excerpt or "The saved excerpt has expired.", and Open in Gmail. It
+  uses only text the app already saved; if the source emails did not load, it is left out.
 - **What is filled in:** every field the app has from the task. A field it does not have, or is
   unsure of, stays blank. Blank required fields are outlined, and the create button stays disabled
   until they are filled.

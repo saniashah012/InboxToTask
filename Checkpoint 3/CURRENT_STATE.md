@@ -1007,3 +1007,7 @@ CP4 deliverables and the evaluation design are in [Checkpoint 4](<../Checkpoint 
 ## CP4 study protocol
 
 Branch `sania/cp4-study-protocol` adds the study protocol with the Gmail comparison, five scored tasks, Calendar instructions, questionnaires, and scoring examples. Documentation checks are recorded in the pull request.
+
+## CP4 protocol update — November 20
+
+Updated participant prompts, answer keys for both inboxes, exact deadline and Calendar reply scripts, prompted update handling, Calendar rescheduling, scoring guidance, and reset instructions.

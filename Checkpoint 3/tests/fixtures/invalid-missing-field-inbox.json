@@ -1,0 +1,39 @@
+{
+  "provenance": "Synthetic format-checker test example, derived from fictional H01.",
+  "user": {
+    "email": "student@example.org",
+    "timeZone": "America/Chicago"
+  },
+  "analysisTime": "2026-11-19T16:00:00-06:00",
+  "rules": {
+    "allow": {
+      "labels": [],
+      "senders": [],
+      "domains": [
+        "example.org"
+      ]
+    },
+    "block": {
+      "labels": [],
+      "senders": [],
+      "domains": [],
+      "subjectKeywords": []
+    }
+  },
+  "cases": [
+    {
+      "message": {
+        "id": "H01",
+        "threadId": "thread-H01",
+        "from": "Nora Kim <nora.kim@example.org>",
+        "sentAt": "2026-11-19T15:00:00-06:00",
+        "sentAtPrecision": "minute",
+        "labels": [
+          "CP4-heldout-set1"
+        ],
+        "subject": "Accessibility checklist"
+      },
+      "threadContext": []
+    }
+  ]
+}

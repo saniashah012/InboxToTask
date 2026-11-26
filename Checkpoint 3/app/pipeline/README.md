@@ -26,6 +26,38 @@ A subsequent evaluation explicitly using Gemini 3.6 Flash completed all 20 cases
 
 ## Run locally
 
+### Labeled fixture format checker (Issue #95)
+
+From `Checkpoint 3/app` (Node.js 22+):
+
+```powershell
+# Check the existing CP2 set (legacy) and Issue #73 set 1 (strict).
+npm run fixtures:check
+# Check a new labeled inbox/answer pair in strict mode; paths are relative to app/.
+npm run fixtures:check -- "../tests/fixtures/issue-73-set1/cp4-heldout-set1-inbox.json" "../tests/fixtures/issue-73-set1/cp4-heldout-set1-expected.json"
+# Run just the format-checker tests.
+npm run test:fixtures
+```
+
+New labeled sets must follow the existing inbox envelope (`user`, `analysisTime`,
+`rules`, `cases`) and use an answer map keyed by `message.id`. Each answer needs
+`category` (`Actionable` or `Passive`), `taskCount` or `minTasks`, and an
+`expectedTasks` array. Each task requires a non-empty `title` and `owner`, plus
+`deadlineDate`: a real calendar date in `YYYY-MM-DD` format or explicit `null`
+when unknown/absent. Passive cases use an empty array. Optional `deadlineDates`
+entries must also be valid calendar dates. The checker validates required message
+fields, unique target IDs, duplicate answer-map keys, matching inbox/answer IDs,
+and task counts. It does not judge semantic accuracy, owner identity, or whether
+the labeled cases were actually held out from prompt tuning.
+
+The old CP2 answer map lacks per-task owners. Use `--legacy` only for existing
+legacy data (before the two paths), not for new held-out sets. With no arguments,
+legacy mode is applied to CP2 only. Invalid inputs return exit status 1 and
+field-specific diagnostics; valid inputs return 0. The checker and its unit tests
+are offline, require no credentials or additional packages, and do not modify
+fixtures or call a model. `npm test` also includes the format-checker suite.
+
+
 ### Uncertainty and wording regression checks
 
 The `cp3-extraction-v2-review` candidate strengthens optional-invitation handling,

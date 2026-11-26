@@ -1,0 +1,16 @@
+{
+  "H01": {
+    "category": "Actionable",
+    "taskCount": 1,
+    "deadlineDates": [
+      "2026-11-23"
+    ],
+    "expectedTasks": [
+      {
+        "title": "Upload accessibility checklist",
+        "owner": "student@example.org",
+        "deadlineDate": "2026-11-23"
+      }
+    ]
+  }
+}
